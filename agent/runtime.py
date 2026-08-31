@@ -1,4 +1,4 @@
-"""AgentRuntime orchestrating the closed-loop observe-decide-execute-observe recovery cycle."""
+"""AgentRuntime orchestrating the closed-loop observe-decide-execute-observe recovery cycle with ToolFirewall protection."""
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -7,6 +7,15 @@ from backend.services.ingestion_service import IngestionService
 from domain.enums import PaymentState
 from execution.executor import ExecutionContext, ExecutionResult, RecoveryExecutor
 from execution.simulator_executor import SimulatorExecutor
+from governor.exceptions import (
+    ActionBlockedError,
+    ConsentViolationError,
+    DuplicateExecutionError,
+    FirewallError,
+    PolicyOutageError,
+    SchemaValidationError,
+)
+from governor.firewall import CustomerConsentContext, ToolFirewall
 from policy.base import BasePolicy, PolicyDecision
 from policy.deterministic import DeterministicRecoveryPolicy
 from policy.public_view import PublicScenarioView
@@ -24,6 +33,7 @@ class AgentIterationRecord(BaseModel):
     execution_result: Optional[ExecutionResult] = Field(default=None, description="Executor result if dispatched")
     aggregate_state: str = Field(..., description="Payment aggregate state after this cycle")
     timestamp_epoch: int = Field(..., description="Epoch timestamp of cycle")
+    error_message: Optional[str] = Field(default=None, description="Any caught error or exception message")
 
 
 class AgentRunResult(BaseModel):
@@ -43,7 +53,7 @@ class AgentRunResult(BaseModel):
 
 
 class AgentRuntime:
-    """Closed-loop recovery controller connecting Ingestion, Risk Detection, Policy, and Execution."""
+    """Closed-loop recovery controller connecting Ingestion, Risk Detection, Policy, Firewall, and Execution."""
 
     def __init__(
         self,
@@ -51,16 +61,23 @@ class AgentRuntime:
         policy: Optional[BasePolicy] = None,
         executor: Optional[RecoveryExecutor] = None,
         risk_detector: Optional[RiskDetector] = None,
+        firewall: Optional[ToolFirewall] = None,
         max_iterations: int = 5,
     ) -> None:
         self.ingestion_service = ingestion_service or IngestionService()
         self.policy = policy or DeterministicRecoveryPolicy()
         self.executor = executor or SimulatorExecutor()
         self.risk_detector = risk_detector or RiskDetector()
+        self.firewall = firewall or ToolFirewall()
         self.max_iterations = max_iterations
 
-    async def run_recovery_loop(self, initial_scenario: SimulatedScenario) -> AgentRunResult:
-        """Execute the bounded, state-guarded recovery loop until resolution, abstention, or limit exhaustion."""
+    async def run_recovery_loop(
+        self,
+        initial_scenario: SimulatedScenario,
+        consent: Optional[CustomerConsentContext] = None,
+        policy_healthy: bool = True,
+    ) -> AgentRunResult:
+        """Execute the bounded, state-guarded recovery loop until resolution, abstention, fault, or limit exhaustion."""
         current_scenario = initial_scenario
         current_event = initial_scenario.event
         current_payload = initial_scenario.webhook_payload
@@ -114,8 +131,30 @@ class AgentRuntime:
                 payment_method=current_event.payment.method if current_event.payment else "card",
             )
 
-            # E. Policy Decision
-            decision = self.policy.decide(public_view)
+            # E. Policy Decision with Policy Outage Protection
+            try:
+                if not policy_healthy:
+                    raise PolicyOutageError("Policy decision service is currently unavailable.")
+                decision = self.policy.decide(public_view)
+            except PolicyOutageError as e:
+                record = AgentIterationRecord(
+                    iteration=iteration,
+                    risk_assessment=risk,
+                    decision=PolicyDecision(
+                        action_type=SimulatedActionType.NO_ACTION,
+                        confidence=0.0,
+                        rationale="Policy decision service unavailable. Failing closed.",
+                        policy_name="FIREWALL_FAIL_CLOSED",
+                        reason_codes=["POLICY_OUTAGE_FAIL_CLOSED"],
+                    ),
+                    execution_result=None,
+                    aggregate_state=current_state.value,
+                    timestamp_epoch=current_epoch,
+                    error_message=str(e),
+                )
+                trace.append(record)
+                stop_reason = "POLICY_OUTAGE"
+                break
 
             # F. Abstention Check
             if decision.action_type == SimulatedActionType.NO_ACTION:
@@ -148,16 +187,63 @@ class AgentRuntime:
                     recovered_amount = aggregate.amount
                 break
 
-            # H. Dispatch Execution
+            # H. Tool Firewall Validation Gate
+            execution_key = f"exec_{payment_id}_{iteration}_{decision.action_type.value}_{current_epoch}"
+            try:
+                validated_action = self.firewall.validate_and_gate(
+                    action=decision.action_type,
+                    execution_key=execution_key,
+                    consent=consent,
+                    policy_healthy=policy_healthy,
+                )
+            except (ActionBlockedError, ConsentViolationError, SchemaValidationError, DuplicateExecutionError, PolicyOutageError) as e:
+                record = AgentIterationRecord(
+                    iteration=iteration,
+                    risk_assessment=risk,
+                    decision=decision,
+                    execution_result=None,
+                    aggregate_state=current_state.value,
+                    timestamp_epoch=current_epoch,
+                    error_message=str(e),
+                )
+                trace.append(record)
+                if isinstance(e, ConsentViolationError):
+                    stop_reason = "ACTION_BLOCKED"
+                elif isinstance(e, PolicyOutageError):
+                    stop_reason = "POLICY_OUTAGE"
+                else:
+                    stop_reason = "ACTION_BLOCKED"
+                break
+
+            # I. Dispatch Execution with Fault Tolerance Handling
             context = ExecutionContext(
                 scenario=current_scenario,
                 attempt_count=iteration,
                 current_epoch=current_epoch,
             )
-            exec_result = await self.executor.execute(decision.action_type, context)
+            try:
+                exec_result = await self.executor.execute(validated_action, context)
+            except (TimeoutError, ConnectionError, PolicyOutageError, Exception) as e:
+                # Catch executor infrastructure faults, log error, and safely stop without crashing
+                record = AgentIterationRecord(
+                    iteration=iteration,
+                    risk_assessment=risk,
+                    decision=decision,
+                    execution_result=None,
+                    aggregate_state=current_state.value,
+                    timestamp_epoch=current_epoch,
+                    error_message=f"{type(e).__name__}: {str(e)}",
+                )
+                trace.append(record)
+                if isinstance(e, PolicyOutageError):
+                    stop_reason = "POLICY_OUTAGE"
+                else:
+                    stop_reason = "EXECUTION_FAILURE"
+                break
+
             total_costs += exec_result.action_cost_paise
 
-            # I. Ingest resulting event into event store & update aggregate
+            # J. Ingest resulting event into event store & update aggregate
             if exec_result.resulting_payload:
                 await self.ingestion_service.process_webhook(exec_result.resulting_payload)
                 current_payload = exec_result.resulting_payload

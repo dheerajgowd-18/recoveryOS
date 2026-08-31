@@ -159,6 +159,13 @@ RecoveryOS is an enterprise-grade autonomous revenue recovery and dunning intell
 - **`domain/enums.py`** & **`domain/events.py`** & **`domain/actions.py`**:
   - Explicit Pydantic v2 domain contracts.
 
+### 2.8 Safety Governor & Tool Firewall (`governor/`)
+- **`governor/firewall.py`**:
+  - `ToolFirewall`: Action schema validator, channel & global customer consent checker, and execution key idempotency safeguard.
+  - `CustomerConsentContext`: Granular communication preferences model.
+- **`governor/exceptions.py`**:
+  - `FirewallError`, `ActionBlockedError`, `SchemaValidationError`, `ConsentViolationError`, `DuplicateExecutionError`, `PolicyOutageError`.
+
 ---
 
 ## 3. Running & Verifying

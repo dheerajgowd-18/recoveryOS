@@ -1,6 +1,7 @@
 """Simulation executor resolving candidate recovery actions against hidden ground-truth counterfactuals."""
 from datetime import datetime, timezone
-from typing import Union
+from typing import Optional, Union
+from pydantic import BaseModel, ConfigDict, Field
 
 from domain.actions import Action
 from domain.enums import ActionType, PaymentState
@@ -12,11 +13,24 @@ from domain.events import (
     WebhookPayloadContent,
 )
 from execution.executor import ExecutionContext, ExecutionResult, RecoveryExecutor
+from governor.exceptions import PolicyOutageError
 from simulator.config import SimulatedActionType
+
+
+class ExecutionFaultConfig(BaseModel):
+    """Failure injection parameters to test runtime fault tolerance and resilience."""
+    model_config = ConfigDict(extra="forbid")
+
+    force_timeout: bool = Field(default=False, description="Simulate a gateway timeout exception")
+    force_connection_error: bool = Field(default=False, description="Simulate a network connection drop")
+    force_policy_outage: bool = Field(default=False, description="Simulate a policy service outage")
 
 
 class SimulatorExecutor(RecoveryExecutor):
     """Executes recovery interventions by querying scenario counterfactuals and synthesizing resulting domain events."""
+
+    def __init__(self, fault_config: Optional[ExecutionFaultConfig] = None) -> None:
+        self.fault_config = fault_config or ExecutionFaultConfig()
 
     def _map_domain_action(self, action: Union[SimulatedActionType, Action]) -> SimulatedActionType:
         """Map domain Action or SimulatedActionType into canonical SimulatedActionType."""
@@ -42,7 +56,23 @@ class SimulatorExecutor(RecoveryExecutor):
         action: Union[SimulatedActionType, Action],
         context: ExecutionContext,
     ) -> ExecutionResult:
-        """Resolve the action against hidden potential outcomes and synthesize the resulting Razorpay domain event."""
+        """Resolve the action against hidden potential outcomes and synthesize the resulting Razorpay domain event.
+
+        Raises:
+            TimeoutError: If fault injection config specifies force_timeout.
+            ConnectionError: If fault injection config specifies force_connection_error.
+            PolicyOutageError: If fault injection config specifies force_policy_outage.
+        """
+        # Failure Injection Checks
+        if self.fault_config.force_timeout:
+            raise TimeoutError("Simulated payment gateway timeout during action execution.")
+
+        if self.fault_config.force_connection_error:
+            raise ConnectionError("Simulated network connection drop during action dispatch.")
+
+        if self.fault_config.force_policy_outage:
+            raise PolicyOutageError("Simulated policy engine service outage.")
+
         action_type = self._map_domain_action(action)
         scenario = context.scenario
         outcome = scenario.hidden_outcomes.get_outcome(action_type)

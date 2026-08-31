@@ -5,7 +5,22 @@ All notable changes to the RecoveryOS platform will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-08-31
+### Added
+- **Safety Governor & Tool Firewall (`governor/firewall.py`, `governor/exceptions.py`)**:
+  - `ToolFirewall` enforcing action schema validation, channel-specific and global customer consent/opt-out checks, and dispatch idempotency keys.
+  - Fail-closed exception hierarchy: `FirewallError`, `ActionBlockedError`, `SchemaValidationError`, `ConsentViolationError`, `DuplicateExecutionError`, `PolicyOutageError`.
+- **Fault Injection in Simulator Executor (`execution/simulator_executor.py`)**:
+  - `ExecutionFaultConfig` supporting controlled fault injection (`force_timeout`, `force_connection_error`, `force_policy_outage`).
+- **Resilient Agent Runtime (`agent/runtime.py`)**:
+  - Integrated `ToolFirewall` pre-execution gating to intercept malformed actions and customer consent violations.
+  - Fail-closed handling for policy service outages (`POLICY_OUTAGE`).
+  - Graceful degradation for executor gateway timeouts and network drops (`EXECUTION_FAILURE`) without runtime crashes.
+- **Adversarial & Fault Injection Test Suite (`tests/adversarial/test_adversarial_scenarios.py`)**:
+  - 9 unit and adversarial integration tests covering malformed action schema rejection, customer opt-out blocking, duplicate execution key prevention, policy outage fail-closed, and executor timeout/connection failure resilience (82 total tests across repository).
+
 ## [0.6.0] - 2026-08-31
+
 ### Added
 - **Recovery Executor Framework (`execution/executor.py`, `execution/simulator_executor.py`)**:
   - `RecoveryExecutor` abstract interface with `ExecutionContext` and `ExecutionResult` contracts.
