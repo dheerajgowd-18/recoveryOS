@@ -59,10 +59,17 @@ class Simulator:
             archetype = rng.choices(archetypes, weights=archetype_weights, k=1)[0]
             failure_class = rng.choices(failures, weights=failure_weights, k=1)[0]
 
-            # Sample amount
-            amount_paise = rng.randint(cfg.amount_min_paise, cfg.amount_max_paise)
-            # Round amount to nearest rupee paise (multiples of 100)
-            amount_paise = (amount_paise // 100) * 100
+            # Sample amount: micro-transactions vs standard amounts
+            if cfg.micro_transaction_ratio > 0.0 and rng.random() < cfg.micro_transaction_ratio:
+                amount_paise = rng.choice([100, 200, 500, 1000])
+            else:
+                amount_paise = rng.randint(cfg.amount_min_paise, cfg.amount_max_paise)
+                amount_paise = (amount_paise // 100) * 100
+                if amount_paise == 0:
+                    amount_paise = 100
+
+            # Sample attempt count: 75% attempt 1, 15% attempt 2, 10% attempt 3
+            attempt_count = rng.choices([1, 2, 3], weights=[0.75, 0.15, 0.10], k=1)[0]
 
             scenario_cfg = ScenarioConfig(
                 scenario_id=scenario_id,
@@ -70,7 +77,7 @@ class Simulator:
                 archetype=archetype,
                 failure_class=failure_class,
                 amount_in_paise=amount_paise,
-                attempt_count=1,
+                attempt_count=attempt_count,
                 currency=cfg.currency,
                 merchant_account_id=cfg.merchant_account_id,
             )

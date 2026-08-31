@@ -48,8 +48,14 @@ class SimulatorConfig(BaseModel):
 
     seed: int = Field(default=42, description="Global random generator seed for reproducibility")
     num_scenarios: int = Field(default=100, ge=1, description="Total number of scenarios to generate")
-    amount_min_paise: int = Field(default=49900, ge=100, description="Minimum amount in paise (e.g. Rs 499)")
-    amount_max_paise: int = Field(default=999900, ge=100, description="Maximum amount in paise (e.g. Rs 9,999)")
+    amount_min_paise: int = Field(default=49900, ge=100, description="Minimum standard amount in paise (e.g. Rs 499)")
+    amount_max_paise: int = Field(default=499900, ge=100, description="Maximum standard amount in paise (e.g. Rs 4,999)")
+    micro_transaction_ratio: float = Field(
+        default=0.15,
+        ge=0.0,
+        le=1.0,
+        description="Fraction of scenarios generated as low-value/micro transactions (Rs 1 - Rs 10)",
+    )
     currency: str = Field(default="INR")
     merchant_account_id: str = Field(default="acc_sim_merchant_001")
     archetype_distribution: Dict[CustomerArchetype, float] = Field(

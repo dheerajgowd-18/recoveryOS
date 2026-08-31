@@ -31,6 +31,8 @@ class AgentIterationRecord(BaseModel):
     risk_assessment: RiskAssessment = Field(..., description="Risk detection outcome")
     decision: PolicyDecision = Field(..., description="Action selected by policy")
     execution_result: Optional[ExecutionResult] = Field(default=None, description="Executor result if dispatched")
+    aggregate_state_before: str = Field(..., description="Payment aggregate state before this cycle")
+    aggregate_state_after: str = Field(..., description="Payment aggregate state after this cycle")
     aggregate_state: str = Field(..., description="Payment aggregate state after this cycle")
     timestamp_epoch: int = Field(..., description="Epoch timestamp of cycle")
     error_message: Optional[str] = Field(default=None, description="Any caught error or exception message")
@@ -58,17 +60,17 @@ class AgentRuntime:
     def __init__(
         self,
         ingestion_service: Optional[IngestionService] = None,
-        policy: Optional[BasePolicy] = None,
-        executor: Optional[RecoveryExecutor] = None,
         risk_detector: Optional[RiskDetector] = None,
+        policy: Optional[BasePolicy] = None,
         firewall: Optional[ToolFirewall] = None,
+        executor: Optional[RecoveryExecutor] = None,
         max_iterations: int = 5,
     ) -> None:
         self.ingestion_service = ingestion_service or IngestionService()
-        self.policy = policy or DeterministicRecoveryPolicy()
-        self.executor = executor or SimulatorExecutor()
         self.risk_detector = risk_detector or RiskDetector()
+        self.policy = policy or DeterministicRecoveryPolicy()
         self.firewall = firewall or ToolFirewall()
+        self.executor = executor or SimulatorExecutor()
         self.max_iterations = max_iterations
 
     async def run_recovery_loop(
@@ -77,77 +79,74 @@ class AgentRuntime:
         consent: Optional[CustomerConsentContext] = None,
         policy_healthy: bool = True,
     ) -> AgentRunResult:
-        """Execute the bounded, state-guarded recovery loop until resolution, abstention, fault, or limit exhaustion."""
-        current_scenario = initial_scenario
-        current_event = initial_scenario.event
-        current_payload = initial_scenario.webhook_payload
-        payment_id = current_event.payment.id if current_event.payment else f"pay_sim_{initial_scenario.scenario_id}"
+        """Execute the closed-loop recovery sequence for an incoming payment failure event."""
+        # 1. Ingest initial failure event into the system
+        await self.ingestion_service.process_webhook(initial_scenario.webhook_payload)
 
-        # 1. Ingest initial failure event
-        await self.ingestion_service.process_webhook(current_payload)
-
+        payment_id = initial_scenario.event.payment.id if initial_scenario.event.payment else "pay_unknown"
         trace: List[AgentIterationRecord] = []
-        iteration = 0
-        total_costs = 0
         recovered_amount = 0
+        total_costs = 0
         stop_reason = "MAX_ITERATIONS_REACHED"
 
-        while iteration < self.max_iterations:
-            iteration += 1
-            current_epoch = current_payload.created_at + (iteration * 3600)
+        current_event = initial_scenario.event
+        current_payload = initial_scenario.webhook_payload
 
-            # A. Fetch current reconciled aggregate
+        for iteration in range(1, self.max_iterations + 1):
+            current_epoch = int(current_payload.created_at) + ((iteration - 1) * 3600)
+
+            # A. State Reconstruction (Observe)
             aggregate = await self.ingestion_service.event_store.get_payment_aggregate(payment_id)
             current_state = aggregate.current_state if aggregate else PaymentState.FAILED
 
-            # B. Check Terminal State Guard
+            # B. Terminal State Early Exit Check
             if aggregate and aggregate.is_terminal:
-                is_recovered = aggregate.current_state == PaymentState.CAPTURED
-                if is_recovered:
+                if aggregate.current_state == PaymentState.CAPTURED:
                     recovered_amount = aggregate.amount
-                stop_reason = "TERMINAL_STATE_REACHED" if is_recovered else "TERMINAL_REFUNDED"
+                    stop_reason = "TERMINAL_STATE_REACHED"
+                else:
+                    stop_reason = "TERMINAL_STATE_REACHED"
                 break
 
-            # C. Detect Risk
+            # C. Risk Assessment
             risk = self.risk_detector.detect_payment_risk(current_event.payment, aggregate)
             if not risk.is_at_risk:
                 stop_reason = "NO_RISK_DETECTED"
                 break
 
-            # D. Construct Sanitized Public Scenario View
-            public_view = PublicScenarioView(
-                scenario_id=current_scenario.scenario_id,
-                failure_class=current_scenario.failure_class,
-                failure_code=current_event.payment.error_code if current_event.payment else None,
-                error_description=current_event.payment.error_description if current_event.payment else None,
-                error_source=current_event.payment.error_source if current_event.payment else None,
-                error_step=current_event.payment.error_step if current_event.payment else None,
-                error_reason=current_event.payment.error_reason if current_event.payment else None,
-                amount_in_paise=current_event.payment.amount if current_event.payment else 0,
-                currency=current_event.payment.currency if current_event.payment else "INR",
-                attempt_count=iteration,
-                customer_id=current_event.payment.customer_id if current_event.payment else None,
-                payment_id=payment_id,
-                payment_method=current_event.payment.method if current_event.payment else "card",
+            # D. Public Scenario Projection
+            current_scenario = SimulatedScenario(
+                scenario_id=initial_scenario.scenario_id,
+                customer=initial_scenario.customer,
+                event=current_event,
+                webhook_payload=current_payload,
+                archetype=initial_scenario.archetype,
+                failure_class=initial_scenario.failure_class,
+                hidden_outcomes=initial_scenario.hidden_outcomes,
             )
+            public_view = PublicScenarioView.from_simulated_scenario(current_scenario)
 
-            # E. Policy Decision with Policy Outage Protection
+            # E. Policy Evaluation (Decide) with Fail-Closed Protection
             try:
                 if not policy_healthy:
-                    raise PolicyOutageError("Policy decision service is currently unavailable.")
+                    raise PolicyOutageError("Policy decision engine is flagged unhealthy. Failing closed.")
                 decision = self.policy.decide(public_view)
             except PolicyOutageError as e:
+                # Fail Closed: Record NO_ACTION and halt loop safely
+                fallback_decision = PolicyDecision(
+                    action_type=SimulatedActionType.NO_ACTION,
+                    confidence=1.0,
+                    rationale="Policy engine unavailable. Failing closed.",
+                    policy_name="FIREWALL_FAIL_CLOSED",
+                    reason_codes=["POLICY_OUTAGE_FAIL_CLOSED"],
+                )
                 record = AgentIterationRecord(
                     iteration=iteration,
                     risk_assessment=risk,
-                    decision=PolicyDecision(
-                        action_type=SimulatedActionType.NO_ACTION,
-                        confidence=0.0,
-                        rationale="Policy decision service unavailable. Failing closed.",
-                        policy_name="FIREWALL_FAIL_CLOSED",
-                        reason_codes=["POLICY_OUTAGE_FAIL_CLOSED"],
-                    ),
+                    decision=fallback_decision,
                     execution_result=None,
+                    aggregate_state_before=current_state.value,
+                    aggregate_state_after=current_state.value,
                     aggregate_state=current_state.value,
                     timestamp_epoch=current_epoch,
                     error_message=str(e),
@@ -163,6 +162,8 @@ class AgentRuntime:
                     risk_assessment=risk,
                     decision=decision,
                     execution_result=None,
+                    aggregate_state_before=current_state.value,
+                    aggregate_state_after=current_state.value,
                     aggregate_state=current_state.value,
                     timestamp_epoch=current_epoch,
                 )
@@ -178,6 +179,8 @@ class AgentRuntime:
                     risk_assessment=risk,
                     decision=decision,
                     execution_result=None,
+                    aggregate_state_before=current_state.value,
+                    aggregate_state_after=aggregate.current_state.value,
                     aggregate_state=aggregate.current_state.value,
                     timestamp_epoch=current_epoch,
                 )
@@ -202,6 +205,8 @@ class AgentRuntime:
                     risk_assessment=risk,
                     decision=decision,
                     execution_result=None,
+                    aggregate_state_before=current_state.value,
+                    aggregate_state_after=current_state.value,
                     aggregate_state=current_state.value,
                     timestamp_epoch=current_epoch,
                     error_message=str(e),
@@ -224,12 +229,13 @@ class AgentRuntime:
             try:
                 exec_result = await self.executor.execute(validated_action, context)
             except (TimeoutError, ConnectionError, PolicyOutageError, Exception) as e:
-                # Catch executor infrastructure faults, log error, and safely stop without crashing
                 record = AgentIterationRecord(
                     iteration=iteration,
                     risk_assessment=risk,
                     decision=decision,
                     execution_result=None,
+                    aggregate_state_before=current_state.value,
+                    aggregate_state_after=current_state.value,
                     aggregate_state=current_state.value,
                     timestamp_epoch=current_epoch,
                     error_message=f"{type(e).__name__}: {str(e)}",
@@ -258,6 +264,8 @@ class AgentRuntime:
                 risk_assessment=risk,
                 decision=decision,
                 execution_result=exec_result,
+                aggregate_state_before=current_state.value,
+                aggregate_state_after=new_state,
                 aggregate_state=new_state,
                 timestamp_epoch=current_epoch,
             )

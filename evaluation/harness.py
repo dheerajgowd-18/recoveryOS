@@ -1,8 +1,8 @@
 """Evaluation harness orchestrator executing policies against synthetic scenarios and computing ground-truth metrics."""
-from typing import Dict, List
+from typing import Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
-from evaluation.metrics import EvaluationMetrics, MetricCalculator, ScenarioEvaluationRecord
+from evaluation.metrics import DEFAULT_CHURN_PENALTY_PAISE_PER_CUSTOMER, EvaluationMetrics, MetricCalculator, ScenarioEvaluationRecord
 from evaluation.policies import BasePolicy
 from policy.public_view import PublicScenarioView
 from simulator.config import SimulatedActionType
@@ -21,8 +21,17 @@ class EvaluationResult(BaseModel):
 class EvaluationHarness:
     """Batch evaluation harness comparing policy interventions against hidden potential outcomes."""
 
-    def evaluate_policy(self, policy: BasePolicy, scenarios: List[SimulatedScenario]) -> EvaluationResult:
+    def __init__(self, churn_penalty_paise_per_customer: int = DEFAULT_CHURN_PENALTY_PAISE_PER_CUSTOMER) -> None:
+        self.churn_penalty_paise_per_customer = churn_penalty_paise_per_customer
+
+    def evaluate_policy(
+        self,
+        policy: BasePolicy,
+        scenarios: List[SimulatedScenario],
+        churn_penalty_paise_per_customer: Optional[int] = None,
+    ) -> EvaluationResult:
         """Run a policy on a batch of scenarios and evaluate against hidden counterfactuals."""
+        penalty = churn_penalty_paise_per_customer if churn_penalty_paise_per_customer is not None else self.churn_penalty_paise_per_customer
         records: List[ScenarioEvaluationRecord] = []
 
         for scenario in scenarios:
@@ -45,7 +54,11 @@ class EvaluationHarness:
             )
             records.append(record)
 
-        metrics = MetricCalculator.compute_metrics(policy_name=policy.name, records=records)
+        metrics = MetricCalculator.compute_metrics(
+            policy_name=policy.name,
+            records=records,
+            churn_penalty_paise_per_customer=penalty,
+        )
 
         return EvaluationResult(
             policy_name=policy.name,
@@ -57,9 +70,15 @@ class EvaluationHarness:
         self,
         policies: List[BasePolicy],
         scenarios: List[SimulatedScenario],
+        churn_penalty_paise_per_customer: Optional[int] = None,
     ) -> Dict[str, EvaluationResult]:
         """Evaluate multiple policies sequentially against the exact same scenario population."""
+        penalty = churn_penalty_paise_per_customer if churn_penalty_paise_per_customer is not None else self.churn_penalty_paise_per_customer
         results: Dict[str, EvaluationResult] = {}
         for policy in policies:
-            results[policy.name] = self.evaluate_policy(policy=policy, scenarios=scenarios)
+            results[policy.name] = self.evaluate_policy(
+                policy=policy,
+                scenarios=scenarios,
+                churn_penalty_paise_per_customer=penalty,
+            )
         return results

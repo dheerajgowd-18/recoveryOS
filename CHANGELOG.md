@@ -5,7 +5,51 @@ All notable changes to the RecoveryOS platform will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-08-31
+
+### Added
+- `Makefile` with standard developer targets: `install`, `test`, and `demo`.
+- `.env.example` template with safe placeholder-only environment variables.
+- Packaging sanity test suite (`tests/unit/test_packaging.py`) validating Makefile targets, environment variable safety, and `.gitignore` coverage.
+
+### Changed
+- `README.md`: Updated with `make` workflow commands alongside direct Python fallback execution.
+
+### Note
+- Prototype validated against the defined synthetic benchmark and local integration tests.
+
+## [0.9.0] - 2026-08-31
+### Added
+- **Permanent Submission & Packaging Documentation**:
+  - `ASSUMPTIONS.md`: Formalized all modeling assumptions, action cost parameters, zero-credential offline benchmark guarantees, and counterfactual simulation boundaries.
+  - `THREAT_MODEL.md`: Comprehensive 14-point threat matrix covering unauthorized action execution, stale state, duplicate replay, policy outages, customer opt-out, PII exposure, and fail-closed mitigations.
+  - `DEMO.md`: Complete interactive CLI demonstration guide with step-by-step judge walkthroughs and script explanations for all 5 signature cases.
+  - `PITCH.md`: 5-minute timed panel presentation pitch script and defense Q&A guide addressing all anticipated architectural and evaluation queries.
+  - `tests/unit/test_documentation.py`: Automated documentation consistency test suite verifying file presence, required keywords, and disclosure statements.
+- **Submission Alignment**:
+  - `README.md` & `PROJECT_EXPLANATION.md`: Updated to reflect official Track 03 naming (`Razorpay AI Buildathon 2026 — Track 03: AI Revenue Recovery`), complete documentation links, and comprehensive system architecture diagrams.
+
+## [0.8.0] - 2026-08-31
+### Added
+- **Audit & Decision Replay Engine (`audit/decision_log.py`, `audit/replay.py`)**:
+  - `DecisionRecord` model capturing immutable decision provenance, candidate score breakdowns, risk evaluations, and explicit `aggregate_state_before` / `aggregate_state_after` transitions.
+  - `DecisionLogStore` in-memory append-only audit persistence.
+  - `ReplayEngine` enabling bit-level reconstruction of any historical decision cycle with selected-action score lookup and execution outcome.
+- **Churn-Adjusted Evaluation Metrics & Benchmark (`evaluation/metrics.py`, `evaluation/harness.py`)**:
+  - Extended `EvaluationMetrics` with `churn_penalty_paise`, `adjusted_net_recovery_paise`, `incremental_adjusted_net_recovery_paise`, `intervention_count`, `abstention_count`, and `actions_avoided_count`.
+  - Configurable churn penalty proxy (`DEFAULT_CHURN_PENALTY_PAISE_PER_CUSTOMER = 250_000` paise / ₹2,500).
+- **Signature Demonstration CLI (`scripts/demo.py`)**:
+  - Standalone terminal showcase executing all 5 signature cases: Correct Abstention, Delayed Retry Economic Selection (with candidate scoring table), Stale Action Protection, Safety Block & Consent Enforcement, and 100-Scenario Batch Benchmark with Churn-Adjusted Economics.
+- **Documentation Suite**:
+  - `README.md`: First-screen benchmark table matching CLI demo output, architecture diagram, and quickstart instructions.
+  - `ARCHITECTURE.md`: Deep-dive technical specification across all architectural layers.
+  - `EVALUATION.md`: Mathematical definitions for Gross, Net, Churn Penalty, Adjusted Net, and Incremental Adjusted Net Recovery, alongside synthetic disclosure.
+  - `LIMITATIONS.md`: Engineering-grade disclosure on churn penalty assumptions, synthetic priors, and continuous timing boundaries.
+- **Test Suite (`tests/unit/test_audit.py`)**:
+  - Added unit tests for decision record storage, non-first candidate score replay lookup, churn penalty calculation, actions avoided counter, demo script execution, and North Star benchmark assertion (89 total passing tests).
+
 ## [0.7.0] - 2026-08-31
+
 ### Added
 - **Safety Governor & Tool Firewall (`governor/firewall.py`, `governor/exceptions.py`)**:
   - `ToolFirewall` enforcing action schema validation, channel-specific and global customer consent/opt-out checks, and dispatch idempotency keys.

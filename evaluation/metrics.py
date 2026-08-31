@@ -5,6 +5,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from simulator.config import SimulatedActionType
 from simulator.outcomes import ActionOutcome
 
+DEFAULT_CHURN_PENALTY_PAISE_PER_CUSTOMER = 250_000  # Rs 2,500 per churned customer proxy
+
 
 class ScenarioEvaluationRecord(BaseModel):
     """Detailed evaluation trace for a single scenario under a given policy."""
@@ -14,6 +16,7 @@ class ScenarioEvaluationRecord(BaseModel):
     policy_name: str = Field(..., description="Name of the evaluating policy")
     chosen_action: SimulatedActionType = Field(..., description="Action selected by the policy")
     is_intervention: bool = Field(..., description="Whether chosen action is an active intervention (not NO_ACTION)")
+    is_abstention: bool = Field(default=False, description="Whether chosen action was NO_ACTION")
     recovered: bool = Field(..., description="Whether revenue was captured by the chosen action")
     recovered_amount_paise: int = Field(..., ge=0, description="Amount captured in paise under chosen action")
     action_cost_paise: int = Field(..., ge=0, description="Cost incurred to execute chosen action in paise")
@@ -23,26 +26,35 @@ class ScenarioEvaluationRecord(BaseModel):
     fatigue_score: float = Field(..., ge=0.0, le=1.0, description="Customer fatigue score under chosen action")
     natural_recovered: bool = Field(..., description="Whether revenue would naturally recover under NO_ACTION")
     natural_recovered_amount_paise: int = Field(..., ge=0, description="Amount naturally recovered under NO_ACTION")
+    natural_customer_churned: bool = Field(default=False, description="Whether customer naturally churned under NO_ACTION")
     incremental_amount_paise: int = Field(..., description="Incremental recovered amount over natural recovery")
 
 
 class EvaluationMetrics(BaseModel):
-    """Aggregated financial and operational performance metrics for a policy over a batch."""
+    """Aggregated financial, churn-adjusted, and operational performance metrics for a policy over a batch."""
     model_config = ConfigDict(extra="forbid")
 
     policy_name: str = Field(..., description="Name of the evaluated policy")
     total_scenarios: int = Field(..., ge=0, description="Total number of evaluated scenarios")
     total_interventions: int = Field(..., ge=0, description="Count of active interventions (non-NO_ACTION decisions)")
+    intervention_count: int = Field(..., ge=0, description="Count of active interventions")
+    total_abstentions: int = Field(..., ge=0, description="Count of abstentions (NO_ACTION decisions)")
+    abstention_count: int = Field(..., ge=0, description="Count of abstentions")
+    actions_avoided_count: int = Field(..., ge=0, description="Count of actions avoided / abstained")
     intervention_rate: float = Field(..., ge=0.0, le=1.0, description="Fraction of scenarios where an intervention was triggered")
     gross_recovered_amount_paise: int = Field(..., ge=0, description="Total recovered revenue in paise under policy actions")
     natural_recovered_amount_paise: int = Field(..., ge=0, description="Baseline revenue in paise recovered without any action")
     incremental_recovered_amount_paise: int = Field(..., description="Incremental revenue gained over natural baseline (Gross - Natural)")
     total_action_cost_paise: int = Field(..., ge=0, description="Total cost of executing chosen policy interventions in paise")
     net_recovered_amount_paise: int = Field(..., description="Net recovery after subtracting execution costs (Gross - Total Cost)")
+    net_recovery_after_action_cost_paise: int = Field(..., description="Net recovery after subtracting execution costs")
+    total_churned_customers: int = Field(..., ge=0, description="Number of customers who churned under policy actions")
+    churn_penalty_paise: int = Field(default=0, ge=0, description="Total financial penalty assigned to customer churn")
+    adjusted_net_recovery_paise: int = Field(default=0, description="Net recovery after subtracting action costs and churn penalty")
+    incremental_adjusted_net_recovery_paise: int = Field(default=0, description="Incremental adjusted net recovery over baseline NO_ACTION")
     recovery_rate: float = Field(..., ge=0.0, le=1.0, description="Fraction of scenarios successfully recovered by policy")
     natural_recovery_rate: float = Field(..., ge=0.0, le=1.0, description="Fraction of scenarios naturally recovered by baseline NO_ACTION")
     incremental_recovery_rate: float = Field(..., ge=-1.0, le=1.0, description="Incremental recovery rate over natural baseline")
-    total_churned_customers: int = Field(..., ge=0, description="Number of customers who churned under policy actions")
     churn_rate: float = Field(..., ge=0.0, le=1.0, description="Fraction of customers who churned")
     average_fatigue_score: float = Field(..., ge=0.0, le=1.0, description="Mean contact fatigue score across scenarios")
     average_recovery_delay_seconds: float = Field(..., ge=0.0, description="Mean realization delay in seconds for recovered scenarios")
@@ -61,6 +73,7 @@ class MetricCalculator:
     ) -> ScenarioEvaluationRecord:
         """Construct a single scenario evaluation record from chosen and baseline counterfactuals."""
         is_intervention = chosen_action != SimulatedActionType.NO_ACTION
+        is_abstention = not is_intervention
         recovered_amount = chosen_outcome.recovered_amount_paise if chosen_outcome.recovered else 0
         natural_recovered_amount = natural_outcome.recovered_amount_paise if natural_outcome.recovered else 0
         net_value = recovered_amount - chosen_outcome.action_cost_paise
@@ -71,6 +84,7 @@ class MetricCalculator:
             policy_name=policy_name,
             chosen_action=chosen_action,
             is_intervention=is_intervention,
+            is_abstention=is_abstention,
             recovered=chosen_outcome.recovered,
             recovered_amount_paise=recovered_amount,
             action_cost_paise=chosen_outcome.action_cost_paise,
@@ -80,11 +94,17 @@ class MetricCalculator:
             fatigue_score=chosen_outcome.fatigue_score,
             natural_recovered=natural_outcome.recovered,
             natural_recovered_amount_paise=natural_recovered_amount,
+            natural_customer_churned=natural_outcome.customer_churned,
             incremental_amount_paise=incremental_amount,
         )
 
     @classmethod
-    def compute_metrics(cls, policy_name: str, records: List[ScenarioEvaluationRecord]) -> EvaluationMetrics:
+    def compute_metrics(
+        cls,
+        policy_name: str,
+        records: List[ScenarioEvaluationRecord],
+        churn_penalty_paise_per_customer: int = DEFAULT_CHURN_PENALTY_PAISE_PER_CUSTOMER,
+    ) -> EvaluationMetrics:
         """Aggregate individual scenario records into a complete EvaluationMetrics model."""
         total_scenarios = len(records)
         if total_scenarios == 0:
@@ -92,22 +112,31 @@ class MetricCalculator:
                 policy_name=policy_name,
                 total_scenarios=0,
                 total_interventions=0,
+                intervention_count=0,
+                total_abstentions=0,
+                abstention_count=0,
+                actions_avoided_count=0,
                 intervention_rate=0.0,
                 gross_recovered_amount_paise=0,
                 natural_recovered_amount_paise=0,
                 incremental_recovered_amount_paise=0,
                 total_action_cost_paise=0,
                 net_recovered_amount_paise=0,
+                net_recovery_after_action_cost_paise=0,
+                total_churned_customers=0,
+                churn_penalty_paise=0,
+                adjusted_net_recovery_paise=0,
+                incremental_adjusted_net_recovery_paise=0,
                 recovery_rate=0.0,
                 natural_recovery_rate=0.0,
                 incremental_recovery_rate=0.0,
-                total_churned_customers=0,
                 churn_rate=0.0,
                 average_fatigue_score=0.0,
                 average_recovery_delay_seconds=0.0,
             )
 
         total_interventions = sum(1 for r in records if r.is_intervention)
+        total_abstentions = total_scenarios - total_interventions
         gross_recovered = sum(r.recovered_amount_paise for r in records)
         natural_recovered = sum(r.natural_recovered_amount_paise for r in records)
         incremental_recovered = gross_recovered - natural_recovered
@@ -117,6 +146,14 @@ class MetricCalculator:
         recovered_count = sum(1 for r in records if r.recovered)
         natural_recovered_count = sum(1 for r in records if r.natural_recovered)
         churned_count = sum(1 for r in records if r.customer_churned)
+        churn_penalty = churned_count * churn_penalty_paise_per_customer
+        adjusted_net_recovery = net_recovered - churn_penalty
+
+        # Natural baseline adjusted net recovery
+        natural_churned_count = sum(1 for r in records if r.natural_customer_churned)
+        natural_churn_penalty = natural_churned_count * churn_penalty_paise_per_customer
+        natural_adjusted_net_recovery = natural_recovered - natural_churn_penalty
+        incremental_adjusted_net_recovery = adjusted_net_recovery - natural_adjusted_net_recovery
 
         recovery_rate = recovered_count / total_scenarios
         natural_recovery_rate = natural_recovered_count / total_scenarios
@@ -132,16 +169,24 @@ class MetricCalculator:
             policy_name=policy_name,
             total_scenarios=total_scenarios,
             total_interventions=total_interventions,
+            intervention_count=total_interventions,
+            total_abstentions=total_abstentions,
+            abstention_count=total_abstentions,
+            actions_avoided_count=total_abstentions,
             intervention_rate=round(intervention_rate, 4),
             gross_recovered_amount_paise=gross_recovered,
             natural_recovered_amount_paise=natural_recovered,
             incremental_recovered_amount_paise=incremental_recovered,
             total_action_cost_paise=total_action_cost,
             net_recovered_amount_paise=net_recovered,
+            net_recovery_after_action_cost_paise=net_recovered,
+            total_churned_customers=churned_count,
+            churn_penalty_paise=churn_penalty,
+            adjusted_net_recovery_paise=adjusted_net_recovery,
+            incremental_adjusted_net_recovery_paise=incremental_adjusted_net_recovery,
             recovery_rate=round(recovery_rate, 4),
             natural_recovery_rate=round(natural_recovery_rate, 4),
             incremental_recovery_rate=round(incremental_recovery_rate, 4),
-            total_churned_customers=churned_count,
             churn_rate=round(churn_rate, 4),
             average_fatigue_score=round(avg_fatigue, 4),
             average_recovery_delay_seconds=round(avg_delay, 2),
