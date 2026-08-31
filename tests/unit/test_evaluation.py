@@ -10,6 +10,7 @@ from evaluation.policies import (
     ProbabilityOnlyPolicy,
     StaticRulePolicy,
 )
+from policy.public_view import PublicScenarioView
 from simulator.config import CustomerArchetype, FailureClass, ScenarioConfig, SimulatedActionType, SimulatorConfig
 from simulator.generator import Simulator
 from simulator.outcomes import ActionOutcome
@@ -30,7 +31,8 @@ class TestBaselinePolicies:
         assert policy.name == "baseline_0_no_action"
 
         for scenario in standard_simulator_batch:
-            decision = policy.decide(scenario)
+            view = PublicScenarioView.from_simulated_scenario(scenario)
+            decision = policy.decide(view)
             assert isinstance(decision, PolicyDecision)
             assert decision.action_type == SimulatedActionType.NO_ACTION
             assert decision.confidence == 1.0
@@ -41,7 +43,8 @@ class TestBaselinePolicies:
         assert policy.name == "baseline_1_always_retry"
 
         for scenario in standard_simulator_batch:
-            decision = policy.decide(scenario)
+            view = PublicScenarioView.from_simulated_scenario(scenario)
+            decision = policy.decide(view)
             assert isinstance(decision, PolicyDecision)
             assert decision.action_type == SimulatedActionType.RETRY_NOW
             assert decision.confidence == 1.0
@@ -52,11 +55,12 @@ class TestBaselinePolicies:
         assert policy.name == "baseline_2_static_rules"
 
         for scenario in standard_simulator_batch:
-            decision = policy.decide(scenario)
+            view = PublicScenarioView.from_simulated_scenario(scenario)
+            decision = policy.decide(view)
             assert isinstance(decision, PolicyDecision)
             assert decision.policy_name == "baseline_2_static_rules"
 
-            error_code = scenario.event.payment.error_code
+            error_code = view.failure_code
             if error_code == "BAD_REQUEST_ERROR":
                 assert decision.action_type == SimulatedActionType.PAYMENT_LINK
             elif error_code == "GATEWAY_ERROR":
@@ -69,12 +73,13 @@ class TestBaselinePolicies:
         assert policy.name == "baseline_3_probability_only"
 
         for scenario in standard_simulator_batch:
-            decision = policy.decide(scenario)
+            view = PublicScenarioView.from_simulated_scenario(scenario)
+            decision = policy.decide(view)
             assert isinstance(decision, PolicyDecision)
             assert decision.policy_name == "baseline_3_probability_only"
             assert decision.confidence > 0.0
 
-            error_code = scenario.event.payment.error_code
+            error_code = view.failure_code
             if error_code == "BAD_REQUEST_ERROR":
                 assert decision.action_type == SimulatedActionType.PAYMENT_LINK
             elif error_code == "GATEWAY_ERROR":

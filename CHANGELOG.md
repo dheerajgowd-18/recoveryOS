@@ -5,7 +5,22 @@ All notable changes to the RecoveryOS platform will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-08-31
+### Added
+- **Public Policy Boundary (`policy/public_view.py`, `policy/base.py`)**:
+  - `PublicScenarioView` model and `from_simulated_scenario()` factory projecting strictly sanitized domain event features while preventing latent customer archetype and counterfactual leakage.
+  - Refactored `BasePolicy` and `PolicyDecision` contracts with machine-readable `reason_codes`, `expected_net_value_paise`, and `expected_incremental_value_paise`.
+- **Deterministic RecoveryOS Policy v0 (`policy/deterministic.py`, `policy/candidates.py`, `policy/scoring.py`, `policy/config.py`)**:
+  - `DeterministicRecoveryPolicy` ("RECOVERYOS_DETERMINISTIC_V0") with transparent candidate filtering, expected-value proxy calculation, and explicit abstention guards.
+  - Candidate generator enforcing failure physics (e.g. blocking retries on expired cards, enforcing attempt caps).
+  - `ExpectedValueScorer` computing incremental recovery uplift $\Delta Y = Y(a) - Y(\text{no\_action})$ and expected net value minus action costs.
+- **Hardened Evaluation Harness Integration (`evaluation/harness.py`)**:
+  - Updated `EvaluationHarness` to project `PublicScenarioView` before passing scenarios to policies, guaranteeing zero information leakage.
+- **Test Suite (`tests/unit/test_deterministic_policy.py`)**:
+  - 14 new unit tests covering public view isolation, factory parsing, candidate filtering, proxy scoring, abstention conditions, determinism, and full batch evaluation through `EvaluationHarness` (69 total tests across repository).
+
 ## [0.4.0] - 2026-08-31
+
 ### Added
 - **Evaluation Harness & Metrics Engine (`evaluation/metrics.py`, `evaluation/harness.py`)**:
   - Pydantic v2 `EvaluationMetrics` and `ScenarioEvaluationRecord` models calculating Gross Recovery, Natural Recovery, Incremental Recovery, Net Recovery, Total Action Cost, Intervention Count/Rate, Churn, and Fatigue.

@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from evaluation.metrics import EvaluationMetrics, MetricCalculator, ScenarioEvaluationRecord
 from evaluation.policies import BasePolicy
+from policy.public_view import PublicScenarioView
 from simulator.config import SimulatedActionType
 from simulator.generator import SimulatedScenario
 
@@ -25,10 +26,13 @@ class EvaluationHarness:
         records: List[ScenarioEvaluationRecord] = []
 
         for scenario in scenarios:
-            # Policy decision based purely on public domain scenario data
-            decision = policy.decide(scenario)
+            # 1. Project sanitized public view (strictly hides counterfactual outcomes and archetypes)
+            public_view = PublicScenarioView.from_simulated_scenario(scenario)
 
-            # Retrieve secret ground truth counterfactuals from hidden_outcomes
+            # 2. Query policy using ONLY the public view
+            decision = policy.decide(public_view)
+
+            # 3. Retrieve secret ground truth counterfactuals from hidden_outcomes for evaluation scoring
             chosen_outcome = scenario.hidden_outcomes.get_outcome(decision.action_type)
             natural_outcome = scenario.hidden_outcomes.get_outcome(SimulatedActionType.NO_ACTION)
 
