@@ -5,6 +5,23 @@ All notable changes to the RecoveryOS platform will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-08-31
+### Added
+- **Domain Aggregates**:
+  - `PaymentAggregate` and `SubscriptionAggregate` tracking financial state, version counter, and chronologically sorted event timeline (`domain/aggregates.py`).
+- **Event Store & Idempotency Abstractions**:
+  - `EventStore` interface and `InMemoryEventStore` with chronological event query by `occurred_at` (`ingestion/store.py`).
+  - `IdempotencyTracker` interface and `InMemoryIdempotencyTracker` caching execution results and preventing duplicate side-effects (`ingestion/idempotency.py`).
+- **State Reconciliation Engine**:
+  - `StateReconciler` resolving out-of-order, duplicate, and late event arrivals deterministically (`ingestion/reconciler.py`).
+  - Terminal state protection: Preserves `CAPTURED` terminal state when delayed failure webhooks arrive.
+  - Strict transition matrix enforcing valid state transitions and raising `InvalidStateTransitionError` on illegal forward mutations.
+- **Ingestion Orchestration Service**:
+  - `IngestionService` coordinating cryptographic verification, idempotency checking, event appending, and aggregate state reconstruction (`backend/services/ingestion_service.py`).
+  - Updated `POST /webhooks/razorpay` to return structured idempotency and state metadata (`backend/api/webhooks.py`).
+- **Test Suite**:
+  - 39 unit and integration tests including adversarial fintech scenarios: duplicate webhooks, out-of-order `captured` vs `authorized`, late failure absorption, and invalid transition rejection (`tests/unit/test_idempotency.py`, `tests/integration/test_reconciliation.py`).
+
 ## [0.1.0] - 2026-08-31
 ### Added
 - **Repository Setup**: Initialized repository structure with `.gitignore`, `pyproject.toml`, and `requirements.txt`.

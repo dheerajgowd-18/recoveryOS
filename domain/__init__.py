@@ -1,4 +1,5 @@
 """Domain models and contracts for RecoveryOS."""
+from domain.aggregates import PaymentAggregate, SubscriptionAggregate
 from domain.enums import (
     ActionStatus,
     ActionType,
@@ -28,4 +29,6 @@ __all__ = [
     "WebhookPayload",
     "Action",
     "Decision",
+    "PaymentAggregate",
+    "SubscriptionAggregate",
 ]

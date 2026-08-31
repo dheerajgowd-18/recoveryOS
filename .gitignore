@@ -46,5 +46,9 @@ htmlcov/
 *.swo
 
 # Local Handoff Artifacts (Ignored from version control)
+CONTEXT_SUMMARY_*.md
+REVIEW_ARTIFACT_*.md
 CONTEXT_SUMMARY_PHASE_01.md
 REVIEW_ARTIFACT_PHASE_01.md
+CONTEXT_SUMMARY_PHASE_02.md
+REVIEW_ARTIFACT_PHASE_02.md

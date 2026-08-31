@@ -4,7 +4,7 @@ RecoveryOS is an enterprise-grade autonomous revenue recovery and dunning intell
 
 ---
 
-## 1. System Architecture (Phase 1)
+## 1. System Architecture
 
 ```
                        +-------------------------------+
@@ -24,56 +24,67 @@ RecoveryOS is an enterprise-grade autonomous revenue recovery and dunning intell
                      +-----------------------------------+
                      |      backend/api/webhooks.py      |
                      |  - Pydantic v2 Parsing & Valid.   |
-                     |  - WebhookPayload & Entities      |
+                     |  - WebhookPayload Extraction      |
                      +-----------------+-----------------+
                                        |
                                        v
-    +-----------------------------------------------------------------------+
-    |                         Domain Layer (domain/)                        |
-    |  - Enums (RevenueState, PaymentState, SubscriptionState, ActionType)  |
-    |  - Events (PaymentEntity, SubscriptionEntity, PaymentEvent)           |
-    |  - Governance (Action, ActionParams, Decision, GuardrailCheckResult)  |
-    +-----------------------------------------------------------------------+
-                                       |
-                                       v
-    +-----------------------------------------------------------------------+
-    |                       Execution Layer (execution/)                    |
-    |  - RazorpayAdapter (Abstract Boundary Interface)                      |
-    |  - MockAdapter (In-memory Simulation & State Tracking)                |
-    +-----------------------------------------------------------------------+
+                     +-----------------------------------+
+                     | backend/services/ingestion_service|
+                     |  - Deterministic Event ID Deriv.  |
+                     +---+---------------------------+---+
+                         |                           |
+        (Duplicate?)     v                           v (Fresh Event)
+        +----------------------------+   +----------------------------+
+        | ingestion/idempotency.py   |   |    ingestion/store.py      |
+        |  - Return Cached Response  |   |  - Append PaymentEvent     |
+        +----------------------------+   +-------------+--------------+
+                                                       |
+                                                       v
+                                         +----------------------------+
+                                         |   ingestion/reconciler.py  |
+                                         |  - Sort by occurred_at     |
+                                         |  - Terminal State Guard    |
+                                         |  - Transition Matrix Check |
+                                         +-------------+--------------+
+                                                       |
+                                                       v
+                                         +----------------------------+
+                                         |    domain/aggregates.py    |
+                                         |  - PaymentAggregate        |
+                                         |  - SubscriptionAggregate   |
+                                         +----------------------------+
 ```
 
 ---
 
 ## 2. Core Modules & Contracts
 
-### 2.1 Domain Layer (`domain/`)
-- **`domain/enums.py`**:
-  - `RevenueState`: Account lifecycle stages (`healthy`, `at_risk`, `critical`, `lost`, `recovered`).
-  - `PaymentState`: Razorpay payment statuses (`created`, `authorized`, `captured`, `refunded`, `failed`).
-  - `SubscriptionState`: Subscription states (`created`, `authenticated`, `active`, `pending`, `halted`, `cancelled`, `completed`, `expired`).
-  - `ActionType` & `DecisionType`: Machine-actionable recovery intents.
-- **`domain/events.py`**:
-  - `PaymentEntity` & `SubscriptionEntity`: Exact mirror of Razorpay JSON payloads with strict typing.
-  - `WebhookPayload`: Root webhook envelope containing account metadata and entity containers.
-  - `PaymentEvent`: Normalized internal event model.
-- **`domain/actions.py`**:
-  - `Action` & `ActionParams`: Strongly-typed execution instructions with parameter bounds.
-  - `Decision`: Governed decision containing audit rationale, confidence score, and guardrail compliance records.
+### 2.1 Ingestion & Idempotency Layer (`ingestion/`)
+- **`ingestion/idempotency.py`**:
+  - `IdempotencyTracker` & `InMemoryIdempotencyTracker`: Tracks processed `event_id` keys and caches execution acknowledgments.
+  - Replays of identical webhook deliveries return cached results with `is_duplicate = True` without re-evaluating business state.
+- **`ingestion/store.py`**:
+  - `EventStore` & `InMemoryEventStore`: Append-only event stream providing timeline sorting by `occurred_at` (business time).
+  - Snapshot persistence for `PaymentAggregate` and `SubscriptionAggregate`.
+- **`ingestion/reconciler.py`**:
+  - `StateReconciler`: Implements deterministic state transition matrices.
+  - **Out-of-order handling**: Reconstructs state based on `occurred_at` rather than delivery arrival order (`received_at`).
+  - **Terminal State Protection**: Once a transaction achieves terminal state (`CAPTURED` or `REFUNDED`), delayed arrival of older `payment.failed` webhooks will not corrupt the terminal state. Late events are safely absorbed into the audit timeline.
+  - **Illegal Transition Detection**: Forward attempts to transition from terminal states (e.g. `CAPTURED` -> `FAILED`) trigger explicit `InvalidStateTransitionError` exceptions.
 
-### 2.2 Ingestion & Security Layer (`backend/`)
-- **`backend/dependencies/security.py`**:
-  - Webhooks are cryptographically validated using HMAC SHA-256 against `RAZORPAY_WEBHOOK_SECRET`.
-  - Raw body bytes are consumed directly via `Request.body()` before parsing to prevent whitespace or key-reordering discrepancies.
-  - Constant-time verification using `hmac.compare_digest` prevents timing side-channel attacks.
-- **`backend/api/webhooks.py`**:
-  - Processes authenticated payloads and enforces schema validation.
+### 2.2 Domain Layer (`domain/`)
+- **`domain/aggregates.py`**:
+  - `PaymentAggregate` & `SubscriptionAggregate`: Encapsulate current state, monotonic versioning, full event history, error logs, and late event counters.
+- **`domain/enums.py`**:
+  - `RevenueState`, `PaymentState`, `SubscriptionState`, `ActionType`, `DecisionType`, `ActionStatus`.
+- **`domain/events.py`**:
+  - Strongly typed Pydantic v2 schemas: `PaymentEntity`, `SubscriptionEntity`, `WebhookPayload`, `PaymentEvent`.
+- **`domain/actions.py`**:
+  - `Action`, `ActionParams`, `Decision`, `GuardrailCheckResult`.
 
 ### 2.3 Execution Layer (`execution/`)
-- **`execution/base.py`**:
-  - Defines the `RazorpayAdapter` abstract contract.
-- **`execution/mock_adapter.py`**:
-  - Offline, high-fidelity mock implementation for deterministic unit and integration testing without network calls or third-party dependencies.
+- **`execution/base.py` & `execution/mock_adapter.py`**:
+  - `RazorpayAdapter` interface and high-fidelity `MockAdapter` for offline simulation of actions and gateway queries.
 
 ---
 
