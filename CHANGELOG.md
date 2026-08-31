@@ -5,7 +5,21 @@ All notable changes to the RecoveryOS platform will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-08-31
+### Added
+- **Recovery Executor Framework (`execution/executor.py`, `execution/simulator_executor.py`)**:
+  - `RecoveryExecutor` abstract interface with `ExecutionContext` and `ExecutionResult` contracts.
+  - `SimulatorExecutor` mapping chosen policy actions to hidden scenario counterfactuals and synthesizing resulting `payment.captured` or `payment.failed` Razorpay domain events.
+- **Deterministic Risk Detection (`agent/risk.py`)**:
+  - `RiskDetector` assessing financial entity risk levels (`NONE`, `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`) and gating non-failure scenarios.
+- **Closed-Loop Agent Runtime (`agent/runtime.py`)**:
+  - `AgentRuntime` orchestrating the observe-decide-execute-observe cycle connecting IngestionService, RiskDetector, DeterministicRecoveryPolicy, and SimulatorExecutor.
+  - Bounded iteration control (`max_iterations = 5`), terminal state early-stopping, explicit abstention handling, and pre-execution stale action protection.
+- **Integration Test Suite (`tests/integration/test_agent_loop.py`)**:
+  - 4 new end-to-end integration tests validating full recovery lifecycle, low-value abstention, retry exhaustion stopping, and out-of-band stale action protection (73 total tests across repository).
+
 ## [0.5.0] - 2026-08-31
+
 ### Added
 - **Public Policy Boundary (`policy/public_view.py`, `policy/base.py`)**:
   - `PublicScenarioView` model and `from_simulated_scenario()` factory projecting strictly sanitized domain event features while preventing latent customer archetype and counterfactual leakage.
