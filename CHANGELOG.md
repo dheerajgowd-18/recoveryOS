@@ -5,7 +5,23 @@ All notable changes to the RecoveryOS platform will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-08-31
+### Added
+- **Evaluation Harness & Metrics Engine (`evaluation/metrics.py`, `evaluation/harness.py`)**:
+  - Pydantic v2 `EvaluationMetrics` and `ScenarioEvaluationRecord` models calculating Gross Recovery, Natural Recovery, Incremental Recovery, Net Recovery, Total Action Cost, Intervention Count/Rate, Churn, and Fatigue.
+  - `EvaluationHarness` orchestrator processing batches of `SimulatedScenario` objects, applying policy decisions, and evaluating against hidden counterfactuals $Y(a)$.
+  - Batch evaluation runner `evaluate_all()` supporting multi-policy comparative benchmarking against identical customer populations.
+- **Baseline Policies Suite (`evaluation/policies.py`)**:
+  - `BasePolicy` abstract base class and `PolicyDecision` model.
+  - Baseline 0 (`NoActionPolicy`): Always abstain, measuring organic natural recovery.
+  - Baseline 1 (`AlwaysRetryPolicy`): Unconditional immediate retry heuristic.
+  - Baseline 2 (`StaticRulePolicy`): Heuristic branching on observable error codes and failure sources.
+  - Baseline 3 (`ProbabilityOnlyPolicy`): Greedy probability maximizer selecting highest raw estimated recovery probability without cost or churn consideration.
+- **Test Suite (`tests/unit/test_evaluation.py`)**:
+  - 10 new unit tests covering baseline decision boundaries, Baseline 0 natural recovery equality, Baseline 1 full intervention count, evaluation determinism, empty batch safety, metric calculation formulas, and comparative consistency across all 4 baselines (55 total tests across repository).
+
 ## [0.3.0] - 2026-08-31
+
 ### Added
 - **Synthetic Revenue-Recovery Environment (Simulator v1)**:
   - Configuration models (`SimulatorConfig`, `ScenarioConfig`, `FailureClass`, `CustomerArchetype`, `SimulatedActionType`) (`simulator/config.py`).

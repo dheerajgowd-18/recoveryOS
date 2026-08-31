@@ -55,7 +55,7 @@ RecoveryOS is an enterprise-grade autonomous revenue recovery and dunning intell
                                          +----------------------------+
 
 -----------------------------------------------------------------------------------------
-                  EVALUATION & SYNTHETIC ENVIRONMENT (Phase 3)
+                  EVALUATION & SYNTHETIC ENVIRONMENT (Phase 3 & 4)
 -----------------------------------------------------------------------------------------
   +-----------------------------------------------------------------------------------+
   | simulator/ (Simulator v1)                                                         |
@@ -71,10 +71,18 @@ RecoveryOS is an enterprise-grade autonomous revenue recovery and dunning intell
   |  [Public Events]                    [Ground Truth]                   [Hidden Outcomes]    |
   |  - PaymentEvent                     - CustomerArchetype              - Y(no_action)       |
   |  - WebhookPayload                   - FailureClass                   - Y(retry_now)       |
-  |  (Fed to Agent Ingestion)           (Evaluation Meta)                - Y(retry_later)     |
-  |                                                                      - Y(payment_link)    |
-  |                                                                      - Y(reminder)        |
-  |                                                                      (Secret for Scoring) |
+  |        |                                                             - Y(retry_later)     |
+  |        v                                                             - Y(payment_link)    |
+  |  [evaluation/policies.py]                                            - Y(reminder)        |
+  |  - Policy.decide(scenario)                                                 |              |
+  |        |                                                                   |              |
+  |        +-------------------------> [Chosen Action a]                       |              |
+  |                                           |                                |              |
+  |                                           v                                v              |
+  |                                 [evaluation/harness.py] <------------------+              |
+  |                                 - Lookup Y(a) vs Y(no_action)                             |
+  |                                 - MetricCalculator: Incremental & Net Recovery            |
+  |                                 - Emits EvaluationMetrics & EvaluationResult              |
   +-----------------------------------------------------------------------------------+
 ```
 
@@ -98,7 +106,22 @@ RecoveryOS is an enterprise-grade autonomous revenue recovery and dunning intell
 - **`simulator/entities.py` & `simulator/generator.py`**:
   - Emits `SimulatedScenario` containing public `PaymentEvent` / `WebhookPayload` ready for agent consumption while segregating hidden counterfactual outcomes.
 
-### 2.2 Ingestion & Idempotency Layer (`ingestion/`)
+### 2.2 Evaluation Harness & Baseline Suite (`evaluation/`)
+- **`evaluation/metrics.py`**:
+  - `EvaluationMetrics`: Strict Pydantic v2 model capturing Gross Recovery, Natural Recovery, Incremental Recovery, Net Recovery, Intervention Count, Churn, and Fatigue.
+  - `ScenarioEvaluationRecord`: Per-scenario record comparing chosen intervention against baseline natural outcome $Y(\text{no\_action})$.
+  - `MetricCalculator`: Aggregates records into final benchmark metrics.
+- **`evaluation/policies.py`**:
+  - `BasePolicy` & `PolicyDecision`: Contract ensuring policies receive only public scenario data.
+  - `NoActionPolicy` (Baseline 0): Always abstain to establish organic recovery baseline.
+  - `AlwaysRetryPolicy` (Baseline 1): Unconditionally retry immediately on failure.
+  - `StaticRulePolicy` (Baseline 2): Diagnostic heuristic mapping error codes to targeted interventions.
+  - `ProbabilityOnlyPolicy` (Baseline 3): Greedy probability selection maximizing raw $\arg\max_a P(a \mid x)$ without considering cost or churn.
+- **`evaluation/harness.py`**:
+  - `EvaluationHarness`: Batch orchestrator executing policies against scenarios and scoring against hidden counterfactuals.
+  - `EvaluationResult`: Encapsulates aggregate metrics and granular per-scenario traces.
+
+### 2.3 Ingestion & Idempotency Layer (`ingestion/`)
 - **`ingestion/idempotency.py`**:
   - `IdempotencyTracker` & `InMemoryIdempotencyTracker`: Tracks processed `event_id` keys and caches execution acknowledgments.
 - **`ingestion/store.py`**:
@@ -106,13 +129,13 @@ RecoveryOS is an enterprise-grade autonomous revenue recovery and dunning intell
 - **`ingestion/reconciler.py`**:
   - `StateReconciler`: Out-of-order resolution, terminal state preservation (`CAPTURED`, `REFUNDED`), and illegal transition protection.
 
-### 2.3 Domain Layer (`domain/`)
+### 2.4 Domain Layer (`domain/`)
 - **`domain/aggregates.py`**:
   - `PaymentAggregate` & `SubscriptionAggregate`.
 - **`domain/enums.py`** & **`domain/events.py`** & **`domain/actions.py`**:
   - Explicit Pydantic v2 domain contracts.
 
-### 2.4 Execution Layer (`execution/`)
+### 2.5 Execution Layer (`execution/`)
 - **`execution/base.py` & `execution/mock_adapter.py`**:
   - `RazorpayAdapter` and in-memory `MockAdapter`.
 
@@ -125,11 +148,21 @@ RecoveryOS is an enterprise-grade autonomous revenue recovery and dunning intell
 pytest -v
 ```
 
-### 3.2 Running Synthetic Simulator
+### 3.2 Running Synthetic Simulator & Evaluation Harness
 ```python
 from simulator import Simulator, SimulatorConfig
+from evaluation import EvaluationHarness, NoActionPolicy, AlwaysRetryPolicy, StaticRulePolicy, ProbabilityOnlyPolicy
 
+# 1. Generate deterministic scenario batch
 sim = Simulator()
-batch = sim.generate_batch(SimulatorConfig(seed=42, num_scenarios=100))
-print(f"Generated {len(batch)} reproducible recovery scenarios.")
+scenarios = sim.generate_batch(SimulatorConfig(seed=42, num_scenarios=100))
+
+# 2. Evaluate baseline policies
+harness = EvaluationHarness()
+policies = [NoActionPolicy(), AlwaysRetryPolicy(), StaticRulePolicy(), ProbabilityOnlyPolicy()]
+results = harness.evaluate_all(policies, scenarios)
+
+for name, result in results.items():
+    m = result.metrics
+    print(f"[{name}] Gross: ₹{m.gross_recovered_amount_paise / 100:.2f} | Net: ₹{m.net_recovered_amount_paise / 100:.2f} | Incr: ₹{m.incremental_recovered_amount_paise / 100:.2f} | Interventions: {m.total_interventions}")
 ```
