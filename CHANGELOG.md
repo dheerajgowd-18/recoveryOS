@@ -1,0 +1,23 @@
+# Changelog
+
+All notable changes to the RecoveryOS platform will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.1.0] - 2026-08-31
+### Added
+- **Repository Setup**: Initialized repository structure with `.gitignore`, `pyproject.toml`, and `requirements.txt`.
+- **Domain Layer Contracts**:
+  - `RevenueState`, `PaymentState`, `SubscriptionState`, `ActionType`, `DecisionType`, and `ActionStatus` enums (`domain/enums.py`).
+  - Strict Pydantic v2 event and webhook models (`PaymentEntity`, `SubscriptionEntity`, `WebhookPayload`, `PaymentEvent`) (`domain/events.py`).
+  - Strict Pydantic v2 action and decision contracts (`Action`, `ActionParams`, `Decision`, `GuardrailCheckResult`) (`domain/actions.py`).
+- **Execution Adapter Boundary**:
+  - `RazorpayAdapter` abstract base class defining payment/subscription operations and governed action execution (`execution/base.py`).
+  - `MockAdapter` providing in-memory simulation with state tracking without network calls (`execution/mock_adapter.py`).
+- **FastAPI Webhook Ingestion & Security**:
+  - Secure HMAC SHA-256 webhook signature verification dependency using raw `Request.body()` and constant-time comparison `hmac.compare_digest` (`backend/dependencies/security.py`).
+  - Webhook route `POST /webhooks/razorpay` validating signatures and parsing payloads into domain models (`backend/api/webhooks.py`).
+  - FastAPI application entrypoint with health check endpoint (`backend/app.py`).
+- **Test Suite**:
+  - 31 unit and integration tests covering domain validation, MockAdapter state mutation, HMAC signature validation, tamper prevention, missing header rejection, and error handling (`tests/unit/test_domain.py`, `tests/integration/test_webhook_security.py`).
