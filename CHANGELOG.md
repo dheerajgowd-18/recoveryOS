@@ -5,6 +5,25 @@ All notable changes to the RecoveryOS platform will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-09-01
+
+### Added
+- **Recovery Governor v1 & Governance Package (`governor/`)**:
+  - `GovernorDecision` contract with canonical decision results (`ALLOW`, `DENY`, `DEFER`, `ESCALATE`, `ABSTAIN`), machine-readable reason codes, and human review triggers.
+  - `MerchantPolicy` contract formalizing versioned operational policies, automation modes (`AUTONOMOUS`, `ASSISTED`, `MANUAL`), retry caps, 24h contact limits, amount thresholds, and cooldown windows.
+  - `GovernanceChecker` executing ordered deterministic governance checks (state validity, recovery window, consent, whitelist, limits, cooldowns, amount caps, human review, confidence thresholds, and negative uplift).
+  - `HumanReviewEvaluator` routing high-value transactions, borderline confidence cases, and manual mode decisions to human review with `stop_reason = 'HUMAN_REVIEW_REQUIRED'`.
+  - `RecoveryGovernor` authority orchestrator evaluating proposals prior to execution.
+- **Evaluation & Audit Governance Metrics**:
+  - Extended `EvaluationMetrics` and `EvaluationHarness` to track `governor_allow_count`, `governor_deny_count`, `governor_abstain_count`, `governor_defer_count`, `human_review_count`, `policy_block_count`, `consent_block_count`, `retry_limit_block_count`, and `contact_limit_block_count`.
+  - Updated `DecisionRecord` and `ReplayRecord` with `governor_decision`, `governor_reason_codes`, `governor_policy_version`, and `human_review_reason`.
+- **Comprehensive Governor Test Suite (`tests/unit/test_governor.py`)**:
+  - Added 13 unit tests validating allowance, consent denial, retry/contact limits, cooldown deferral, human review escalation, fail-closed policy outages, and firewall independence (130 total passing tests).
+
+### Changed
+- `agent/runtime.py`: Integrated `RecoveryGovernor` into the recovery cycle between policy proposal and tool firewall execution.
+- `scripts/demo.py`: Showcases explicit Governor verdicts across signature demo cases.
+
 ## [1.1.0] - 2026-09-01
 
 ### Added

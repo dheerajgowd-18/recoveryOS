@@ -1,4 +1,4 @@
-"""AgentRuntime orchestrating the closed-loop observe-diagnose-decide-execute recovery cycle."""
+"""AgentRuntime orchestrating the closed-loop observe-diagnose-propose-govern-execute recovery cycle."""
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -7,6 +7,7 @@ from backend.services.ingestion_service import IngestionService
 from domain.enums import PaymentState
 from execution.executor import ExecutionContext, ExecutionResult, RecoveryExecutor
 from execution.simulator_executor import SimulatorExecutor
+from governor.decision import GovernorDecision, GovernorDecisionResult
 from governor.exceptions import (
     ActionBlockedError,
     ConsentViolationError,
@@ -15,6 +16,8 @@ from governor.exceptions import (
     SchemaValidationError,
 )
 from governor.firewall import CustomerConsentContext, ToolFirewall
+from governor.policy import MerchantPolicy
+from governor.recovery_governor import RecoveryGovernor
 from intelligence.context import ObservableContextBuilder, ObservableRecoveryContext
 from intelligence.providers import BaseDiagnosisProvider, DeterministicDiagnosisProvider
 from intelligence.schemas import StructuredDiagnosis
@@ -30,8 +33,9 @@ class AgentIterationRecord(BaseModel):
 
     iteration: int = Field(..., description="Cycle index (1-based)")
     risk_assessment: RiskAssessment = Field(..., description="Risk detection outcome")
-    decision: PolicyDecision = Field(..., description="Action selected by policy")
+    decision: PolicyDecision = Field(..., description="Action proposed by policy")
     diagnosis: Optional[StructuredDiagnosis] = Field(default=None, description="Structured diagnosis produced")
+    governor_decision: Optional[GovernorDecision] = Field(default=None, description="Authoritative governance verdict")
     execution_result: Optional[ExecutionResult] = Field(default=None, description="Executor result if dispatched")
     aggregate_state_before: str = Field(..., description="Payment aggregate state before this cycle")
     aggregate_state_after: str = Field(..., description="Payment aggregate state after this cycle")
@@ -57,7 +61,7 @@ class AgentRunResult(BaseModel):
 
 
 class AgentRuntime:
-    """Closed-loop recovery controller connecting Ingestion, Intelligence, Policy, Firewall, and Execution."""
+    """Closed-loop recovery controller connecting Ingestion, Intelligence, Policy, Governor, Firewall, and Execution."""
 
     def __init__(
         self,
@@ -65,6 +69,7 @@ class AgentRuntime:
         risk_detector: Optional[RiskDetector] = None,
         diagnosis_provider: Optional[BaseDiagnosisProvider] = None,
         policy: Optional[BasePolicy] = None,
+        governor: Optional[RecoveryGovernor] = None,
         firewall: Optional[ToolFirewall] = None,
         executor: Optional[RecoveryExecutor] = None,
         max_iterations: int = 5,
@@ -73,6 +78,7 @@ class AgentRuntime:
         self.risk_detector = risk_detector or RiskDetector()
         self.diagnosis_provider = diagnosis_provider or DeterministicDiagnosisProvider()
         self.policy = policy or DeterministicRecoveryPolicy(diagnosis_provider=self.diagnosis_provider)
+        self.governor = governor or RecoveryGovernor()
         self.firewall = firewall or ToolFirewall()
         self.executor = executor or SimulatorExecutor()
         self.max_iterations = max_iterations
@@ -127,20 +133,28 @@ class AgentRuntime:
                 scenario_id=initial_scenario.scenario_id,
             )
 
-            # E. Intelligence Diagnosis & Policy Evaluation with Fail-Closed Protection
+            # E. Intelligence Diagnosis & Policy Proposal
             try:
                 if not policy_healthy:
                     raise PolicyOutageError("Policy decision engine is flagged unhealthy. Failing closed.")
 
                 diagnosis = await self.diagnosis_provider.diagnose(obs_context)
-                decision = self.policy.decide(obs_context, diagnosis=diagnosis)
+                proposal = self.policy.decide(obs_context, diagnosis=diagnosis)
             except PolicyOutageError as e:
-                # Fail Closed: Record NO_ACTION and halt loop safely
+                # Policy Outage Fail-Closed: Pass through Governor to record governance decision
+                gov_decision = self.governor.evaluate(
+                    context=obs_context,
+                    diagnosis=None,
+                    proposal=None,
+                    aggregate=aggregate,
+                    consent=consent,
+                    policy_healthy=False,
+                )
                 fallback_decision = PolicyDecision(
                     action_type=SimulatedActionType.NO_ACTION,
                     confidence=1.0,
                     rationale="Policy engine unavailable. Failing closed.",
-                    policy_name="FIREWALL_FAIL_CLOSED",
+                    policy_name="GOVERNOR_FAIL_CLOSED",
                     reason_codes=["POLICY_OUTAGE_FAIL_CLOSED"],
                 )
                 record = AgentIterationRecord(
@@ -148,6 +162,7 @@ class AgentRuntime:
                     risk_assessment=risk,
                     decision=fallback_decision,
                     diagnosis=None,
+                    governor_decision=gov_decision,
                     execution_result=None,
                     aggregate_state_before=current_state.value,
                     aggregate_state_after=current_state.value,
@@ -156,24 +171,35 @@ class AgentRuntime:
                     error_message=str(e),
                 )
                 trace.append(record)
-                stop_reason = "POLICY_OUTAGE"
+                stop_reason = gov_decision.stop_reason or "POLICY_OUTAGE"
                 break
 
-            # F. Abstention Check
-            if decision.action_type == SimulatedActionType.NO_ACTION:
+            # F. Recovery Governor Evaluation (Authority Check)
+            gov_decision = self.governor.evaluate(
+                context=obs_context,
+                diagnosis=diagnosis,
+                proposal=proposal,
+                aggregate=aggregate,
+                consent=consent,
+                policy_healthy=policy_healthy,
+            )
+
+            if gov_decision.decision_result != GovernorDecisionResult.ALLOW:
                 record = AgentIterationRecord(
                     iteration=iteration,
                     risk_assessment=risk,
-                    decision=decision,
-                    diagnosis=decision.diagnosis,
+                    decision=proposal,
+                    diagnosis=diagnosis,
+                    governor_decision=gov_decision,
                     execution_result=None,
                     aggregate_state_before=current_state.value,
                     aggregate_state_after=current_state.value,
                     aggregate_state=current_state.value,
                     timestamp_epoch=current_epoch,
+                    error_message=gov_decision.human_review_reason if gov_decision.decision_result == GovernorDecisionResult.ESCALATE else (gov_decision.rationale if gov_decision.decision_result == GovernorDecisionResult.DENY else None),
                 )
                 trace.append(record)
-                stop_reason = "POLICY_ABSTAINED"
+                stop_reason = gov_decision.stop_reason or "GOVERNOR_BLOCKED"
                 break
 
             # G. Stale Action Protection (Revalidate aggregate before execution)
@@ -182,8 +208,9 @@ class AgentRuntime:
                 record = AgentIterationRecord(
                     iteration=iteration,
                     risk_assessment=risk,
-                    decision=decision,
-                    diagnosis=decision.diagnosis,
+                    decision=proposal,
+                    diagnosis=diagnosis,
+                    governor_decision=gov_decision,
                     execution_result=None,
                     aggregate_state_before=current_state.value,
                     aggregate_state_after=aggregate.current_state.value,
@@ -196,11 +223,12 @@ class AgentRuntime:
                     recovered_amount = aggregate.amount
                 break
 
-            # H. Tool Firewall Validation Gate
-            execution_key = f"exec_{payment_id}_{iteration}_{decision.action_type.value}_{current_epoch}"
+            # H. Tool Firewall Validation Gate (Independent Pre-Execution Verification)
+            chosen_action = gov_decision.selected_action or proposal.action_type
+            execution_key = f"exec_{payment_id}_{iteration}_{chosen_action.value}_{current_epoch}"
             try:
                 validated_action = self.firewall.validate_and_gate(
-                    action=decision.action_type,
+                    action=chosen_action,
                     execution_key=execution_key,
                     consent=consent,
                     policy_healthy=policy_healthy,
@@ -209,8 +237,9 @@ class AgentRuntime:
                 record = AgentIterationRecord(
                     iteration=iteration,
                     risk_assessment=risk,
-                    decision=decision,
-                    diagnosis=decision.diagnosis,
+                    decision=proposal,
+                    diagnosis=diagnosis,
+                    governor_decision=gov_decision,
                     execution_result=None,
                     aggregate_state_before=current_state.value,
                     aggregate_state_after=current_state.value,
@@ -248,8 +277,9 @@ class AgentRuntime:
                 record = AgentIterationRecord(
                     iteration=iteration,
                     risk_assessment=risk,
-                    decision=decision,
-                    diagnosis=decision.diagnosis,
+                    decision=proposal,
+                    diagnosis=diagnosis,
+                    governor_decision=gov_decision,
                     execution_result=None,
                     aggregate_state_before=current_state.value,
                     aggregate_state_after=current_state.value,
@@ -279,8 +309,9 @@ class AgentRuntime:
             record = AgentIterationRecord(
                 iteration=iteration,
                 risk_assessment=risk,
-                decision=decision,
-                diagnosis=decision.diagnosis,
+                decision=proposal,
+                diagnosis=diagnosis,
+                governor_decision=gov_decision,
                 execution_result=exec_result,
                 aggregate_state_before=current_state.value,
                 aggregate_state_after=new_state,

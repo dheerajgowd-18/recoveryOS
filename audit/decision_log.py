@@ -19,7 +19,7 @@ class CandidateScore(BaseModel):
 
 
 class DecisionRecord(BaseModel):
-    """Immutable audit record capturing full context and reasoning for an autonomous recovery decision."""
+    """Immutable audit record capturing full context, reasoning, and governance for an autonomous recovery decision."""
     model_config = ConfigDict(extra="forbid")
 
     decision_id: str = Field(..., description="Unique deterministic decision identifier")
@@ -34,6 +34,10 @@ class DecisionRecord(BaseModel):
     diagnosis_confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Confidence score of diagnosis")
     diagnosis_source: str = Field(default="deterministic_offline", description="Diagnosis provider source")
     evidence_codes: List[str] = Field(default_factory=list, description="Observable evidence codes used in diagnosis")
+    governor_decision: Optional[str] = Field(default=None, description="Governor outcome: ALLOW, DENY, DEFER, ESCALATE, ABSTAIN")
+    governor_reason_codes: List[str] = Field(default_factory=list, description="Governor check reason codes")
+    governor_policy_version: Optional[str] = Field(default=None, description="Merchant policy version applied by Governor")
+    human_review_reason: Optional[str] = Field(default=None, description="Detailed human review trigger reason if escalated")
     failure_class: Optional[str] = Field(default=None, description="Ground truth failure class (evaluator audit only)")
     failure_code: Optional[str] = Field(default=None, description="Observed error code")
     amount_in_paise: int = Field(..., ge=0, description="Transaction amount in paise")

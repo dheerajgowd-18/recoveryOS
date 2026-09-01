@@ -1,4 +1,4 @@
-"""Replay engine for reconstructing exact historical decision traces, candidate evaluations, and execution states."""
+"""Replay engine for reconstructing exact historical decision traces, candidate evaluations, governance verdicts, and execution states."""
 from datetime import datetime, timezone
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
@@ -7,6 +7,9 @@ from agent.risk import RiskAssessment
 from agent.runtime import AgentRunResult
 from audit.decision_log import CandidateScore, DecisionLogStore, DecisionRecord
 from execution.executor import ExecutionResult
+from governor.decision import GovernorDecision, GovernorDecisionResult
+from governor.policy import MerchantPolicy
+from governor.recovery_governor import RecoveryGovernor
 from intelligence.context import ObservableContextBuilder, ObservableRecoveryContext
 from intelligence.providers import DeterministicDiagnosisProvider
 from intelligence.schemas import DiagnosisLabel, StructuredDiagnosis
@@ -31,6 +34,7 @@ class ReplayRecord(BaseModel):
     model_version: str = Field(..., description="Model / scoring engine release version")
     observable_context_snapshot: ObservableRecoveryContext = Field(..., description="Sanitized observable input supplied to policy")
     diagnosis: StructuredDiagnosis = Field(..., description="Structured diagnosis produced by intelligence layer")
+    governor_decision: Optional[GovernorDecision] = Field(default=None, description="Authoritative Governor evaluation verdict")
     aggregate_state_before: str = Field(..., description="Aggregate state before execution")
     risk_assessment: RiskAssessment = Field(..., description="Risk detection outcome")
     candidate_evaluations: List[CandidateScore] = Field(default_factory=list, description="Candidate action scores")
@@ -48,10 +52,13 @@ class ReplayEngine:
         self,
         decision_log: Optional[DecisionLogStore] = None,
         config: Optional[DeterministicPolicyConfig] = None,
+        merchant_policy: Optional[MerchantPolicy] = None,
     ) -> None:
         self.decision_log = decision_log or DecisionLogStore()
         self.config = config or DeterministicPolicyConfig()
+        self.merchant_policy = merchant_policy or MerchantPolicy()
         self.diagnosis_provider = DeterministicDiagnosisProvider()
+        self.governor = RecoveryGovernor(merchant_policy=self.merchant_policy)
 
     def record_run(
         self,
@@ -104,6 +111,13 @@ class ReplayEngine:
                 or self.diagnosis_provider.diagnose_sync(obs_context)
             )
 
+            # 3. Get Governor Decision
+            gov_decision = item.governor_decision or self.governor.evaluate(
+                context=obs_context,
+                diagnosis=diagnosis,
+                proposal=item.decision,
+            )
+
             admissible_actions = CandidateGenerator.generate_candidates(obs_context, diagnosis, self.config)
             candidate_scores: List[CandidateScore] = []
 
@@ -148,6 +162,10 @@ class ReplayEngine:
                 diagnosis_confidence=diagnosis.confidence,
                 diagnosis_source=diagnosis.diagnosis_source,
                 evidence_codes=diagnosis.evidence_codes,
+                governor_decision=gov_decision.decision_result.value if gov_decision else None,
+                governor_reason_codes=gov_decision.reason_codes if gov_decision else [],
+                governor_policy_version=gov_decision.policy_version if gov_decision else self.merchant_policy.policy_version,
+                human_review_reason=gov_decision.human_review_reason if gov_decision else None,
                 failure_class=scenario.failure_class.value if scenario.failure_class else None,
                 failure_code=scenario.event.payment.error_code if scenario.event.payment else None,
                 amount_in_paise=scenario.event.payment.amount if scenario.event.payment else 0,
@@ -178,7 +196,7 @@ class ReplayEngine:
         decision_id: str,
         scenario: Optional[SimulatedScenario] = None,
     ) -> Optional[ReplayRecord]:
-        """Reconstruct the exact decision trace and scoring breakdown for a specific decision_id."""
+        """Reconstruct the exact decision trace, governance verdict, and scoring breakdown for a specific decision_id."""
         record = self.decision_log.get_record(decision_id)
         if not record:
             return None
@@ -209,7 +227,7 @@ class ReplayEngine:
             uncertainties=[],
             recommended_candidate_actions=[record.selected_action],
             recommended_timing_hint=None,
-            human_review_required=False,
+            human_review_required=record.human_review_reason is not None,
             abstain_recommended=False,
             rationale=record.rationale,
             diagnosis_source=record.diagnosis_source,
@@ -231,6 +249,27 @@ class ReplayEngine:
             expected_incremental_value_paise=selected_score.incremental_uplift_paise if selected_score else None,
             diagnosis=diagnosis,
         )
+
+        gov_decision: Optional[GovernorDecision] = None
+        if record.governor_decision:
+            try:
+                gov_res = GovernorDecisionResult(record.governor_decision)
+            except Exception:
+                gov_res = GovernorDecisionResult.ALLOW
+
+            gov_decision = GovernorDecision(
+                decision_result=gov_res,
+                selected_action=record.selected_action if gov_res == GovernorDecisionResult.ALLOW else None,
+                timing_hint=None,
+                reason_codes=record.governor_reason_codes,
+                policy_version=record.governor_policy_version or "v1.0.0",
+                diagnosis_confidence=record.diagnosis_confidence,
+                expected_incremental_value_paise=selected_score.incremental_uplift_paise if selected_score else 0,
+                expected_net_value_paise=selected_score.expected_net_value_paise if selected_score else 0,
+                human_review_reason=record.human_review_reason,
+                stop_reason=record.stop_reason,
+                rationale=record.rationale,
+            )
 
         risk = RiskAssessment(
             is_at_risk=record.risk_level in ("HIGH", "CRITICAL"),
@@ -262,6 +301,7 @@ class ReplayEngine:
             model_version=record.model_version,
             observable_context_snapshot=obs_context,
             diagnosis=diagnosis,
+            governor_decision=gov_decision,
             aggregate_state_before=record.aggregate_state_before,
             risk_assessment=risk,
             candidate_evaluations=record.candidate_scores,

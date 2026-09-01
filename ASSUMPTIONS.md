@@ -48,6 +48,10 @@ This document explicitly details all foundational assumptions, modeling abstract
 - **Assumption**: The baseline policy (`DeterministicRecoveryPolicy`) uses structured diagnosis taxonomy labels (`DiagnosisLabel`) and observable context, applying confidence gates (`confidence_threshold = 0.50`) and expected-value ranking.
 - **Implication**: The deterministic policy provides an interpretable, transparent benchmark demonstrating the value of structured diagnosis, expected-value optimization, physical constraint filtering, and active abstention.
 
+### 3.3 Recovery Governor & Merchant Policy Contract
+- **Assumption**: Autonomous actions pass through `RecoveryGovernor` evaluating versioned `MerchantPolicy` rules (automation modes, retry caps, 24h contact limits, amount thresholds, cooldowns, and human review routing).
+- **Implication**: The Governor acts as the deterministic execution authority, ensuring zero unauthorized dunning actions execute without passing merchant policy checks.
+
 ---
 
 ## 4. Systems & Persistence Assumptions

@@ -88,15 +88,20 @@ Traditional subscription dunning systems rely on static retry schedules and aggr
 |    - CandidateGenerator: Physical failure constraints & attempt caps              |
 |    - ExpectedValueScorer: Net Uplift Scoring (Allows Negative Uplift)             |
 |        |                                                                          |
-|        +-----------------------------> [NO_ACTION] --------> [Halt / Abstain]     |
+|        v [Proposed Action & Value]                                                |
+|  [Recovery Governor v1] (governor/recovery_governor.py)                           |
+|    - Evaluates: State, Merchant Policy, Consent, Limits, Cooldown, Amount Caps    |
+|    - Outcomes: ALLOW, DENY, DEFER, ESCALATE, ABSTAIN                              |
 |        |                                                                          |
-|        v [Active Action Candidate]                                                |
+|        +---- [DENY / DEFER / ESCALATE / ABSTAIN] ----> [Halt / Human Review Trace] |
+|        |                                                                          |
+|        v [ALLOW]                                                                  |
 |  [Stale Action Revalidation Check] (Cancels retry if captured out-of-band)        |
 |        |                                                                          |
 |        v                                                                          |
-|  [Governor / ToolFirewall] (Deterministic Execution Authority)                    |
+|  [ToolFirewall] (governor/firewall.py - Independent Safety & Idempotency Gate)    |
 |    - Schema Validation                                                            |
-|    - Customer Opt-Out / Consent Verification                                      |
+|    - Channel Consent Double-Check                                                 |
 |    - Action Idempotency Lock                                                      |
 |        |                                                                          |
 |        v (Gated Action)                                                           |

@@ -64,6 +64,10 @@ The evaluation harness benchmarks RecoveryOS against 4 standard industry baselin
 | **Customer Churn Count** | $\sum \mathbb{I}(\text{Churned})$ | Number of customers who permanently churned due to dunning fatigue |
 | **Diagnosis Accuracy** | $\frac{1}{N}\sum \mathbb{I}(\hat{D} = D^*)$ | Evaluator-side accuracy of inferred diagnosis vs hidden root cause |
 | **Fallback Count** | $\sum \mathbb{I}(\text{Source} = \text{fallback})$ | Invocations safely fallen back to deterministic offline rules |
+| **Governor Allowed** | $\sum \mathbb{I}(\text{Gov} = \text{ALLOW})$ | Total proposed actions approved by the Recovery Governor |
+| **Governor Denied** | $\sum \mathbb{I}(\text{Gov} = \text{DENY})$ | Total proposed actions blocked by merchant policies or limits |
+| **Human Escalations** | $\sum \mathbb{I}(\text{Gov} = \text{ESCALATE})$ | Total high-value or ambiguous cases routed to human review |
+| **Governor Abstentions** | $\sum \mathbb{I}(\text{Gov} = \text{ABSTAIN})$ | Total zero-intervention baseline decisions confirmed |
 
 ---
 

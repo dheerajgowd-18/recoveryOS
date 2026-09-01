@@ -31,6 +31,10 @@ In accordance with Track 03 engineering rigor, this document details the archite
 - **Current Implementation**: The evaluation harness benchmarks a 100-scenario deterministic population across all archetypes and failure physics for high-speed local verification.
 - **Limitation**: Large-scale statistical stress tests across 10,000+ scenarios and Monte Carlo distributions are deferred to future production scale benchmarks.
 
+### 1.7 Human Review Escalation Execution
+- **Current Implementation**: The Recovery Governor routes high-value or uncertain decisions to human review with `stop_reason = "HUMAN_REVIEW_REQUIRED"`.
+- **Limitation**: In this phase, human review halts autonomous execution and records audit provenance without dispatching real-time notifications to a live ticketing system (e.g. Zendesk/Slack).
+
 ---
 
 ## 2. Infrastructure & Persistence Boundaries

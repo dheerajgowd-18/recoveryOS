@@ -83,9 +83,20 @@ This document provides a comprehensive technical overview of the architecture, c
 - **State Guarded Loop**: Bounded by `max_iterations = 5`, executing the observe -> diagnose -> decide -> execute sequence.
 - **Stale Action Protection**: Re-inspects aggregate state immediately prior to executor dispatch, canceling in-flight retries if the customer paid out-of-band.
 
-### 3.7 Tool Firewall & Safety Governor (`governor/`)
-- **Deterministic Execution Authority**: Gating all actions behind schema validation, customer opt-out verification, and idempotency locks before executor dispatch.
+### 3.7 Recovery Governor v1 & Safety Tool Firewall (`governor/`)
+- **Recovery Governor (`governor/recovery_governor.py`, `governor/checks.py`)**: Authoritative governance engine evaluating proposals against merchant operational limits. Runs deterministic checks in fixed priority order:
+  1. *State Validity & Terminal State*: Denies actions if payment is already captured/refunded (`REVENUE_ALREADY_RECOVERED`, `STATE_INVALID`).
+  2. *Recovery Window*: Denies actions outside the recovery window (`RECOVERY_WINDOW_EXPIRED`).
+  3. *Customer Consent*: Denies customer-facing actions for opted-out users (`CUSTOMER_OPTED_OUT`).
+  4. *Action Whitelist*: Denies unapproved dunning channels (`ACTION_NOT_ALLOWED_BY_POLICY`).
+  5. *Retry Limits & Contact Caps*: Enforces attempt caps and 24h/7d communication limits (`RETRY_LIMIT_REACHED`, `CONTACT_LIMIT_REACHED`).
+  6. *Cooldown Enforcement*: Defers active dunning within cooldown intervals (`COOLDOWN_ACTIVE`).
+  7. *Amount Thresholds & Human Review*: Escalates high-value transactions or diagnosis uncertainty to human operators (`HUMAN_REVIEW_REQUIRED`).
+  8. *Economic Viability*: Confirms abstention on negative uplift or low expected return (`NEGATIVE_INCREMENTAL_UPLIFT`, `EXPECTED_VALUE_BELOW_THRESHOLD`).
+- **Merchant Policy Contract (`governor/policy.py`)**: Formalizes configurable, versioned merchant rules (`MerchantPolicy`) and automation modes (`AUTONOMOUS`, `ASSISTED`, `MANUAL`).
+- **Human Review Escalator (`governor/human_review.py`)**: Routes ambiguous, high-value, or low-confidence decisions to human review with explicit stop reasons and reason codes.
+- **Tool Firewall (`governor/firewall.py`)**: Acts as an independent second line of defense immediately prior to adapter dispatch, enforcing strict schema validation and execution key idempotency locks.
 
 ### 3.8 Audit & Decision Replay Engine (`audit/`)
-- **Immutable Decision Log (`audit/decision_log.py`)**: Stores complete decision records including observable context snapshots, structured diagnosis, candidate score arrays, chosen action, confidence, and execution outcomes.
-- **Replay Engine (`audit/replay.py`)**: Reconstructs historical decision states, structured diagnoses, and score breakdowns by `decision_id` for compliance audits and post-mortem analysis.
+- **Immutable Decision Log (`audit/decision_log.py`)**: Stores complete decision records including observable context snapshots, structured diagnosis, Governor verdict, candidate score arrays, chosen action, confidence, and execution outcomes.
+- **Replay Engine (`audit/replay.py`)**: Reconstructs historical decision states, structured diagnoses, Governor verdicts, and score breakdowns by `decision_id` for compliance audits and post-mortem analysis.

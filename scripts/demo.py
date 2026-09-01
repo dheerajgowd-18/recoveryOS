@@ -3,9 +3,9 @@
 
 Executes the 5 signature demo cases defining the Track 03 standard:
 1. Correct Abstention (Avoid Value-Destructive Interventions)
-2. Delayed Retry Economic Selection (Candidate Expected Value Comparison)
+2. Delayed Retry Economic Selection (Candidate Expected Value Comparison & Governor ALLOW)
 3. Late State Change & Stale Action Protection
-4. Safety Block & Customer Consent Opt-Out Enforcement
+4. Safety Governor & Customer Consent Opt-Out Enforcement (Governor DENY)
 5. Full Population Benchmark Comparison with Churn/Friction Adjusted Economics
 """
 import asyncio
@@ -30,7 +30,10 @@ from domain.events import PaymentContainer, PaymentEntity, WebhookPayload, Webho
 from evaluation.harness import EvaluationHarness
 from evaluation.policies import AlwaysRetryPolicy, NoActionPolicy, ProbabilityOnlyPolicy, StaticRulePolicy
 from execution.simulator_executor import SimulatorExecutor
+from governor.decision import GovernorDecisionResult
 from governor.firewall import CustomerConsentContext, ToolFirewall
+from governor.policy import MerchantPolicy
+from governor.recovery_governor import RecoveryGovernor
 from intelligence.context import ObservableRecoveryContext
 from intelligence.providers import DeterministicDiagnosisProvider
 from policy.base import BasePolicy, PolicyDecision
@@ -67,7 +70,8 @@ async def demo_case_1_abstention() -> None:
 
     ingestion = IngestionService()
     executor = SimulatorExecutor()
-    runtime = AgentRuntime(ingestion_service=ingestion, executor=executor)
+    governor = RecoveryGovernor()
+    runtime = AgentRuntime(ingestion_service=ingestion, executor=executor, governor=governor)
     replay_engine = ReplayEngine()
 
     customer = SimulatedCustomer(
@@ -112,20 +116,21 @@ async def demo_case_1_abstention() -> None:
     result: AgentRunResult = await runtime.run_recovery_loop(scenario)
     records = replay_engine.record_run(result, scenario)
 
-    print(f"  [RESULT] Stop Reason : {result.stop_reason}")
-    print(f"  [RESULT] Final State : {result.final_state}")
-    print(f"  [RESULT] Total Cost  : INR {result.total_cost_paise / 100:.2f}")
-    print(f"  [RESULT] Net Value   : INR {result.net_value_paise / 100:.2f}")
+    print(f"  [RESULT] Stop Reason    : {result.stop_reason}")
+    print(f"  [RESULT] Final State    : {result.final_state}")
+    print(f"  [RESULT] Total Cost     : INR {result.total_cost_paise / 100:.2f}")
+    print(f"  [RESULT] Net Value      : INR {result.net_value_paise / 100:.2f}")
     if records:
-        print(f"  [AUDIT]  Decision ID : {records[0].decision_id}")
-        print(f"  [AUDIT]  Rationale   : {records[0].rationale}")
-        print(f"  [AUDIT]  Reason Codes: {records[0].reason_codes}")
+        print(f"  [GOVERNOR] Verdict      : {records[0].governor_decision} (Confirmed zero-intervention baseline)")
+        print(f"  [AUDIT]  Decision ID    : {records[0].decision_id}")
+        print(f"  [AUDIT]  Rationale      : {records[0].rationale}")
+        print(f"  [AUDIT]  Reason Codes   : {records[0].reason_codes}")
 
 
 async def demo_case_2_delayed_retry_economic_selection() -> None:
-    """Demo 2: Delayed Retry Economic Selection (Candidate Comparison)."""
+    """Demo 2: Delayed Retry Economic Selection (Candidate Comparison & Governor ALLOW)."""
     print("\n" + HEADER)
-    print("  CASE 2: DELAYED RETRY ECONOMIC SELECTION (Candidate Comparison)")
+    print("  CASE 2: DELAYED RETRY ECONOMIC SELECTION (Governor: ALLOW)")
     print(HEADER)
     print("  Context: INR 5,000.00 transaction failed with TRANSIENT_GATEWAY error.")
     print("  Comparison: Evaluating all candidate interventions and ranking by Expected Net Value:\n")
@@ -169,7 +174,8 @@ async def demo_case_2_delayed_retry_economic_selection() -> None:
 
     ingestion = IngestionService()
     executor = SimulatorExecutor()
-    runtime = AgentRuntime(ingestion_service=ingestion, executor=executor)
+    governor = RecoveryGovernor()
+    runtime = AgentRuntime(ingestion_service=ingestion, executor=executor, governor=governor)
     replay_engine = ReplayEngine()
 
     customer = SimulatedCustomer(
@@ -220,6 +226,7 @@ async def demo_case_2_delayed_retry_economic_selection() -> None:
     print(f"  [RESULT] Total Cost     : INR {result.total_cost_paise / 100:.2f}")
     print(f"  [RESULT] Net Value      : INR {result.net_value_paise / 100:.2f}")
     if records:
+        print(f"  [GOVERNOR] Verdict      : {records[0].governor_decision} (Approved under policy {records[0].governor_policy_version})")
         print(f"  [AUDIT]  Action Chosen  : {records[0].selected_action.value}")
         print(f"  [AUDIT]  Rationale      : {records[0].rationale}")
 
@@ -318,13 +325,13 @@ async def demo_case_3_late_state_change() -> None:
 
 
 async def demo_case_4_safety_block() -> None:
-    """Demo 4: Safety Block & Customer Consent Opt-Out."""
+    """Demo 4: Safety Governor & Customer Consent Enforcement (Governor: DENY)."""
     print("\n" + HEADER)
-    print("  CASE 4: SAFETY GOVERNOR & CUSTOMER CONSENT ENFORCEMENT")
+    print("  CASE 4: SAFETY GOVERNOR & CONSENT ENFORCEMENT (Governor: DENY)")
     print(HEADER)
     print("  Context: Customer has globally opted out of all dunning communications.")
     print("  Problem: Rogue or aggressive policy proposing WhatsApp reminders.")
-    print("  RecoveryOS Decision: ToolFirewall intercepts action, raises ConsentViolationError, fails closed.\n")
+    print("  RecoveryOS Decision: Governor intercepts proposal, outputs DENY, halts execution.\n")
 
     class AggressivePolicy(BasePolicy):
         def __init__(self) -> None:
@@ -339,8 +346,9 @@ async def demo_case_4_safety_block() -> None:
                 reason_codes=["FORCE_REMINDER"],
             )
 
+    governor = RecoveryGovernor()
     firewall = ToolFirewall()
-    runtime = AgentRuntime(policy=AggressivePolicy(), firewall=firewall)
+    runtime = AgentRuntime(policy=AggressivePolicy(), governor=governor, firewall=firewall)
 
     customer = SimulatedCustomer(
         customer_id="cust_demo_04",
@@ -388,14 +396,18 @@ async def demo_case_4_safety_block() -> None:
 
     result: AgentRunResult = await runtime.run_recovery_loop(scenario, consent=consent)
 
-    print(f"  [RESULT] Stop Reason : {result.stop_reason}")
-    print(f"  [RESULT] Total Cost  : INR {result.total_cost_paise / 100:.2f}")
+    print(f"  [RESULT] Stop Reason    : {result.stop_reason}")
+    print(f"  [RESULT] Total Cost     : INR {result.total_cost_paise / 100:.2f}")
     if result.trace:
-        print(f"  [FIREWALL] Error Msg : {result.trace[0].error_message}")
+        gov_dec = result.trace[0].governor_decision
+        if gov_dec:
+            print(f"  [GOVERNOR] Verdict      : {gov_dec.decision_result.value}")
+            print(f"  [GOVERNOR] Reason Codes : {gov_dec.reason_codes}")
+            print(f"  [GOVERNOR] Rationale    : {gov_dec.rationale}")
 
 
 def demo_case_5_batch_benchmark() -> None:
-    """Demo 5: Batch Benchmark Summary (Evaluation Harness)."""
+    """Demo 5: Batch Benchmark Summary (Evaluation Harness & Governance Counters)."""
     print("\n" + HEADER)
     print("  CASE 5: COMPREHENSIVE BATCH BENCHMARK (100 SCENARIOS)")
     print(HEADER)
