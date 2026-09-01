@@ -2,10 +2,17 @@
 from typing import Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
-from evaluation.metrics import DEFAULT_CHURN_PENALTY_PAISE_PER_CUSTOMER, EvaluationMetrics, MetricCalculator, ScenarioEvaluationRecord
+from evaluation.metrics import (
+    DEFAULT_CHURN_PENALTY_PAISE_PER_CUSTOMER,
+    EvaluationMetrics,
+    MetricCalculator,
+    ScenarioEvaluationRecord,
+)
 from evaluation.policies import BasePolicy
-from policy.public_view import PublicScenarioView
-from simulator.config import SimulatedActionType
+from intelligence.context import ObservableContextBuilder
+from intelligence.providers import BaseDiagnosisProvider, DeterministicDiagnosisProvider
+from intelligence.schemas import DiagnosisLabel
+from simulator.config import FailureClass, SimulatedActionType
 from simulator.generator import SimulatedScenario
 
 
@@ -18,11 +25,23 @@ class EvaluationResult(BaseModel):
     records: List[ScenarioEvaluationRecord] = Field(..., description="Detailed per-scenario traces")
 
 
+FAILURE_CLASS_TO_DIAGNOSIS_LABEL = {
+    FailureClass.TRANSIENT_GATEWAY: DiagnosisLabel.TRANSIENT_GATEWAY_FAILURE,
+    FailureClass.INSUFFICIENT_FUNDS: DiagnosisLabel.INSUFFICIENT_FUNDS,
+    FailureClass.EXPIRED_PAYMENT_METHOD: DiagnosisLabel.EXPIRED_PAYMENT_METHOD,
+}
+
+
 class EvaluationHarness:
     """Batch evaluation harness comparing policy interventions against hidden potential outcomes."""
 
-    def __init__(self, churn_penalty_paise_per_customer: int = DEFAULT_CHURN_PENALTY_PAISE_PER_CUSTOMER) -> None:
+    def __init__(
+        self,
+        churn_penalty_paise_per_customer: int = DEFAULT_CHURN_PENALTY_PAISE_PER_CUSTOMER,
+        diagnosis_provider: Optional[BaseDiagnosisProvider] = None,
+    ) -> None:
         self.churn_penalty_paise_per_customer = churn_penalty_paise_per_customer
+        self.diagnosis_provider = diagnosis_provider or DeterministicDiagnosisProvider()
 
     def evaluate_policy(
         self,
@@ -34,16 +53,33 @@ class EvaluationHarness:
         penalty = churn_penalty_paise_per_customer if churn_penalty_paise_per_customer is not None else self.churn_penalty_paise_per_customer
         records: List[ScenarioEvaluationRecord] = []
 
+        fallback_count = 0
+        invalid_output_count = 0
+
         for scenario in scenarios:
-            # 1. Project sanitized public view (strictly hides counterfactual outcomes and archetypes)
-            public_view = PublicScenarioView.from_simulated_scenario(scenario)
+            # 1. Project sanitized observable context (strictly hides counterfactual outcomes and archetypes)
+            context = ObservableContextBuilder.build_from_simulated_scenario(scenario)
 
-            # 2. Query policy using ONLY the public view
-            decision = policy.decide(public_view)
+            # 2. Produce structured diagnosis from observable context
+            diagnosis = self.diagnosis_provider.diagnose_sync(context)
 
-            # 3. Retrieve secret ground truth counterfactuals from hidden_outcomes for evaluation scoring
+            # 3. Query policy using ONLY the observable context and structured diagnosis
+            decision = policy.decide(context, diagnosis=diagnosis)
+
+            # 4. Evaluator-side diagnosis accuracy verification (Comparing predicted label to hidden truth)
+            expected_label = FAILURE_CLASS_TO_DIAGNOSIS_LABEL.get(scenario.failure_class)
+            diag_to_check = decision.diagnosis or diagnosis
+            diag_correct = (diag_to_check.diagnosis_label == expected_label) if expected_label and diag_to_check else None
+
+            # 5. Retrieve secret ground truth counterfactuals from hidden_outcomes for evaluation scoring
             chosen_outcome = scenario.hidden_outcomes.get_outcome(decision.action_type)
             natural_outcome = scenario.hidden_outcomes.get_outcome(SimulatedActionType.NO_ACTION)
+
+            is_low_conf = "ABSTAIN_LOW_CONFIDENCE_DIAGNOSIS" in decision.reason_codes
+            is_neg_uplift = "ABSTAIN_NEGATIVE_UPLIFT" in decision.reason_codes
+
+            if diag_to_check.diagnosis_source == "deterministic_fallback":
+                fallback_count += 1
 
             record = MetricCalculator.create_record(
                 scenario_id=scenario.scenario_id,
@@ -51,6 +87,12 @@ class EvaluationHarness:
                 chosen_action=decision.action_type,
                 chosen_outcome=chosen_outcome,
                 natural_outcome=natural_outcome,
+                predicted_diagnosis=diag_to_check.diagnosis_label.value if diag_to_check else None,
+                diagnosis_confidence=diag_to_check.confidence if diag_to_check else None,
+                diagnosis_source=diag_to_check.diagnosis_source if diag_to_check else None,
+                diagnosis_correct=diag_correct,
+                is_low_confidence_abstention=is_low_conf,
+                is_negative_uplift_abstention=is_neg_uplift,
             )
             records.append(record)
 
@@ -58,6 +100,8 @@ class EvaluationHarness:
             policy_name=policy.name,
             records=records,
             churn_penalty_paise_per_customer=penalty,
+            deterministic_fallback_count=fallback_count,
+            invalid_llm_output_count=invalid_output_count,
         )
 
         return EvaluationResult(

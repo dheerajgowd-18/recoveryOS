@@ -165,7 +165,7 @@ class MockFaultyPolicy(BasePolicy):
     def __init__(self, name: str = "FAULTY_POLICY", description: str = "Faulty Policy for Testing") -> None:
         super().__init__(name=name, description=description)
 
-    def decide(self, scenario: PublicScenarioView) -> PolicyDecision:
+    def decide(self, scenario, diagnosis=None) -> PolicyDecision:
         raise PolicyOutageError("Policy decision service unreachable (503 Service Unavailable).")
 
 
@@ -181,13 +181,14 @@ class ForcedActionPolicy(BasePolicy):
         super().__init__(name=name, description=description)
         self._forced_action = action_type
 
-    def decide(self, scenario: PublicScenarioView) -> PolicyDecision:
+    def decide(self, scenario, diagnosis=None) -> PolicyDecision:
         return PolicyDecision(
             action_type=self._forced_action,
             confidence=0.95,
             rationale="Forced action for adversarial test.",
             policy_name=self.name,
             reason_codes=["FORCED_ACTION_TEST"],
+            diagnosis=diagnosis,
         )
 
 

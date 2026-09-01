@@ -66,23 +66,26 @@ This document provides a comprehensive technical overview of the architecture, c
 - **Failure Physics (`simulator/archetypes.py`)**: Enforces real-world physical constraints (e.g. `EXPIRED_PAYMENT_METHOD` has a hard 0% success rate on automated retries).
 - **Counterfactual Potential Outcomes $Y(a)$ (`simulator/outcomes.py`)**: Computes the complete latent outcome vector across all candidate actions for ground-truth benchmark comparison.
 
-### 3.4 Public Policy Boundary & Deterministic Policy (`policy/`)
-- **Public Scenario Projection (`policy/public_view.py`)**: Sanitizes scenario data into `PublicScenarioView`, exposing only observable error codes, reasons, amounts, and attempt counts.
-- **Candidate Generator (`policy/candidates.py`)**: Filters candidate interventions based on physical failure diagnostics (e.g. disallowing retries on expired cards, enforcing attempt limits on insufficient funds).
-- **Expected-Value Proxy Scorer (`policy/scoring.py`)**: Calculates expected incremental value:
+### 3.4 Strict Observable Context & Structured Intelligence Layer (`intelligence/`)
+- **Observable Recovery Context (`intelligence/context.py`)**: Sanitizes event data into `ObservableRecoveryContext`, exposing only observable error codes, reasons, descriptions, amounts, attempt counts, and interaction history. Strictly hides ground-truth failure classes, archetypes, and potential outcomes.
+- **Structured Diagnosis Contract (`intelligence/schemas.py`)**: Defines schema-validated diagnosis objects (`StructuredDiagnosis`) with canonical root cause labels (`DiagnosisLabel`), calibrated confidence scores, observable evidence codes, action recommendations, and timing hints.
+- **Deterministic Offline Provider (`intelligence/providers.py`)**: Infers structured root-cause diagnoses purely offline from observable error signatures with 0 external API dependencies.
+- **LLM-Compatible Provider Boundary (`intelligence/providers.py`)**: Provides an optional structured LLM diagnosis interface with strict Pydantic validation, safe error handling, and automatic fallback to the deterministic provider (`diagnosis_source = 'deterministic_fallback'`).
+
+### 3.5 Candidate Generation & Negative Uplift Scorer (`policy/`)
+- **Candidate Generator (`policy/candidates.py`)**: Filters candidate interventions based on structured diagnosis diagnostics and attempt limits (e.g. blocking retries on expired cards, capping attempts on insufficient funds).
+- **Expected-Value Proxy Scorer (`policy/scoring.py`)**: Calculates expected incremental value with full negative uplift support:
   $$\text{Expected Net Value} = (\text{Amount} \times \Delta P) - \text{Action Cost}$$
-  $$\Delta P = \max(0.0, P_{\text{prior}}(a) - P_{\text{prior}}(\text{no\_action}))$$
-- **Deterministic Policy (`policy/deterministic.py`)**: Ranks candidates, applies net value thresholds, and explicitly abstains (`NO_ACTION`) when expected net return is negative.
+  $$\Delta P = P_{\text{prior}}(a) - P_{\text{prior}}(\text{no\_action}) \quad (\Delta P \text{ may be negative})$$
+- **Deterministic Policy (`policy/deterministic.py`)**: Ranks candidates, applies diagnosis confidence gates and net value thresholds, and explicitly abstains (`NO_ACTION`) when confidence is low or expected net return is negative.
 
-### 3.5 Closed-Loop Agent Runtime (`agent/runtime.py`)
-- **State Guarded Loop**: Bounded by `max_iterations = 5`, terminating on recovery (`REVENUE_RECOVERED`), abstention (`POLICY_ABSTAINED`), terminal state (`TERMINAL_STATE_REACHED`), or fault (`POLICY_OUTAGE`, `EXECUTION_FAILURE`).
-- **Stale Action Protection**: Re-inspects the aggregate state immediately prior to executor dispatch, canceling in-flight retries if the customer paid out-of-band.
+### 3.6 Closed-Loop Agent Runtime (`agent/runtime.py`)
+- **State Guarded Loop**: Bounded by `max_iterations = 5`, executing the observe -> diagnose -> decide -> execute sequence.
+- **Stale Action Protection**: Re-inspects aggregate state immediately prior to executor dispatch, canceling in-flight retries if the customer paid out-of-band.
 
-### 3.6 Tool Firewall & Safety Governor (`governor/`)
-- **Schema Validation**: Rejects unrecognized action names or illegal parameter structures.
-- **Consent Enforcement**: Rejects customer-facing communications (`PAYMENT_LINK`, `REMINDER`) when customer opt-out preferences are recorded.
-- **Idempotency Locking**: Blocks duplicate execution keys `exec_{payment_id}_{iteration}_{action}_{epoch}`.
+### 3.7 Tool Firewall & Safety Governor (`governor/`)
+- **Deterministic Execution Authority**: Gating all actions behind schema validation, customer opt-out verification, and idempotency locks before executor dispatch.
 
-### 3.7 Audit & Decision Replay Engine (`audit/`)
-- **Immutable Decision Log (`audit/decision_log.py`)**: Stores complete decision records including input snapshots, candidate score arrays, chosen action, confidence, and execution outcomes.
-- **Replay Engine (`audit/replay.py`)**: Reconstructs historical decision states and score breakdowns by `decision_id` for compliance audits and post-mortem analysis.
+### 3.8 Audit & Decision Replay Engine (`audit/`)
+- **Immutable Decision Log (`audit/decision_log.py`)**: Stores complete decision records including observable context snapshots, structured diagnosis, candidate score arrays, chosen action, confidence, and execution outcomes.
+- **Replay Engine (`audit/replay.py`)**: Reconstructs historical decision states, structured diagnoses, and score breakdowns by `decision_id` for compliance audits and post-mortem analysis.

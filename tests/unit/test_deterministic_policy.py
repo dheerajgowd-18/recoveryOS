@@ -1,14 +1,17 @@
-"""Unit tests for PublicScenarioView, Candidate Generation, Scoring, and DeterministicRecoveryPolicy."""
+"""Unit tests for ObservableRecoveryContext, Candidate Generation, Scoring, and DeterministicRecoveryPolicy."""
 import pytest
 
 from evaluation.harness import EvaluationHarness, EvaluationResult
 from evaluation.policies import PolicyDecision
+from intelligence.context import ObservableContextBuilder, ObservableRecoveryContext
+from intelligence.providers import DeterministicDiagnosisProvider
+from intelligence.schemas import DiagnosisLabel, StructuredDiagnosis
 from policy.candidates import CandidateGenerator
 from policy.config import DeterministicPolicyConfig
 from policy.deterministic import DeterministicRecoveryPolicy
 from policy.public_view import PublicScenarioView
 from policy.scoring import ExpectedValueScorer
-from simulator.config import FailureClass, SimulatedActionType, SimulatorConfig
+from simulator.config import SimulatedActionType, SimulatorConfig
 from simulator.generator import Simulator
 
 
@@ -20,30 +23,30 @@ def standard_simulator_batch():
 
 
 class TestPublicScenarioViewBoundary:
-    """Validates that PublicScenarioView strictly excludes latent variables and ground-truth counterfactuals."""
+    """Validates that PublicScenarioView / ObservableRecoveryContext strictly excludes latent variables and ground-truth counterfactuals."""
 
     def test_public_view_excludes_hidden_fields(self, standard_simulator_batch):
         for scenario in standard_simulator_batch:
             view = PublicScenarioView.from_simulated_scenario(scenario)
 
-            # Strict absence of secret simulation artifacts
+            # Strict absence of secret simulation artifacts and true failure class
             assert hasattr(view, "hidden_outcomes") is False
             assert hasattr(view, "archetype") is False
             assert hasattr(view, "customer_archetype") is False
             assert hasattr(view, "potential_outcomes") is False
             assert hasattr(view, "ground_truth") is False
+            assert hasattr(view, "failure_class") is False
 
     def test_public_view_factory_produces_valid_model(self, standard_simulator_batch):
         scenario = standard_simulator_batch[0]
         view = PublicScenarioView.from_simulated_scenario(scenario)
 
-        assert isinstance(view, PublicScenarioView)
+        assert isinstance(view, ObservableRecoveryContext)
         assert view.scenario_id == scenario.scenario_id
-        assert view.failure_class == scenario.failure_class
         assert view.amount_in_paise == scenario.event.payment.amount
         assert view.currency == scenario.event.payment.currency
         assert view.attempt_count == 1
-        assert view.failure_code == scenario.event.payment.error_code
+        assert view.error_code == scenario.event.payment.error_code
 
 
 class TestCandidateGenerator:
@@ -51,14 +54,20 @@ class TestCandidateGenerator:
 
     def test_expired_payment_method_disallows_retries(self):
         config = DeterministicPolicyConfig()
-        view = PublicScenarioView(
+        view = ObservableRecoveryContext(
             scenario_id="scen_expired_01",
-            failure_class=FailureClass.EXPIRED_PAYMENT_METHOD,
             amount_in_paise=50000,
             attempt_count=1,
+            error_code="BAD_REQUEST_ERROR",
+            error_reason="card_expired",
+        )
+        diag = StructuredDiagnosis(
+            diagnosis_label=DiagnosisLabel.EXPIRED_PAYMENT_METHOD,
+            confidence=0.90,
+            rationale="Expired card",
         )
 
-        candidates = CandidateGenerator.generate_candidates(view, config)
+        candidates = CandidateGenerator.generate_candidates(view, diag, config)
 
         assert SimulatedActionType.NO_ACTION in candidates
         assert SimulatedActionType.PAYMENT_LINK in candidates
@@ -67,28 +76,38 @@ class TestCandidateGenerator:
 
     def test_transient_gateway_candidates(self):
         config = DeterministicPolicyConfig(allow_immediate_retry=False)
-        view = PublicScenarioView(
+        view = ObservableRecoveryContext(
             scenario_id="scen_gw_01",
-            failure_class=FailureClass.TRANSIENT_GATEWAY,
             amount_in_paise=50000,
             attempt_count=1,
+            error_code="GATEWAY_ERROR",
+        )
+        diag = StructuredDiagnosis(
+            diagnosis_label=DiagnosisLabel.TRANSIENT_GATEWAY_FAILURE,
+            confidence=0.85,
+            rationale="Gateway timeout",
         )
 
-        candidates = CandidateGenerator.generate_candidates(view, config)
+        candidates = CandidateGenerator.generate_candidates(view, diag, config)
         assert SimulatedActionType.NO_ACTION in candidates
         assert SimulatedActionType.RETRY_LATER in candidates
         assert SimulatedActionType.RETRY_NOW not in candidates
 
     def test_attempt_limit_blocks_retries_for_insufficient_funds(self):
         config = DeterministicPolicyConfig(max_retry_attempts=3)
-        view = PublicScenarioView(
+        view = ObservableRecoveryContext(
             scenario_id="scen_funds_01",
-            failure_class=FailureClass.INSUFFICIENT_FUNDS,
             amount_in_paise=50000,
             attempt_count=3,
+            error_code="INSUFFICIENT_FUNDS",
+        )
+        diag = StructuredDiagnosis(
+            diagnosis_label=DiagnosisLabel.INSUFFICIENT_FUNDS,
+            confidence=0.80,
+            rationale="Insufficient balance",
         )
 
-        candidates = CandidateGenerator.generate_candidates(view, config)
+        candidates = CandidateGenerator.generate_candidates(view, diag, config)
         assert SimulatedActionType.RETRY_LATER not in candidates
         assert SimulatedActionType.PAYMENT_LINK in candidates
         assert SimulatedActionType.NO_ACTION in candidates
@@ -99,14 +118,18 @@ class TestExpectedValueScorer:
 
     def test_scoring_no_action_has_zero_incremental_value(self):
         config = DeterministicPolicyConfig()
-        view = PublicScenarioView(
+        view = ObservableRecoveryContext(
             scenario_id="scen_score_01",
-            failure_class=FailureClass.TRANSIENT_GATEWAY,
             amount_in_paise=100000,
             attempt_count=1,
         )
+        diag = StructuredDiagnosis(
+            diagnosis_label=DiagnosisLabel.TRANSIENT_GATEWAY_FAILURE,
+            confidence=0.85,
+            rationale="Gateway issue",
+        )
 
-        scored = ExpectedValueScorer.score_candidate(view, SimulatedActionType.NO_ACTION, config)
+        scored = ExpectedValueScorer.score_candidate(view, diag, SimulatedActionType.NO_ACTION, config)
         assert scored.expected_uplift == 0.0
         assert scored.expected_incremental_value_paise == 0
         assert scored.action_cost_paise == 0
@@ -114,16 +137,20 @@ class TestExpectedValueScorer:
 
     def test_scoring_positive_uplift_action(self):
         config = DeterministicPolicyConfig()
-        view = PublicScenarioView(
+        view = ObservableRecoveryContext(
             scenario_id="scen_score_02",
-            failure_class=FailureClass.TRANSIENT_GATEWAY,
             amount_in_paise=100000,  # ₹1,000
             attempt_count=1,
+        )
+        diag = StructuredDiagnosis(
+            diagnosis_label=DiagnosisLabel.TRANSIENT_GATEWAY_FAILURE,
+            confidence=0.85,
+            rationale="Gateway issue",
         )
 
         # Prior: RETRY_LATER=0.80, NO_ACTION=0.25 -> uplift = 0.55 -> incremental = 55000 paise
         # Cost = 20 paise -> net = 54980 paise
-        scored = ExpectedValueScorer.score_candidate(view, SimulatedActionType.RETRY_LATER, config)
+        scored = ExpectedValueScorer.score_candidate(view, diag, SimulatedActionType.RETRY_LATER, config)
         assert scored.expected_uplift == pytest.approx(0.55, abs=1e-4)
         assert scored.expected_incremental_value_paise == 55000
         assert scored.action_cost_paise == 20
@@ -131,14 +158,14 @@ class TestExpectedValueScorer:
 
 
 class TestDeterministicRecoveryPolicy:
-    """Validates decision-making of the first RecoveryOS policy baseline."""
+    """Validates decision-making of the RecoveryOS policy baseline."""
 
     def test_deterministic_policy_returns_valid_actions(self, standard_simulator_batch):
         policy = DeterministicRecoveryPolicy()
         allowed_actions = set(SimulatedActionType)
 
         for scenario in standard_simulator_batch:
-            view = PublicScenarioView.from_simulated_scenario(scenario)
+            view = ObservableContextBuilder.build_from_simulated_scenario(scenario)
             decision = policy.decide(view)
 
             assert isinstance(decision, PolicyDecision)
@@ -148,11 +175,13 @@ class TestDeterministicRecoveryPolicy:
 
     def test_expired_payment_method_does_not_retry(self):
         policy = DeterministicRecoveryPolicy()
-        view = PublicScenarioView(
+        view = ObservableRecoveryContext(
             scenario_id="scen_exp_test",
-            failure_class=FailureClass.EXPIRED_PAYMENT_METHOD,
             amount_in_paise=99900,
             attempt_count=1,
+            error_code="BAD_REQUEST_ERROR",
+            error_reason="card_expired",
+            error_description="Expired card",
         )
 
         decision = policy.decide(view)
@@ -161,11 +190,13 @@ class TestDeterministicRecoveryPolicy:
 
     def test_transient_gateway_prefers_retry_later(self):
         policy = DeterministicRecoveryPolicy()
-        view = PublicScenarioView(
+        view = ObservableRecoveryContext(
             scenario_id="scen_gw_test",
-            failure_class=FailureClass.TRANSIENT_GATEWAY,
             amount_in_paise=50000,
             attempt_count=1,
+            error_code="GATEWAY_ERROR",
+            error_source="gateway",
+            error_reason="gateway_timeout",
         )
 
         decision = policy.decide(view)
@@ -178,11 +209,12 @@ class TestDeterministicRecoveryPolicy:
             min_expected_net_value_paise=100000,  # ₹1,000 net value threshold
         )
         policy = DeterministicRecoveryPolicy(config=config)
-        view = PublicScenarioView(
+        view = ObservableRecoveryContext(
             scenario_id="scen_limit_test",
-            failure_class=FailureClass.INSUFFICIENT_FUNDS,
             amount_in_paise=50000,  # ₹500
             attempt_count=2,
+            error_code="INSUFFICIENT_FUNDS",
+            error_reason="insufficient_funds",
         )
 
         decision = policy.decide(view)
@@ -193,11 +225,12 @@ class TestDeterministicRecoveryPolicy:
         # Transaction of ₹1.00 (100 paise) where payment link costs 100 paise -> negative or tiny net value
         config = DeterministicPolicyConfig(min_expected_net_value_paise=5000)
         policy = DeterministicRecoveryPolicy(config=config)
-        view = PublicScenarioView(
+        view = ObservableRecoveryContext(
             scenario_id="scen_low_val",
-            failure_class=FailureClass.EXPIRED_PAYMENT_METHOD,
             amount_in_paise=100,
             attempt_count=1,
+            error_code="BAD_REQUEST_ERROR",
+            error_reason="card_expired",
         )
 
         decision = policy.decide(view)
@@ -207,7 +240,7 @@ class TestDeterministicRecoveryPolicy:
     def test_determinism_same_input_yields_same_decision(self, standard_simulator_batch):
         policy = DeterministicRecoveryPolicy()
         for scenario in standard_simulator_batch[:20]:
-            view = PublicScenarioView.from_simulated_scenario(scenario)
+            view = ObservableContextBuilder.build_from_simulated_scenario(scenario)
             dec_1 = policy.decide(view)
             dec_2 = policy.decide(view)
             assert dec_1.model_dump() == dec_2.model_dump()

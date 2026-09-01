@@ -71,15 +71,22 @@ Traditional subscription dunning systems rely on static retry schedules and aggr
 +-----------------------------------------------------------------------------------+
 |                        CLOSED-LOOP AGENT RUNTIME (agent/)                         |
 |                                                                                   |
-|  [RiskDetector] -> High Risk Detected                                             |
+|  [RiskDetector] -> Payment Risk Detected                                          |
 |        |                                                                          |
 |        v                                                                          |
-|  [PublicScenarioView Boundary] (Zero Leakage of Archetypes or Potential Outcomes) |
+|  [ObservableRecoveryContext] (Strict Hidden/Public Boundary: No Hidden Truth)     |
+|        |                                                                          |
+|        v                                                                          |
+|  [Structured Intelligence Layer] (intelligence/)                                  |
+|    - DeterministicDiagnosisProvider (Offline Rule Inference)                      |
+|    - LLMDiagnosisProvider (Optional LLM Boundary with Safe Fallback)              |
+|    - StructuredDiagnosis: taxonomy label, confidence, evidence, timing hint       |
 |        |                                                                          |
 |        v                                                                          |
 |  [DeterministicRecoveryPolicy]                                                    |
+|    - Low Confidence Gate: Abstains if diagnosis confidence < threshold            |
 |    - CandidateGenerator: Physical failure constraints & attempt caps              |
-|    - ExpectedValueScorer: Net Economic Uplift Proxy Scoring                       |
+|    - ExpectedValueScorer: Net Uplift Scoring (Allows Negative Uplift)             |
 |        |                                                                          |
 |        +-----------------------------> [NO_ACTION] --------> [Halt / Abstain]     |
 |        |                                                                          |
@@ -87,7 +94,7 @@ Traditional subscription dunning systems rely on static retry schedules and aggr
 |  [Stale Action Revalidation Check] (Cancels retry if captured out-of-band)        |
 |        |                                                                          |
 |        v                                                                          |
-|  [ToolFirewall]                                                                   |
+|  [Governor / ToolFirewall] (Deterministic Execution Authority)                    |
 |    - Schema Validation                                                            |
 |    - Customer Opt-Out / Consent Verification                                      |
 |    - Action Idempotency Lock                                                      |

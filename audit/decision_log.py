@@ -1,5 +1,5 @@
 """Audit models and decision log storage for deterministic decision provenance and compliance tracking."""
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from simulator.config import SimulatedActionType
@@ -14,8 +14,8 @@ class CandidateScore(BaseModel):
     rejection_reason: Optional[str] = Field(default=None, description="Reason for rejection if inadmissible")
     expected_recovery_prob: float = Field(default=0.0, ge=0.0, le=1.0, description="Estimated recovery probability prior")
     action_cost_paise: int = Field(default=0, ge=0, description="Direct cost of action in paise")
-    expected_net_value_paise: int = Field(default=0, description="Estimated net monetary recovery in paise")
-    incremental_uplift_paise: int = Field(default=0, description="Estimated incremental uplift vs no-action in paise")
+    expected_net_value_paise: int = Field(default=0, description="Estimated net monetary recovery in paise (can be negative)")
+    incremental_uplift_paise: int = Field(default=0, description="Estimated incremental uplift vs no-action in paise (can be negative)")
 
 
 class DecisionRecord(BaseModel):
@@ -30,12 +30,16 @@ class DecisionRecord(BaseModel):
     policy_name: str = Field(..., description="Executing policy identifier")
     policy_version: str = Field(..., description="Policy version string")
     model_version: str = Field(default="deterministic-proxy-v1", description="Model / scoring engine version")
-    failure_class: str = Field(..., description="Observed failure class category")
+    diagnosis_label: str = Field(..., description="Inferred diagnosis classification")
+    diagnosis_confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Confidence score of diagnosis")
+    diagnosis_source: str = Field(default="deterministic_offline", description="Diagnosis provider source")
+    evidence_codes: List[str] = Field(default_factory=list, description="Observable evidence codes used in diagnosis")
+    failure_class: Optional[str] = Field(default=None, description="Ground truth failure class (evaluator audit only)")
     failure_code: Optional[str] = Field(default=None, description="Observed error code")
     amount_in_paise: int = Field(..., ge=0, description="Transaction amount in paise")
     aggregate_state_before: str = Field(..., description="Reconciled payment state prior to decision/execution")
     aggregate_state_after: str = Field(..., description="Reconciled payment state after execution cycle")
-    aggregate_state: str = Field(..., description="Reconciled payment state at evaluation (backwards compatibility)")
+    aggregate_state: str = Field(..., description="Reconciled payment state at evaluation")
     risk_level: str = Field(..., description="Risk detector classification (NONE, LOW, HIGH)")
     candidate_scores: List[CandidateScore] = Field(default_factory=list, description="All evaluated candidate actions")
     selected_action: SimulatedActionType = Field(..., description="Action chosen by the policy")
@@ -47,6 +51,7 @@ class DecisionRecord(BaseModel):
     action_cost_paise: Optional[int] = Field(default=None, description="Actual action cost incurred")
     recovered_amount_paise: Optional[int] = Field(default=None, description="Actual revenue recovered")
     stop_reason: Optional[str] = Field(default=None, description="Runtime stopping reason")
+    observable_context: Optional[Dict[str, Any]] = Field(default=None, description="Snapshot of observable context")
 
 
 class DecisionLogStore:

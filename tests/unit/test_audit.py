@@ -35,8 +35,12 @@ class TestAuditAndReplay:
             iteration=1,
             timestamp_epoch=1700000000,
             policy_name="TEST_POLICY",
-            policy_version="v0.8.0",
+            policy_version="v1.0.0",
             model_version="deterministic-proxy-v1",
+            diagnosis_label="transient_gateway_failure",
+            diagnosis_confidence=0.90,
+            diagnosis_source="deterministic_offline",
+            evidence_codes=["OBS_GATEWAY_ERROR"],
             failure_class="transient_gateway",
             failure_code="GATEWAY_ERROR",
             amount_in_paise=50000,
@@ -95,8 +99,12 @@ class TestAuditAndReplay:
             iteration=1,
             timestamp_epoch=1700000000,
             policy_name="TEST_POLICY",
-            policy_version="v0.8.0",
+            policy_version="v1.0.0",
             model_version="deterministic-proxy-v1",
+            diagnosis_label="transient_gateway_failure",
+            diagnosis_confidence=0.90,
+            diagnosis_source="deterministic_offline",
+            evidence_codes=["OBS_GATEWAY_ERROR"],
             failure_class="transient_gateway",
             failure_code="GATEWAY_ERROR",
             amount_in_paise=50000,
@@ -281,8 +289,8 @@ class TestAuditAndReplay:
         replayed: ReplayRecord = replay_engine.replay_decision(first_decision_id)
         assert replayed is not None
         assert replayed.decision_id == first_decision_id
-        assert replayed.policy_version == "v0.8.0"
-        assert replayed.public_view_snapshot.scenario_id == "scen_replay_01"
+        assert replayed.policy_version == "v1.0.0"
+        assert replayed.observable_context_snapshot.scenario_id == "scen_replay_01"
         assert len(replayed.candidate_evaluations) == len(SimulatedActionType)
         assert replayed.execution_outcome is not None
         assert replayed.execution_outcome.recovered is True

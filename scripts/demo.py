@@ -31,10 +31,11 @@ from evaluation.harness import EvaluationHarness
 from evaluation.policies import AlwaysRetryPolicy, NoActionPolicy, ProbabilityOnlyPolicy, StaticRulePolicy
 from execution.simulator_executor import SimulatorExecutor
 from governor.firewall import CustomerConsentContext, ToolFirewall
+from intelligence.context import ObservableRecoveryContext
+from intelligence.providers import DeterministicDiagnosisProvider
 from policy.base import BasePolicy, PolicyDecision
 from policy.config import DeterministicPolicyConfig
 from policy.deterministic import DeterministicRecoveryPolicy
-from policy.public_view import PublicScenarioView
 from policy.scoring import ExpectedValueScorer
 from simulator.config import CustomerArchetype, FailureClass, ScenarioConfig, SimulatedActionType, SimulatorConfig
 from simulator.entities import SimulatedCustomer, SyntheticEntityGenerator
@@ -130,21 +131,22 @@ async def demo_case_2_delayed_retry_economic_selection() -> None:
     print("  Comparison: Evaluating all candidate interventions and ranking by Expected Net Value:\n")
 
     config = DeterministicPolicyConfig()
-    public_view = PublicScenarioView(
+    obs_context = ObservableRecoveryContext(
         scenario_id="scen_demo_timing",
-        failure_class=FailureClass.TRANSIENT_GATEWAY,
-        failure_code="GATEWAY_ERROR",
-        error_description="Gateway timeout",
-        error_source="bank",
-        error_step="payment_authentication",
-        error_reason="gateway_timed_out",
+        payment_id="pay_demo_02",
+        customer_id="cust_demo_02",
         amount_in_paise=500000,  # INR 5,000.00
         currency="INR",
-        attempt_count=1,
-        customer_id="cust_demo_02",
-        payment_id="pay_demo_02",
         payment_method="card",
+        attempt_count=1,
+        error_code="GATEWAY_ERROR",
+        error_description="Temporary gateway or bank network timeout occurred.",
+        error_source="gateway",
+        error_step="payment_authorization",
+        error_reason="gateway_timeout",
     )
+    diag_provider = DeterministicDiagnosisProvider()
+    diagnosis = diag_provider.diagnose_sync(obs_context)
 
     candidates = [
         SimulatedActionType.RETRY_NOW,
@@ -153,7 +155,7 @@ async def demo_case_2_delayed_retry_economic_selection() -> None:
         SimulatedActionType.REMINDER,
         SimulatedActionType.NO_ACTION,
     ]
-    scored = ExpectedValueScorer.score_all(public_view, candidates, config)
+    scored = ExpectedValueScorer.score_all(obs_context, diagnosis, candidates, config)
 
     print(f"  {'Candidate Action':<18} | {'Est Prob':<10} | {'Action Cost':<12} | {'Exp Net Value':<14} | {'Selected?'}")
     print("  " + "-" * 70)
@@ -328,7 +330,7 @@ async def demo_case_4_safety_block() -> None:
         def __init__(self) -> None:
             super().__init__(name="AGGRESSIVE_SPAMMER", description="Spams reminders indiscriminately")
 
-        def decide(self, scenario) -> PolicyDecision:
+        def decide(self, context, diagnosis=None) -> PolicyDecision:
             return PolicyDecision(
                 action_type=SimulatedActionType.REMINDER,
                 confidence=0.99,

@@ -7,12 +7,14 @@ from agent.risk import RiskAssessment
 from agent.runtime import AgentRunResult
 from audit.decision_log import CandidateScore, DecisionLogStore, DecisionRecord
 from execution.executor import ExecutionResult
+from intelligence.context import ObservableContextBuilder, ObservableRecoveryContext
+from intelligence.providers import DeterministicDiagnosisProvider
+from intelligence.schemas import DiagnosisLabel, StructuredDiagnosis
 from policy.base import PolicyDecision
 from policy.candidates import CandidateGenerator
 from policy.config import DeterministicPolicyConfig
-from policy.public_view import PublicScenarioView
 from policy.scoring import ExpectedValueScorer
-from simulator.config import FailureClass, SimulatedActionType
+from simulator.config import SimulatedActionType
 from simulator.generator import SimulatedScenario
 
 
@@ -27,7 +29,8 @@ class ReplayRecord(BaseModel):
     policy_name: str = Field(..., description="Policy identifier used during execution")
     policy_version: str = Field(..., description="Policy code release version")
     model_version: str = Field(..., description="Model / scoring engine release version")
-    public_view_snapshot: PublicScenarioView = Field(..., description="Sanitized public input supplied to policy")
+    observable_context_snapshot: ObservableRecoveryContext = Field(..., description="Sanitized observable input supplied to policy")
+    diagnosis: StructuredDiagnosis = Field(..., description="Structured diagnosis produced by intelligence layer")
     aggregate_state_before: str = Field(..., description="Aggregate state before execution")
     risk_assessment: RiskAssessment = Field(..., description="Risk detection outcome")
     candidate_evaluations: List[CandidateScore] = Field(default_factory=list, description="Candidate action scores")
@@ -48,12 +51,13 @@ class ReplayEngine:
     ) -> None:
         self.decision_log = decision_log or DecisionLogStore()
         self.config = config or DeterministicPolicyConfig()
+        self.diagnosis_provider = DeterministicDiagnosisProvider()
 
     def record_run(
         self,
         run_result: AgentRunResult,
         scenario: SimulatedScenario,
-        policy_version: str = "v0.8.0",
+        policy_version: str = "v1.0.0",
         model_version: str = "deterministic-proxy-v1",
     ) -> List[DecisionRecord]:
         """Convert runtime execution trace into immutable DecisionRecord entries and save to log store."""
@@ -63,28 +67,48 @@ class ReplayEngine:
             iteration = item.iteration
             decision_id = f"dec_{run_result.scenario_id}_it{iteration}_{item.decision.action_type.value}"
 
-            # Evaluate candidate scores for complete provenance
-            public_view = PublicScenarioView(
+            # 1. Reconstruct sanitized ObservableRecoveryContext
+            obs_context = ObservableRecoveryContext(
                 scenario_id=run_result.scenario_id,
-                failure_class=scenario.failure_class,
-                failure_code=scenario.event.payment.error_code if scenario.event.payment else None,
+                payment_id=run_result.payment_id,
+                customer_id=scenario.customer.customer_id if scenario.customer else None,
+                amount_in_paise=scenario.event.payment.amount if scenario.event.payment else 0,
+                currency=scenario.event.payment.currency if scenario.event.payment else "INR",
+                payment_method=scenario.event.payment.method if scenario.event.payment else "card",
+                attempt_count=iteration,
+                error_code=scenario.event.payment.error_code if scenario.event.payment else None,
                 error_description=scenario.event.payment.error_description if scenario.event.payment else None,
                 error_source=scenario.event.payment.error_source if scenario.event.payment else None,
                 error_step=scenario.event.payment.error_step if scenario.event.payment else None,
                 error_reason=scenario.event.payment.error_reason if scenario.event.payment else None,
-                amount_in_paise=scenario.event.payment.amount if scenario.event.payment else 0,
-                currency=scenario.event.payment.currency if scenario.event.payment else "INR",
-                attempt_count=iteration,
-                customer_id=scenario.customer.customer_id,
-                payment_id=run_result.payment_id,
-                payment_method=scenario.event.payment.method if scenario.event.payment else "card",
+                time_since_failure_seconds=0,
+                recent_failed_attempts=iteration,
+                prior_successful_payments=1,
+                prior_retry_success=True,
+                prior_payment_link_success=None,
+                average_recovery_time_seconds=7200,
+                contacts_in_last_24h=0,
+                contacts_in_last_7d=0,
+                time_since_last_contact_seconds=None,
+                time_since_last_successful_payment_seconds=None,
+                subscription_id=scenario.event.subscription.id if scenario.event.subscription else None,
+                subscription_status=scenario.event.subscription.status if scenario.event.subscription else None,
+                subscription_age_days=90,
+                consent_opted_out=False,
             )
 
-            admissible_actions = CandidateGenerator.generate_candidates(public_view, self.config)
+            # 2. Get Structured Diagnosis
+            diagnosis = (
+                item.diagnosis
+                or item.decision.diagnosis
+                or self.diagnosis_provider.diagnose_sync(obs_context)
+            )
+
+            admissible_actions = CandidateGenerator.generate_candidates(obs_context, diagnosis, self.config)
             candidate_scores: List[CandidateScore] = []
 
             priors = self.config.estimated_action_priors.get(
-                public_view.failure_class, self.config.default_priors
+                diagnosis.diagnosis_label, self.config.default_priors
             )
 
             for action_type in SimulatedActionType:
@@ -92,7 +116,7 @@ class ReplayEngine:
                 rejection_reason = None if is_admissible else "Inadmissible under failure physics or attempt limit"
                 prob = priors.get(action_type, 0.0)
                 cost = self.config.action_costs_paise.get(action_type, 0)
-                scored = ExpectedValueScorer.score_candidate(public_view, action_type, self.config)
+                scored = ExpectedValueScorer.score_candidate(obs_context, diagnosis, action_type, self.config)
 
                 candidate_scores.append(
                     CandidateScore(
@@ -120,7 +144,11 @@ class ReplayEngine:
                 policy_name=item.decision.policy_name,
                 policy_version=policy_version,
                 model_version=model_version,
-                failure_class=scenario.failure_class.value,
+                diagnosis_label=diagnosis.diagnosis_label.value,
+                diagnosis_confidence=diagnosis.confidence,
+                diagnosis_source=diagnosis.diagnosis_source,
+                evidence_codes=diagnosis.evidence_codes,
+                failure_class=scenario.failure_class.value if scenario.failure_class else None,
                 failure_code=scenario.event.payment.error_code if scenario.event.payment else None,
                 amount_in_paise=scenario.event.payment.amount if scenario.event.payment else 0,
                 aggregate_state_before=item.aggregate_state_before,
@@ -137,6 +165,7 @@ class ReplayEngine:
                 action_cost_paise=action_cost,
                 recovered_amount_paise=recovered_amount,
                 stop_reason=run_result.stop_reason if idx == len(run_result.trace) - 1 else None,
+                observable_context=obs_context.model_dump(),
             )
 
             self.decision_log.save_record(record)
@@ -154,26 +183,37 @@ class ReplayEngine:
         if not record:
             return None
 
-        # Reconstruct PublicScenarioView
-        try:
-            fc = FailureClass(record.failure_class.lower())
-        except Exception:
-            fc = FailureClass.TRANSIENT_GATEWAY
+        # Reconstruct ObservableRecoveryContext
+        obs_context = (
+            ObservableRecoveryContext(**record.observable_context)
+            if record.observable_context
+            else ObservableRecoveryContext(
+                scenario_id=record.scenario_id,
+                payment_id=record.payment_id,
+                amount_in_paise=record.amount_in_paise,
+                currency="INR",
+                attempt_count=record.iteration,
+                error_code=record.failure_code,
+            )
+        )
 
-        public_view = PublicScenarioView(
-            scenario_id=record.scenario_id,
-            failure_class=fc,
-            failure_code=record.failure_code,
-            error_description=None,
-            error_source=None,
-            error_step=None,
-            error_reason=None,
-            amount_in_paise=record.amount_in_paise,
-            currency="INR",
-            attempt_count=record.iteration,
-            customer_id=None,
-            payment_id=record.payment_id,
-            payment_method="card",
+        try:
+            diag_label = DiagnosisLabel(record.diagnosis_label)
+        except Exception:
+            diag_label = DiagnosisLabel.UNKNOWN_FAILURE
+
+        diagnosis = StructuredDiagnosis(
+            diagnosis_label=diag_label,
+            confidence=record.diagnosis_confidence,
+            evidence_codes=record.evidence_codes,
+            uncertainties=[],
+            recommended_candidate_actions=[record.selected_action],
+            recommended_timing_hint=None,
+            human_review_required=False,
+            abstain_recommended=False,
+            rationale=record.rationale,
+            diagnosis_source=record.diagnosis_source,
+            model_version=record.model_version,
         )
 
         selected_score = next(
@@ -189,6 +229,7 @@ class ReplayEngine:
             reason_codes=record.reason_codes,
             expected_net_value_paise=selected_score.expected_net_value_paise if selected_score else None,
             expected_incremental_value_paise=selected_score.incremental_uplift_paise if selected_score else None,
+            diagnosis=diagnosis,
         )
 
         risk = RiskAssessment(
@@ -219,7 +260,8 @@ class ReplayEngine:
             policy_name=record.policy_name,
             policy_version=record.policy_version,
             model_version=record.model_version,
-            public_view_snapshot=public_view,
+            observable_context_snapshot=obs_context,
+            diagnosis=diagnosis,
             aggregate_state_before=record.aggregate_state_before,
             risk_assessment=risk,
             candidate_evaluations=record.candidate_scores,

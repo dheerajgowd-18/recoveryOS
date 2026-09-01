@@ -1,5 +1,5 @@
 """Strict Pydantic v2 metrics models and calculation engine for RecoveryOS evaluations."""
-from typing import List
+from typing import Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from simulator.config import SimulatedActionType
@@ -17,6 +17,12 @@ class ScenarioEvaluationRecord(BaseModel):
     chosen_action: SimulatedActionType = Field(..., description="Action selected by the policy")
     is_intervention: bool = Field(..., description="Whether chosen action is an active intervention (not NO_ACTION)")
     is_abstention: bool = Field(default=False, description="Whether chosen action was NO_ACTION")
+    is_low_confidence_abstention: bool = Field(default=False, description="Whether abstention was due to low diagnosis confidence")
+    is_negative_uplift_abstention: bool = Field(default=False, description="Whether abstention was due to negative expected uplift")
+    predicted_diagnosis: Optional[str] = Field(default=None, description="Inferred diagnosis label")
+    diagnosis_confidence: Optional[float] = Field(default=None, description="Inferred diagnosis confidence score")
+    diagnosis_source: Optional[str] = Field(default=None, description="Diagnosis provider source")
+    diagnosis_correct: Optional[bool] = Field(default=None, description="Evaluator-side comparison against hidden failure class")
     recovered: bool = Field(..., description="Whether revenue was captured by the chosen action")
     recovered_amount_paise: int = Field(..., ge=0, description="Amount captured in paise under chosen action")
     action_cost_paise: int = Field(..., ge=0, description="Cost incurred to execute chosen action in paise")
@@ -31,7 +37,7 @@ class ScenarioEvaluationRecord(BaseModel):
 
 
 class EvaluationMetrics(BaseModel):
-    """Aggregated financial, churn-adjusted, and operational performance metrics for a policy over a batch."""
+    """Aggregated financial, churn-adjusted, intelligence, and operational performance metrics for a policy over a batch."""
     model_config = ConfigDict(extra="forbid")
 
     policy_name: str = Field(..., description="Name of the evaluated policy")
@@ -41,6 +47,12 @@ class EvaluationMetrics(BaseModel):
     total_abstentions: int = Field(..., ge=0, description="Count of abstentions (NO_ACTION decisions)")
     abstention_count: int = Field(..., ge=0, description="Count of abstentions")
     actions_avoided_count: int = Field(..., ge=0, description="Count of actions avoided / abstained")
+    low_confidence_abstention_count: int = Field(default=0, ge=0, description="Count of abstentions triggered by low diagnosis confidence")
+    negative_uplift_abstention_count: int = Field(default=0, ge=0, description="Count of abstentions triggered by negative expected uplift")
+    diagnosis_accuracy: float = Field(default=1.0, ge=0.0, le=1.0, description="Diagnosis accuracy compared to hidden true root cause")
+    diagnosis_source_counts: Dict[str, int] = Field(default_factory=dict, description="Count of diagnoses by provider source")
+    deterministic_fallback_count: int = Field(default=0, ge=0, description="Count of LLM fallbacks to deterministic provider")
+    invalid_llm_output_count: int = Field(default=0, ge=0, description="Count of malformed or invalid LLM responses")
     intervention_rate: float = Field(..., ge=0.0, le=1.0, description="Fraction of scenarios where an intervention was triggered")
     gross_recovered_amount_paise: int = Field(..., ge=0, description="Total recovered revenue in paise under policy actions")
     natural_recovered_amount_paise: int = Field(..., ge=0, description="Baseline revenue in paise recovered without any action")
@@ -70,6 +82,12 @@ class MetricCalculator:
         chosen_action: SimulatedActionType,
         chosen_outcome: ActionOutcome,
         natural_outcome: ActionOutcome,
+        predicted_diagnosis: Optional[str] = None,
+        diagnosis_confidence: Optional[float] = None,
+        diagnosis_source: Optional[str] = None,
+        diagnosis_correct: Optional[bool] = None,
+        is_low_confidence_abstention: bool = False,
+        is_negative_uplift_abstention: bool = False,
     ) -> ScenarioEvaluationRecord:
         """Construct a single scenario evaluation record from chosen and baseline counterfactuals."""
         is_intervention = chosen_action != SimulatedActionType.NO_ACTION
@@ -85,6 +103,12 @@ class MetricCalculator:
             chosen_action=chosen_action,
             is_intervention=is_intervention,
             is_abstention=is_abstention,
+            is_low_confidence_abstention=is_low_confidence_abstention,
+            is_negative_uplift_abstention=is_negative_uplift_abstention,
+            predicted_diagnosis=predicted_diagnosis,
+            diagnosis_confidence=diagnosis_confidence,
+            diagnosis_source=diagnosis_source,
+            diagnosis_correct=diagnosis_correct,
             recovered=chosen_outcome.recovered,
             recovered_amount_paise=recovered_amount,
             action_cost_paise=chosen_outcome.action_cost_paise,
@@ -104,6 +128,8 @@ class MetricCalculator:
         policy_name: str,
         records: List[ScenarioEvaluationRecord],
         churn_penalty_paise_per_customer: int = DEFAULT_CHURN_PENALTY_PAISE_PER_CUSTOMER,
+        deterministic_fallback_count: int = 0,
+        invalid_llm_output_count: int = 0,
     ) -> EvaluationMetrics:
         """Aggregate individual scenario records into a complete EvaluationMetrics model."""
         total_scenarios = len(records)
@@ -116,6 +142,12 @@ class MetricCalculator:
                 total_abstentions=0,
                 abstention_count=0,
                 actions_avoided_count=0,
+                low_confidence_abstention_count=0,
+                negative_uplift_abstention_count=0,
+                diagnosis_accuracy=1.0,
+                diagnosis_source_counts={},
+                deterministic_fallback_count=0,
+                invalid_llm_output_count=0,
                 intervention_rate=0.0,
                 gross_recovered_amount_paise=0,
                 natural_recovered_amount_paise=0,
@@ -137,6 +169,9 @@ class MetricCalculator:
 
         total_interventions = sum(1 for r in records if r.is_intervention)
         total_abstentions = total_scenarios - total_interventions
+        low_conf_abstentions = sum(1 for r in records if r.is_low_confidence_abstention)
+        neg_uplift_abstentions = sum(1 for r in records if r.is_negative_uplift_abstention)
+
         gross_recovered = sum(r.recovered_amount_paise for r in records)
         natural_recovered = sum(r.natural_recovered_amount_paise for r in records)
         incremental_recovered = gross_recovered - natural_recovered
@@ -165,6 +200,18 @@ class MetricCalculator:
         recovered_delays = [r.recovery_delay_seconds for r in records if r.recovered]
         avg_delay = (sum(recovered_delays) / len(recovered_delays)) if recovered_delays else 0.0
 
+        # Diagnosis accuracy
+        records_with_eval = [r for r in records if r.diagnosis_correct is not None]
+        if records_with_eval:
+            diag_acc = sum(1 for r in records_with_eval if r.diagnosis_correct) / len(records_with_eval)
+        else:
+            diag_acc = 1.0
+
+        source_counts: Dict[str, int] = {}
+        for r in records:
+            if r.diagnosis_source:
+                source_counts[r.diagnosis_source] = source_counts.get(r.diagnosis_source, 0) + 1
+
         return EvaluationMetrics(
             policy_name=policy_name,
             total_scenarios=total_scenarios,
@@ -173,6 +220,12 @@ class MetricCalculator:
             total_abstentions=total_abstentions,
             abstention_count=total_abstentions,
             actions_avoided_count=total_abstentions,
+            low_confidence_abstention_count=low_conf_abstentions,
+            negative_uplift_abstention_count=neg_uplift_abstentions,
+            diagnosis_accuracy=round(diag_acc, 4),
+            diagnosis_source_counts=source_counts,
+            deterministic_fallback_count=deterministic_fallback_count,
+            invalid_llm_output_count=invalid_llm_output_count,
             intervention_rate=round(intervention_rate, 4),
             gross_recovered_amount_paise=gross_recovered,
             natural_recovered_amount_paise=natural_recovered,

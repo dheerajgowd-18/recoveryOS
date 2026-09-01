@@ -1,8 +1,9 @@
 """Baseline policy implementations for RecoveryOS evaluation."""
-from typing import Dict
+from typing import Dict, Optional
 
+from intelligence.context import ObservableRecoveryContext
+from intelligence.schemas import StructuredDiagnosis
 from policy.base import BasePolicy, PolicyDecision
-from policy.public_view import PublicScenarioView
 from simulator.config import SimulatedActionType
 
 __all__ = [
@@ -24,7 +25,11 @@ class NoActionPolicy(BasePolicy):
             description="Abstain from all interventions; capture natural recovery baseline.",
         )
 
-    def decide(self, scenario: PublicScenarioView) -> PolicyDecision:
+    def decide(
+        self,
+        context: ObservableRecoveryContext,
+        diagnosis: Optional[StructuredDiagnosis] = None,
+    ) -> PolicyDecision:
         return PolicyDecision(
             action_type=SimulatedActionType.NO_ACTION,
             confidence=1.0,
@@ -33,6 +38,7 @@ class NoActionPolicy(BasePolicy):
             reason_codes=["BASELINE_0_ABSTAIN"],
             expected_net_value_paise=0,
             expected_incremental_value_paise=0,
+            diagnosis=diagnosis,
         )
 
 
@@ -45,13 +51,18 @@ class AlwaysRetryPolicy(BasePolicy):
             description="Unconditionally retry failed transactions immediately.",
         )
 
-    def decide(self, scenario: PublicScenarioView) -> PolicyDecision:
+    def decide(
+        self,
+        context: ObservableRecoveryContext,
+        diagnosis: Optional[StructuredDiagnosis] = None,
+    ) -> PolicyDecision:
         return PolicyDecision(
             action_type=SimulatedActionType.RETRY_NOW,
             confidence=1.0,
             rationale="Baseline 1: Immediate retry heuristic without root-cause differentiation.",
             policy_name=self.name,
             reason_codes=["BASELINE_1_UNCONDITIONAL_RETRY"],
+            diagnosis=diagnosis,
         )
 
 
@@ -61,21 +72,27 @@ class StaticRulePolicy(BasePolicy):
     def __init__(self) -> None:
         super().__init__(
             name="baseline_2_static_rules",
-            description="Rule-based heuristic mapping error codes to targeted actions.",
+            description="Rule-based heuristic mapping observable error codes to targeted actions.",
         )
 
-    def decide(self, scenario: PublicScenarioView) -> PolicyDecision:
-        error_code = scenario.failure_code
-        error_source = scenario.error_source
+    def decide(
+        self,
+        context: ObservableRecoveryContext,
+        diagnosis: Optional[StructuredDiagnosis] = None,
+    ) -> PolicyDecision:
+        error_code = context.error_code or context.failure_code or ""
+        error_source = context.error_source or ""
+        error_desc = (context.error_description or "").lower()
 
-        # Hard failure on expired / bad payment method: retries physically fail -> dispatch link
-        if error_code == "BAD_REQUEST_ERROR" or (scenario.error_description and "expired" in scenario.error_description.lower()):
+        # Hard failure on expired / bad payment method: naive rule engine dispatches link on BAD_REQUEST_ERROR
+        if error_code == "BAD_REQUEST_ERROR" or "expired" in error_desc:
             return PolicyDecision(
                 action_type=SimulatedActionType.PAYMENT_LINK,
                 confidence=0.90,
                 rationale="Static Rule: Expired payment method requires customer payment link to update credentials.",
                 policy_name=self.name,
                 reason_codes=["RULE_EXPIRED_PAYMENT_METHOD"],
+                diagnosis=diagnosis,
             )
 
         # Gateway network error: immediate retry is optimal
@@ -86,16 +103,18 @@ class StaticRulePolicy(BasePolicy):
                 rationale="Static Rule: Transient gateway error diagnosed; executing immediate retry.",
                 policy_name=self.name,
                 reason_codes=["RULE_TRANSIENT_GATEWAY"],
+                diagnosis=diagnosis,
             )
 
         # Insufficient funds: delayed retry gives time for account replenishment
-        if error_code == "INSUFFICIENT_FUNDS" or scenario.error_reason == "insufficient_funds":
+        if error_code == "INSUFFICIENT_FUNDS" or context.error_reason == "insufficient_funds":
             return PolicyDecision(
                 action_type=SimulatedActionType.RETRY_LATER,
                 confidence=0.75,
                 rationale="Static Rule: Insufficient funds diagnosed; scheduling delayed retry.",
                 policy_name=self.name,
                 reason_codes=["RULE_INSUFFICIENT_FUNDS"],
+                diagnosis=diagnosis,
             )
 
         # Default fallback
@@ -105,6 +124,7 @@ class StaticRulePolicy(BasePolicy):
             rationale="Static Rule: Default fallback to payment link dispatch.",
             policy_name=self.name,
             reason_codes=["RULE_DEFAULT_FALLBACK"],
+            diagnosis=diagnosis,
         )
 
 
@@ -149,8 +169,12 @@ class ProbabilityOnlyPolicy(BasePolicy):
             description="Greedy probability maximizer picking argmax P(recovery|action) without cost or uplift consideration.",
         )
 
-    def decide(self, scenario: PublicScenarioView) -> PolicyDecision:
-        error_code = scenario.failure_code or ""
+    def decide(
+        self,
+        context: ObservableRecoveryContext,
+        diagnosis: Optional[StructuredDiagnosis] = None,
+    ) -> PolicyDecision:
+        error_code = context.error_code or context.failure_code or ""
         priors = self.ESTIMATED_PRIORS.get(error_code, self.DEFAULT_PRIORS)
 
         # Pick action with maximum estimated raw recovery probability
@@ -163,4 +187,5 @@ class ProbabilityOnlyPolicy(BasePolicy):
             rationale=f"Baseline 3: Greedy probability selection maximizing raw recovery P={max_prob:.2f} (ignoring costs/churn).",
             policy_name=self.name,
             reason_codes=["BASELINE_3_GREEDY_MAX_PROB"],
+            diagnosis=diagnosis,
         )

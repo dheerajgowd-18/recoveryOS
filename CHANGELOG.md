@@ -5,6 +5,27 @@ All notable changes to the RecoveryOS platform will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-09-01
+
+### Added
+- **Structured Intelligence Layer & Diagnosis Provider (`intelligence/`)**:
+  - `StructuredDiagnosis` contract with canonical root-cause taxonomy (`DiagnosisLabel`), calibrated confidence, observable evidence codes, recommended candidate actions, and timing hints.
+  - `ObservableRecoveryContext` and `ObservableContextBuilder` providing a strict public boundary free of latent simulator truth (no `failure_class`, `archetype`, or `hidden_outcomes` leakage).
+  - `DeterministicDiagnosisProvider` providing pure offline rule-based diagnosis inference with zero external API dependencies.
+  - `LLMDiagnosisProvider` boundary supporting structured LLM outputs with Pydantic validation and automatic fallback (`diagnosis_source = 'deterministic_fallback'`).
+- **Negative Incremental Uplift Semantics**:
+  - Refactored `ExpectedValueScorer` to compute $\Delta P = P(a) - P(\text{no\_action})$ without artificial zero-clipping, enabling explicit negative uplift calculation and negative expected net value tracking.
+  - Added low-confidence diagnosis abstention guards (`confidence < threshold`) and negative uplift abstention flags in `DeterministicRecoveryPolicy`.
+- **Evaluator-Side Diagnosis Verification**:
+  - Added `diagnosis_accuracy`, `diagnosis_source_counts`, `deterministic_fallback_count`, and `invalid_llm_output_count` to `EvaluationMetrics` and `EvaluationHarness`.
+- **Comprehensive Intelligence Test Suite (`tests/unit/test_intelligence.py`)**:
+  - Added 12 unit tests validating context segregation, deterministic inference, LLM validation and fallback, negative uplift abstention, and baseline compatibility under observable context (117 total passing tests).
+
+### Changed
+- `policy/public_view.py`: Refactored `PublicScenarioView` to inherit from `ObservableRecoveryContext` without exposing simulator ground-truth failure classes.
+- `agent/runtime.py`: Integrated `ObservableContextBuilder` and `DiagnosisProvider` into the closed-loop recovery sequence.
+- `audit/decision_log.py` & `audit/replay.py`: Upgraded audit models to capture structured diagnosis, confidence, provider source, and candidate score breakdowns.
+
 ## [1.0.0] - 2026-08-31
 
 ### Added

@@ -43,8 +43,8 @@ The evaluation harness benchmarks RecoveryOS against 4 standard industry baselin
      $$a^* = \arg\max_a P(a \mid x)$$
    - Purpose: Represents naive ML models that ignore action costs and customer fatigue.
 5. **RecoveryOS Deterministic v0 (`DeterministicRecoveryPolicy`)**
-   - Policy: Filters candidate actions under physical failure constraints, estimates net incremental recovery uplift, and enforces net value thresholds and abstention guards:
-     $$a^* = \arg\max_{a \in \mathcal{A}_{\text{admissible}}} \left( \text{Amount} \times \max(0.0, P(a) - P(\text{no\_action})) - \text{Cost}(a) \right)$$
+   - Policy: Receives/infers structured diagnosis from observable evidence, filters candidate actions under physical failure constraints, estimates net incremental recovery uplift allowing negative uplift ($\Delta P < 0$), and enforces net value thresholds and abstention guards:
+     $$a^* = \arg\max_{a \in \mathcal{A}_{\text{admissible}}} \left( \text{Amount} \times (P(a) - P(\text{no\_action})) - \text{Cost}(a) \right)$$
 
 ---
 
@@ -62,6 +62,8 @@ The evaluation harness benchmarks RecoveryOS against 4 standard industry baselin
 | **Interventions** | $\sum \mathbb{I}(a_{\text{chosen}} \neq \text{NO\_ACTION})$ | Total active dunning interventions triggered |
 | **Actions Avoided** | $\sum \mathbb{I}(a_{\text{chosen}} = \text{NO\_ACTION})$ | Total scenarios where the policy safely abstained |
 | **Customer Churn Count** | $\sum \mathbb{I}(\text{Churned})$ | Number of customers who permanently churned due to dunning fatigue |
+| **Diagnosis Accuracy** | $\frac{1}{N}\sum \mathbb{I}(\hat{D} = D^*)$ | Evaluator-side accuracy of inferred diagnosis vs hidden root cause |
+| **Fallback Count** | $\sum \mathbb{I}(\text{Source} = \text{fallback})$ | Invocations safely fallen back to deterministic offline rules |
 
 ---
 

@@ -3,7 +3,8 @@ from abc import ABC, abstractmethod
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
-from policy.public_view import PublicScenarioView
+from intelligence.context import ObservableRecoveryContext
+from intelligence.schemas import StructuredDiagnosis
 from simulator.config import SimulatedActionType
 
 
@@ -18,6 +19,7 @@ class PolicyDecision(BaseModel):
     reason_codes: List[str] = Field(default_factory=list, description="Machine-readable audit reason tags")
     expected_net_value_paise: Optional[int] = Field(default=None, description="Estimated net recovery in paise")
     expected_incremental_value_paise: Optional[int] = Field(default=None, description="Estimated incremental uplift in paise")
+    diagnosis: Optional[StructuredDiagnosis] = Field(default=None, description="Structured diagnosis utilized in decisioning")
 
 
 class BasePolicy(ABC):
@@ -28,11 +30,15 @@ class BasePolicy(ABC):
         self.description = description
 
     @abstractmethod
-    def decide(self, scenario: PublicScenarioView) -> PolicyDecision:
-        """Evaluate a scenario using ONLY sanitized public domain event data.
+    def decide(
+        self,
+        context: ObservableRecoveryContext,
+        diagnosis: Optional[StructuredDiagnosis] = None,
+    ) -> PolicyDecision:
+        """Evaluate a scenario using ONLY sanitized observable recovery context and structured diagnosis.
 
         Guarantees:
-        - Policies receive PublicScenarioView.
-        - Policies cannot inspect hidden counterfactual outcomes or latent customer archetypes.
+        - Policies receive ObservableRecoveryContext (no hidden potential outcomes, archetypes, or true failure classes).
+        - Policies use StructuredDiagnosis for semantic reasoning.
         """
         pass

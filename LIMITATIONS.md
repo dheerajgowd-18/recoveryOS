@@ -20,8 +20,16 @@ In accordance with Track 03 engineering rigor, this document details the archite
 - **Limitation**: The agent does not engage in interactive, multi-turn natural language negotiations (e.g. conversational WhatsApp back-and-forth negotiating custom installment plans). Such workflows require human-in-the-loop escalation gates.
 
 ### 1.4 Coarse Timing Selection vs Continuous Delay Optimization
-- **Current Implementation**: The policy chooses between discrete candidate actions (`RETRY_NOW` vs `RETRY_LATER` representing an optimal 24-hour backoff).
-- **Limitation**: The deterministic policy does not compute fine-grained continuous hour-by-hour timing windows (e.g. 6 hours vs 18 hours vs payday matching).
+- **Current Implementation**: The policy chooses between discrete candidate actions (`RETRY_NOW` vs `RETRY_LATER` representing an optimal backoff window).
+- **Limitation**: The system does not compute continuous hour-by-hour timing windows or custom payday alignment. Durable scheduling is modeled via delay tags and backoff representations rather than an external distributed timer daemon.
+
+### 1.5 Headless API & CLI Interface vs Operations Console
+- **Current Implementation**: RecoveryOS exposes a headless Python API, an interactive CLI audit tool (`scripts/demo.py`), and programmatic replay capabilities.
+- **Limitation**: A graphical merchant dashboard / human-in-the-loop operations console is a non-goal for this phase and is planned for future platform expansion.
+
+### 1.6 Benchmark Population Scale
+- **Current Implementation**: The evaluation harness benchmarks a 100-scenario deterministic population across all archetypes and failure physics for high-speed local verification.
+- **Limitation**: Large-scale statistical stress tests across 10,000+ scenarios and Monte Carlo distributions are deferred to future production scale benchmarks.
 
 ---
 

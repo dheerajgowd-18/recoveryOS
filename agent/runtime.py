@@ -1,4 +1,4 @@
-"""AgentRuntime orchestrating the closed-loop observe-decide-execute-observe recovery cycle with ToolFirewall protection."""
+"""AgentRuntime orchestrating the closed-loop observe-diagnose-decide-execute recovery cycle."""
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -11,14 +11,15 @@ from governor.exceptions import (
     ActionBlockedError,
     ConsentViolationError,
     DuplicateExecutionError,
-    FirewallError,
     PolicyOutageError,
     SchemaValidationError,
 )
 from governor.firewall import CustomerConsentContext, ToolFirewall
+from intelligence.context import ObservableContextBuilder, ObservableRecoveryContext
+from intelligence.providers import BaseDiagnosisProvider, DeterministicDiagnosisProvider
+from intelligence.schemas import StructuredDiagnosis
 from policy.base import BasePolicy, PolicyDecision
 from policy.deterministic import DeterministicRecoveryPolicy
-from policy.public_view import PublicScenarioView
 from simulator.config import SimulatedActionType
 from simulator.generator import SimulatedScenario
 
@@ -30,6 +31,7 @@ class AgentIterationRecord(BaseModel):
     iteration: int = Field(..., description="Cycle index (1-based)")
     risk_assessment: RiskAssessment = Field(..., description="Risk detection outcome")
     decision: PolicyDecision = Field(..., description="Action selected by policy")
+    diagnosis: Optional[StructuredDiagnosis] = Field(default=None, description="Structured diagnosis produced")
     execution_result: Optional[ExecutionResult] = Field(default=None, description="Executor result if dispatched")
     aggregate_state_before: str = Field(..., description="Payment aggregate state before this cycle")
     aggregate_state_after: str = Field(..., description="Payment aggregate state after this cycle")
@@ -55,12 +57,13 @@ class AgentRunResult(BaseModel):
 
 
 class AgentRuntime:
-    """Closed-loop recovery controller connecting Ingestion, Risk Detection, Policy, Firewall, and Execution."""
+    """Closed-loop recovery controller connecting Ingestion, Intelligence, Policy, Firewall, and Execution."""
 
     def __init__(
         self,
         ingestion_service: Optional[IngestionService] = None,
         risk_detector: Optional[RiskDetector] = None,
+        diagnosis_provider: Optional[BaseDiagnosisProvider] = None,
         policy: Optional[BasePolicy] = None,
         firewall: Optional[ToolFirewall] = None,
         executor: Optional[RecoveryExecutor] = None,
@@ -68,7 +71,8 @@ class AgentRuntime:
     ) -> None:
         self.ingestion_service = ingestion_service or IngestionService()
         self.risk_detector = risk_detector or RiskDetector()
-        self.policy = policy or DeterministicRecoveryPolicy()
+        self.diagnosis_provider = diagnosis_provider or DeterministicDiagnosisProvider()
+        self.policy = policy or DeterministicRecoveryPolicy(diagnosis_provider=self.diagnosis_provider)
         self.firewall = firewall or ToolFirewall()
         self.executor = executor or SimulatorExecutor()
         self.max_iterations = max_iterations
@@ -114,23 +118,22 @@ class AgentRuntime:
                 stop_reason = "NO_RISK_DETECTED"
                 break
 
-            # D. Public Scenario Projection
-            current_scenario = SimulatedScenario(
-                scenario_id=initial_scenario.scenario_id,
-                customer=initial_scenario.customer,
+            # D. Observable Context Construction (Strictly without hidden simulator truth)
+            obs_context = ObservableContextBuilder.build_from_payment_event(
                 event=current_event,
-                webhook_payload=current_payload,
-                archetype=initial_scenario.archetype,
-                failure_class=initial_scenario.failure_class,
-                hidden_outcomes=initial_scenario.hidden_outcomes,
+                aggregate=aggregate,
+                customer_consent=consent,
+                attempt_count=iteration,
+                scenario_id=initial_scenario.scenario_id,
             )
-            public_view = PublicScenarioView.from_simulated_scenario(current_scenario)
 
-            # E. Policy Evaluation (Decide) with Fail-Closed Protection
+            # E. Intelligence Diagnosis & Policy Evaluation with Fail-Closed Protection
             try:
                 if not policy_healthy:
                     raise PolicyOutageError("Policy decision engine is flagged unhealthy. Failing closed.")
-                decision = self.policy.decide(public_view)
+
+                diagnosis = await self.diagnosis_provider.diagnose(obs_context)
+                decision = self.policy.decide(obs_context, diagnosis=diagnosis)
             except PolicyOutageError as e:
                 # Fail Closed: Record NO_ACTION and halt loop safely
                 fallback_decision = PolicyDecision(
@@ -144,6 +147,7 @@ class AgentRuntime:
                     iteration=iteration,
                     risk_assessment=risk,
                     decision=fallback_decision,
+                    diagnosis=None,
                     execution_result=None,
                     aggregate_state_before=current_state.value,
                     aggregate_state_after=current_state.value,
@@ -161,6 +165,7 @@ class AgentRuntime:
                     iteration=iteration,
                     risk_assessment=risk,
                     decision=decision,
+                    diagnosis=decision.diagnosis,
                     execution_result=None,
                     aggregate_state_before=current_state.value,
                     aggregate_state_after=current_state.value,
@@ -178,6 +183,7 @@ class AgentRuntime:
                     iteration=iteration,
                     risk_assessment=risk,
                     decision=decision,
+                    diagnosis=decision.diagnosis,
                     execution_result=None,
                     aggregate_state_before=current_state.value,
                     aggregate_state_after=aggregate.current_state.value,
@@ -204,6 +210,7 @@ class AgentRuntime:
                     iteration=iteration,
                     risk_assessment=risk,
                     decision=decision,
+                    diagnosis=decision.diagnosis,
                     execution_result=None,
                     aggregate_state_before=current_state.value,
                     aggregate_state_after=current_state.value,
@@ -221,18 +228,28 @@ class AgentRuntime:
                 break
 
             # I. Dispatch Execution with Fault Tolerance Handling
-            context = ExecutionContext(
+            current_scenario = SimulatedScenario(
+                scenario_id=initial_scenario.scenario_id,
+                customer=initial_scenario.customer,
+                event=current_event,
+                webhook_payload=current_payload,
+                archetype=initial_scenario.archetype,
+                failure_class=initial_scenario.failure_class,
+                hidden_outcomes=initial_scenario.hidden_outcomes,
+            )
+            exec_ctx = ExecutionContext(
                 scenario=current_scenario,
                 attempt_count=iteration,
                 current_epoch=current_epoch,
             )
             try:
-                exec_result = await self.executor.execute(validated_action, context)
+                exec_result = await self.executor.execute(validated_action, exec_ctx)
             except (TimeoutError, ConnectionError, PolicyOutageError, Exception) as e:
                 record = AgentIterationRecord(
                     iteration=iteration,
                     risk_assessment=risk,
                     decision=decision,
+                    diagnosis=decision.diagnosis,
                     execution_result=None,
                     aggregate_state_before=current_state.value,
                     aggregate_state_after=current_state.value,
@@ -263,6 +280,7 @@ class AgentRuntime:
                 iteration=iteration,
                 risk_assessment=risk,
                 decision=decision,
+                diagnosis=decision.diagnosis,
                 execution_result=exec_result,
                 aggregate_state_before=current_state.value,
                 aggregate_state_after=new_state,
