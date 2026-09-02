@@ -15,9 +15,12 @@ class ScoredAction(BaseModel):
     estimated_probability: float = Field(..., ge=0.0, le=1.0, description="Estimated recovery probability")
     natural_probability: float = Field(..., ge=0.0, le=1.0, description="Estimated baseline natural recovery probability")
     expected_uplift: float = Field(..., ge=-1.0, le=1.0, description="Incremental uplift over natural recovery (can be negative)")
+    expected_gross_recovery_paise: int = Field(default=0, ge=0, description="Expected total gross recovered amount in paise")
+    expected_natural_recovery_paise: int = Field(default=0, ge=0, description="Expected organic recovery without intervention")
     expected_incremental_value_paise: int = Field(..., description="Expected incremental revenue in paise (can be negative)")
     action_cost_paise: int = Field(..., ge=0, description="Direct execution cost in paise")
-    expected_net_value_paise: int = Field(..., description="Expected net recovery value (Incremental - Cost)")
+    customer_friction_penalty_paise: int = Field(default=0, ge=0, description="Estimated customer contact fatigue cost")
+    expected_net_value_paise: int = Field(..., description="Expected net recovery value (Incremental - Cost - Friction)")
     timing_window: Optional[str] = Field(default=None, description="Timing window bucket")
     delay_seconds: int = Field(default=0, ge=0, description="Delay in seconds")
     reason_codes: List[str] = Field(default_factory=list, description="Scoring audit tags")
@@ -39,23 +42,38 @@ class ExpectedValueScorer:
         p_natural = priors.get(SimulatedActionType.NO_ACTION, 0.0)
 
         cost = config.action_costs_paise.get(action, 0)
+        amount = context.amount_in_paise
+
+        natural_val = int(amount * p_natural)
+        gross_val = int(amount * p_action)
 
         if action == SimulatedActionType.NO_ACTION:
             return ScoredAction(
                 action_type=action,
-                estimated_probability=p_natural,
-                natural_probability=p_natural,
+                estimated_probability=round(p_natural, 4),
+                natural_probability=round(p_natural, 4),
                 expected_uplift=0.0,
+                expected_gross_recovery_paise=natural_val,
+                expected_natural_recovery_paise=natural_val,
                 expected_incremental_value_paise=0,
                 action_cost_paise=0,
+                customer_friction_penalty_paise=0,
                 expected_net_value_paise=0,
                 reason_codes=["NATURAL_RECOVERY_BASELINE"],
             )
 
+        # Compute friction penalty based on customer contact frequency
+        friction_penalty = 0
+        if action in (SimulatedActionType.PAYMENT_LINK, SimulatedActionType.REMINDER):
+            if context.contacts_in_last_24h > 0:
+                friction_penalty = 500  # ₹5 fatigue penalty for consecutive contact
+            if context.contacts_in_last_7d >= 2:
+                friction_penalty += 1000  # ₹10 fatigue penalty for high weekly frequency
+
         # Allow genuine negative uplift (e.g. ill-timed actions destroying natural recovery)
-        uplift = p_action - p_natural
-        incremental_value = int(context.amount_in_paise * uplift)
-        net_value = incremental_value - cost
+        uplift = round(p_action - p_natural, 4)
+        incremental_value = int(amount * uplift)
+        net_value = incremental_value - cost - friction_penalty
 
         reason_codes = [
             f"PRIOR_PROB_{int(p_action * 100)}PCT",
@@ -63,6 +81,8 @@ class ExpectedValueScorer:
             f"COST_{cost}PAISE",
         ]
 
+        if friction_penalty > 0:
+            reason_codes.append(f"FRICTION_PENALTY_{friction_penalty}PAISE")
         if uplift < 0:
             reason_codes.append("NEGATIVE_INCREMENTAL_UPLIFT")
         if net_value < 0:
@@ -72,9 +92,12 @@ class ExpectedValueScorer:
             action_type=action,
             estimated_probability=round(p_action, 4),
             natural_probability=round(p_natural, 4),
-            expected_uplift=round(uplift, 4),
+            expected_uplift=uplift,
+            expected_gross_recovery_paise=gross_val,
+            expected_natural_recovery_paise=natural_val,
             expected_incremental_value_paise=incremental_value,
             action_cost_paise=cost,
+            customer_friction_penalty_paise=friction_penalty,
             expected_net_value_paise=net_value,
             reason_codes=reason_codes,
         )

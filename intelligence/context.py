@@ -114,7 +114,28 @@ class ObservableContextBuilder:
         if customer_consent and customer_consent.is_globally_opted_out:
             opted_out = True
 
-        err_code = payment.error_code if payment else (aggregate.error_code if aggregate else None)
+        err_code = (
+            (payment.error_code if payment else None)
+            or (payment.error.code if payment and payment.error else None)
+            or (aggregate.error_code if aggregate else None)
+        )
+        err_desc = (
+            (payment.error_description if payment else None)
+            or (payment.error.description if payment and payment.error else None)
+            or (aggregate.error_description if aggregate else None)
+        )
+        err_source = (
+            (payment.error_source if payment else None)
+            or (payment.error.source if payment and payment.error else None)
+        )
+        err_step = (
+            (payment.error_step if payment else None)
+            or (payment.error.step if payment and payment.error else None)
+        )
+        err_reason = (
+            (payment.error_reason if payment else None)
+            or (payment.error.reason if payment and payment.error else None)
+        )
 
         return ObservableRecoveryContext(
             scenario_id=scen_id,
@@ -126,10 +147,10 @@ class ObservableContextBuilder:
             attempt_count=attempt_count,
             error_code=err_code,
             failure_code=err_code,
-            error_description=payment.error_description if payment else (aggregate.error_description if aggregate else None),
-            error_source=payment.error_source if payment else None,
-            error_step=payment.error_step if payment else None,
-            error_reason=payment.error_reason if payment else None,
+            error_description=err_desc,
+            error_source=err_source,
+            error_step=err_step,
+            error_reason=err_reason,
             time_since_failure_seconds=0,
             recent_failed_attempts=attempt_count,
             prior_successful_payments=1,

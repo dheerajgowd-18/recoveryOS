@@ -16,6 +16,7 @@ class DeterministicDiagnosisProvider(BaseDiagnosisProvider):
 
     def diagnose_sync(self, context: ObservableRecoveryContext) -> StructuredDiagnosis:
         error_code = (context.error_code or "").upper()
+        error_code_lower = (context.error_code or "").lower()
         error_desc = (context.error_description or "").lower()
         error_reason = (context.error_reason or "").lower()
         error_source = (context.error_source or "").lower()
@@ -118,7 +119,7 @@ class DeterministicDiagnosisProvider(BaseDiagnosisProvider):
             )
 
         # 5. Mandate Issue Check
-        if "mandate" in error_code or "mandate" in error_desc or "mandate" in error_reason:
+        if "mandate" in error_code_lower or "mandate" in error_desc or "mandate" in error_reason:
             return StructuredDiagnosis(
                 diagnosis_label=DiagnosisLabel.MANDATE_ISSUE,
                 confidence=0.85,

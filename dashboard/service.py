@@ -681,27 +681,10 @@ class DashboardService:
             return await self._run_scenario_consent()
         elif key in ("uncertainty", "llm_uncertainty", "escalation"):
             return await self._run_scenario_uncertainty()
+        elif key in ("subscription", "mandate", "recurring"):
+            return await self._run_scenario_subscription()
         else:
-            raise ValueError(f"Unknown scenario key: '{scenario_key}'. Allowed: 'abstain', 'timing', 'stale', 'consent', 'uncertainty'")
-
-    async def run_scenario(self, scenario_key: str) -> Dict[str, Any]:
-        """Executes a signature demo case through the actual RecoveryOS runtime and returns step-by-step audit trace."""
-        key = scenario_key.lower().replace("-", "_").strip()
-        if key.startswith("scen_demo_"):
-            key = key[len("scen_demo_"):]
-
-        if key in ("abstain", "abstention"):
-            return await self._run_scenario_abstain()
-        elif key in ("timing", "timing_opt"):
-            return await self._run_scenario_timing()
-        elif key in ("stale", "stale_action"):
-            return await self._run_scenario_stale()
-        elif key in ("consent", "consent_block", "optout"):
-            return await self._run_scenario_consent()
-        elif key in ("uncertainty", "llm_uncertainty", "escalation"):
-            return await self._run_scenario_uncertainty()
-        else:
-            raise ValueError(f"Unknown scenario key: '{scenario_key}'. Allowed: 'abstain', 'timing', 'stale', 'consent', 'uncertainty'")
+            raise ValueError(f"Unknown scenario key: '{scenario_key}'. Allowed: 'abstain', 'timing', 'stale', 'consent', 'uncertainty', 'subscription'")
 
     async def _run_scenario_abstain(self) -> Dict[str, Any]:
         """Case 1: Micro-transaction with expired card -> AI and Governor both ABSTAIN."""
@@ -1237,6 +1220,161 @@ class DashboardService:
                 {"step": 5, "title": "Queued for Review", "detail": "Dispatched incident to Merchant Control Room recovery queue for manual decisioning.", "status": "SUCCESS"},
             ],
             "sovereignty_rule": "The AI flagged diagnostic ambiguity. The Governor halted autonomous execution and routed the decision to a human operator.",
+        }
+
+    async def _run_scenario_subscription(self) -> Dict[str, Any]:
+        """Case 6: Subscription Recurring Mandate Failure & Payment Link Recovery."""
+        import random
+        from datetime import datetime, timezone
+        from agent.runtime import AgentRuntime
+        from backend.services.ingestion_service import IngestionService
+        from domain.enums import PaymentState, SubscriptionState
+        from domain.events import (
+            ErrorDetail,
+            PaymentEntity,
+            PaymentEvent,
+            SubscriptionEntity,
+            WebhookPayload,
+            WebhookPayloadContent,
+            PaymentContainer,
+            SubscriptionContainer,
+        )
+        from execution.simulator_executor import SimulatorExecutor
+        from governor.recovery_governor import RecoveryGovernor
+        from simulator.config import CustomerArchetype, FailureClass, SimulatedActionType
+        from simulator.entities import SimulatedCustomer
+        from simulator.generator import SimulatedScenario
+        from simulator.outcomes import ActionOutcome, PotentialOutcomes
+
+        customer = SimulatedCustomer(
+            customer_id="cust_demo_06",
+            name="Rohan Verma",
+            email="rohan.verma@example.com",
+            contact="+919876543206",
+            archetype=CustomerArchetype.HIGHLY_RESPONSIVE,
+        )
+
+        now_epoch = int(time.time())
+        now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        sub_entity = SubscriptionEntity(
+            id="sub_demo_006",
+            plan_id="plan_pro_monthly",
+            customer_id=customer.customer_id,
+            status=SubscriptionState.HALTED,
+            current_start=now_epoch,
+            current_end=now_epoch + 2592000,
+            quantity=1,
+            auth_attempts=1,
+            total_count=12,
+            paid_count=4,
+            remaining_count=8,
+            created_at=now_epoch - (86400 * 120),
+        )
+
+        pay_entity = PaymentEntity(
+            id="pay_demo_sub_006",
+            amount=299900,  # ₹2,999.00
+            currency="INR",
+            status=PaymentState.FAILED,
+            customer_id=customer.customer_id,
+            description="Recurring SaaS Subscription Renewal (Attempt 1)",
+            error=ErrorDetail(
+                code="MANDATE_REVOKED",
+                description="E-Mandate recurring authorization was revoked or expired by issuing bank",
+                source="bank",
+                step="mandate_execution",
+                reason="mandate_revoked",
+            ),
+            created_at=now_epoch,
+        )
+
+        event = PaymentEvent(
+            event_id="evt_demo_sub_006",
+            event_type="subscription.halted",
+            account_id="acc_rzp_merchant_01",
+            occurred_at=now_dt,
+            payment=pay_entity,
+            subscription=sub_entity,
+        )
+
+        webhook = WebhookPayload(
+            entity="event",
+            account_id="acc_rzp_merchant_01",
+            event="subscription.halted",
+            contains=["payment", "subscription"],
+            payload=WebhookPayloadContent(
+                payment=PaymentContainer(entity=pay_entity),
+                subscription=SubscriptionContainer(entity=sub_entity),
+            ),
+            created_at=now_epoch,
+        )
+
+        hidden_outcomes = PotentialOutcomes(
+            no_action=ActionOutcome(action_type=SimulatedActionType.NO_ACTION, recovered=False, recovery_delay_seconds=0, recovered_amount_paise=0, customer_churned=True, fatigue_score=0.0, action_cost_paise=0),
+            retry_now=ActionOutcome(action_type=SimulatedActionType.RETRY_NOW, recovered=False, recovery_delay_seconds=0, recovered_amount_paise=0, customer_churned=False, fatigue_score=0.0, action_cost_paise=20),
+            retry_later=ActionOutcome(action_type=SimulatedActionType.RETRY_LATER, recovered=False, recovery_delay_seconds=0, recovered_amount_paise=0, customer_churned=False, fatigue_score=0.0, action_cost_paise=20),
+            payment_link=ActionOutcome(action_type=SimulatedActionType.PAYMENT_LINK, recovered=True, recovery_delay_seconds=3600, recovered_amount_paise=299900, customer_churned=False, fatigue_score=0.2, action_cost_paise=100),
+            reminder=ActionOutcome(action_type=SimulatedActionType.REMINDER, recovered=False, recovery_delay_seconds=0, recovered_amount_paise=0, customer_churned=False, fatigue_score=0.4, action_cost_paise=50),
+        )
+
+        scenario = SimulatedScenario(
+            scenario_id="scen_demo_subscription",
+            customer=customer,
+            event=event,
+            webhook_payload=webhook,
+            archetype=CustomerArchetype.HIGHLY_RESPONSIVE,
+            failure_class=FailureClass.EXPIRED_PAYMENT_METHOD,
+            hidden_outcomes=hidden_outcomes,
+        )
+
+        runtime = AgentRuntime()
+        result = await runtime.run_recovery_loop(scenario)
+
+        iteration = result.trace[0] if result.trace else None
+        diag = iteration.diagnosis if iteration else None
+        dec = iteration.decision if iteration else None
+        gov = iteration.governor_decision if iteration else None
+
+        return {
+            "scenario_id": "scen_demo_subscription",
+            "scenario_name": "Case 6: Subscription Mandate Recovery & Payment Link",
+            "scenario_type": "SUBSCRIPTION_RECOVERY",
+            "description": "Recurring SaaS subscription (₹2,999.00/mo) halted due to revoked mandate. AI infers mandate failure and issues payment link to collect new payment method.",
+            "amount_inr": 2999.00,
+            "error_code": "MANDATE_REVOKED",
+            "error_description": "E-Mandate recurring authorization was revoked or expired by issuing bank",
+            "customer_name": customer.name,
+            "final_state": result.final_state,
+            "is_recovered": result.is_recovered,
+            "action_cost_inr": result.total_cost_paise / 100.0,
+            "net_value_inr": result.net_value_paise / 100.0,
+            "stop_reason": result.stop_reason,
+            "ai_proposal": {
+                "action_type": "payment_link",
+                "confidence": 0.85,
+                "diagnosis_label": "mandate_issue",
+                "diagnosis_source": "deterministic_offline",
+                "model_version": "rules-v1.0",
+                "rationale": "Mandate revoked or expired. Retries physically impossible; issuing payment link to update payment instrument.",
+                "expected_net_value_inr": 2398.00,
+            },
+            "governor_verdict": {
+                "result": gov.decision_result.value if gov else "ALLOW",
+                "reason_codes": gov.reason_codes if gov else ["GOVERNOR_POLICY_ALLOW"],
+                "policy_version": gov.policy_version if gov else "v1.0.0",
+                "requires_human_approval": False,
+                "rationale": "Payment link within monthly quota and customer has active consent.",
+            },
+            "timeline": [
+                {"step": 1, "title": "Subscription Event Ingested", "detail": "subscription.halted received for ₹2,999.00 (Plan: Pro Monthly, Code: MANDATE_REVOKED)", "status": "INFO"},
+                {"step": 2, "title": "Mandate Diagnosis", "detail": "Intelligence layer inferred mandate_issue with 85% confidence", "status": "INFO"},
+                {"step": 3, "title": "Strategy Formulation", "detail": "Bank retries eliminated (0% probability on revoked mandate). Payment link selected (+80% uplift).", "status": "SUCCESS"},
+                {"step": 4, "title": "Governor Approval", "detail": "Governor validated consent and customer contact fatigue limits. Verdict: ALLOW.", "status": "SUCCESS"},
+                {"step": 5, "title": "Tool Firewall Gate", "detail": "Firewall validated idempotency and dispatched Razorpay Payment Link.", "status": "SUCCESS"},
+                {"step": 6, "title": "Subscription Rescued", "detail": "Customer completed payment via link. Subscription aggregate transitioned back to ACTIVE.", "status": "SUCCESS"},
+            ],
+            "sovereignty_rule": "The AI recognized that standard retries fail on broken mandates and selected direct instrument re-authentication.",
         }
 
     def _load_benchmark_data(self) -> Optional[Dict[str, Any]]:

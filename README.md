@@ -1,7 +1,7 @@
 # RecoveryOS: Autonomous AI Revenue Recovery Agent
 
-[![Build Status](https://img.shields.io/badge/tests-194%20passed-brightgreen.svg)]()
-[![Python Version](https://img.shields.io/badge/python-3.11%2B-blue.svg)]()
+[![Build Status](https://img.shields.io/badge/tests-209%20passed-brightgreen.svg)]()
+[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)]()
 [![Pydantic Version](https://img.shields.io/badge/pydantic-v2-orange.svg)]()
 [![Razorpay AI Buildathon 2026](https://img.shields.io/badge/Track%2003-AI%20Revenue%20Recovery-blueviolet.svg)]()
 [![LLM Provider](https://img.shields.io/badge/LLM-Groq%20llama--3.3--70b--versatile-indigo.svg)]()
@@ -18,10 +18,11 @@
 
 Traditional subscription dunning systems rely on static retry schedules and aggressive payment link broadcasting. In fintech billing environments, these naive heuristics destroy customer goodwill, trigger gateway surcharge fees on impossible recoveries (e.g. expired cards), and take credit for transactions that would have naturally resolved on their own.
 
-**RecoveryOS** introduces a closed-loop, state-reconciling autonomous recovery agent built on three strict separation-of-concern planes:
-1. **Intelligence Plane**: Open-weights Groq LLM (`llama-3.3-70b-versatile`) and deterministic offline diagnostic providers operating strictly over bounded observable transaction contexts.
-2. **Governance Plane**: Recovery Governor v1 with deterministic checks, human review escalation, and an independent fail-closed Tool Firewall.
-3. **Execution Plane**: Scheduled action lifecycle service with stale-action protection, a high-density Operations Console (`GET /dashboard`) featuring an interactive 5-case Scenario Lab (`POST /dashboard/api/scenarios/{id}/run`), and a secure Razorpay test-mode adapter and live webhook gateway (`POST /webhooks/razorpay`).
+**RecoveryOS** introduces a closed-loop, state-reconciling autonomous recovery agent built on four strict separation-of-concern planes:
+1. **Memory & Context Plane**: Bounded context assembler and Recovery Memory RAG (`rag/`) attaching immutable provenance metadata without exposing simulator ground truth.
+2. **Intelligence Plane**: Specialized Multi-Agent reasoning graph (`agent/agents.py`, `agent/graph.py`) powered by real open-weights LLM (`Groq llama-3.3-70b-versatile`) and deterministic offline diagnostic providers.
+3. **Governance Plane**: Recovery Governor v1 with deterministic mathematical scoring, contact fatigue caps, and an independent fail-closed Tool Firewall.
+4. **Execution Plane**: Scheduled action lifecycle service with stale-action state versioning, a high-density Operations Console (`GET /dashboard`) featuring an interactive 6-case Scenario Lab (`POST /dashboard/api/scenarios/{id}/run`), and a secure Razorpay test-mode adapter and live webhook gateway (`POST /webhooks/razorpay`).
 
 ### Benchmark Comparison (100 Deterministic Synthetic Scenarios, Seed=42)
 
