@@ -157,7 +157,7 @@ class TestRazorpayAdapterExecution:
 
     def test_adapter_missing_credentials_fails_closed_safely(self):
         """Adapter instantiated without credentials fails closed safely without unhandled exceptions."""
-        adapter = RazorpayAdapter(key_id=None, key_secret=None)
+        adapter = RazorpayAdapter(key_id="", key_secret="")
         assert adapter.has_valid_credentials is False
 
         sim = Simulator()

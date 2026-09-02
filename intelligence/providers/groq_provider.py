@@ -39,9 +39,13 @@ class GroqLLMDiagnosisProvider(LLMDiagnosisProvider):
         max_retries: Optional[int] = None,
         fallback_provider: Optional[DeterministicDiagnosisProvider] = None,
         client: Optional[Any] = None,
+        replay_cache: Optional[Any] = None,
         strict_no_fallback: bool = False,
     ) -> None:
-        effective_key = api_key or os.getenv("GROQ_API_KEY") or default_llm_config.api_key
+        if api_key is not None:
+            effective_key = api_key
+        else:
+            effective_key = os.getenv("GROQ_API_KEY") or default_llm_config.api_key
         effective_model = model_id or os.getenv("GROQ_MODEL_ID") or DEFAULT_GROQ_MODEL
         effective_base_url = base_url or os.getenv("GROQ_BASE_URL") or DEFAULT_GROQ_BASE_URL
         effective_timeout = timeout_seconds if timeout_seconds is not None else default_llm_config.timeout_seconds
@@ -54,6 +58,7 @@ class GroqLLMDiagnosisProvider(LLMDiagnosisProvider):
             max_retries=max_retries,
             fallback_provider=fallback_provider,
             client=client,
+            replay_cache=replay_cache,
             strict_no_fallback=strict_no_fallback,
         )
         self.model_id = effective_model

@@ -157,7 +157,8 @@ class TestGroqLLMDiagnosisProvider:
 
     def test_groq_provider_falls_back_when_no_api_key(self, sample_context):
         """When unconfigured without an API key, provider cleanly falls back with no exceptions."""
-        provider = GroqLLMDiagnosisProvider(api_key=None)
+        from intelligence.replay_cache import LLMReplayCache
+        provider = GroqLLMDiagnosisProvider(api_key="", replay_cache=LLMReplayCache())
 
         diagnosis = provider.diagnose_sync(sample_context)
 

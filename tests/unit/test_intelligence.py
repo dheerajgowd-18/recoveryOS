@@ -123,7 +123,8 @@ class TestLLMDiagnosisProviderBoundary:
     """Validates schema enforcement and fail-safe fallback behavior."""
 
     def test_unavailable_llm_falls_back_safely(self):
-        provider = LLMDiagnosisProvider(api_key=None)
+        from intelligence.replay_cache import LLMReplayCache
+        provider = LLMDiagnosisProvider(api_key="", replay_cache=LLMReplayCache())
         ctx = ObservableRecoveryContext(
             scenario_id="scen_llm_fallback",
             amount_in_paise=100000,

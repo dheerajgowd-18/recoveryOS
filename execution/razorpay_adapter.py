@@ -29,8 +29,8 @@ class RazorpayAdapter(RecoveryExecutor):
         base_url: str = RAZORPAY_API_BASE,
         timeout_seconds: float = 10.0,
     ) -> None:
-        self._key_id = key_id or os.getenv("RAZORPAY_KEY_ID")
-        self._key_secret = key_secret or os.getenv("RAZORPAY_KEY_SECRET")
+        self._key_id = key_id if key_id is not None else os.getenv("RAZORPAY_KEY_ID")
+        self._key_secret = key_secret if key_secret is not None else os.getenv("RAZORPAY_KEY_SECRET")
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
 

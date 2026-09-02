@@ -91,7 +91,10 @@ class LLMDiagnosisProvider(BaseDiagnosisProvider):
     ) -> None:
         cfg = config or default_llm_config
         self.provider = cfg.provider or DEFAULT_LLM_PROVIDER
-        self.api_key = api_key or cfg.api_key or os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("RAZORPAY_AI_LLM_KEY")
+        if api_key is not None:
+            self.api_key = api_key
+        else:
+            self.api_key = cfg.api_key or os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("RAZORPAY_AI_LLM_KEY")
         self.model_name = model_name or cfg.model or DEFAULT_LLM_MODEL
         self.base_url = base_url or cfg.base_url or DEFAULT_GROQ_BASE_URL
         self.timeout_seconds = timeout_seconds if timeout_seconds is not None else cfg.timeout_seconds
@@ -470,6 +473,9 @@ class LLMDiagnosisProvider(BaseDiagnosisProvider):
             except Exception as e:
                 last_exception = e
 
+        if self.strict_no_fallback:
+            raise RuntimeError(f"Strict LLM execution failed in LLMDiagnosisProvider: Live API call failed with {type(last_exception).__name__}: {last_exception}")
+
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
         self.last_latency_ms = elapsed_ms
         self.fallback_count += 1
@@ -486,5 +492,8 @@ class LLMDiagnosisProvider(BaseDiagnosisProvider):
         else:
             reason_code = "FALLBACK_API_ERROR"
 
+        logger.warning(
+            f"Groq LLM ({self.model_name}) async diagnosis failed ({type(last_exception).__name__}: {last_exception}); fallback code: {reason_code}"
+        )
         fallback_diag = self.fallback_provider.diagnose_sync(context, memory_bundle)
         return self._wrap_fallback(fallback_diag, reason_code)
