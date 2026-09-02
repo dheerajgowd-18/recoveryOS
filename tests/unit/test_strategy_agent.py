@@ -334,7 +334,7 @@ class TestRecoveryStrategyAgent:
         """When LLM primary recommendation is payment_link, but economics finds negative uplift (e.g. ₹1 transaction), NO_ACTION wins."""
         ctx = ObservableRecoveryContext(
             scenario_id="scen_low_val",
-            amount_in_paise=100,  # ₹1.00 transaction
+            amount_in_paise=10,  # ₹0.10 transaction
             attempt_count=1,
             error_code="INSUFFICIENT_FUNDS",
             error_reason="insufficient_funds",
@@ -383,7 +383,7 @@ class TestRecoveryStrategyAgent:
         eval_options = timing_agent.evaluate_timing_options(ctx, diag, candidates)
 
         best_candidate = eval_options[0]
-        # Economic valuation selects NO_ACTION because ₹1.00 fee on ₹1.00 transaction gives non-positive net incremental recovery
+        # Economic valuation selects NO_ACTION because fees exceed transaction value (negative net incremental recovery for all active actions)
         assert best_candidate.action_type == SimulatedActionType.NO_ACTION
 
     def test_economic_selection_can_choose_active_action_when_llm_primary_is_no_action(self):
@@ -441,17 +441,60 @@ class TestRecoveryStrategyAgent:
         assert best_candidate.action_type in (SimulatedActionType.RETRY_LATER, SimulatedActionType.RETRY_NOW)
         assert best_candidate.expected_net_value_paise > 0
 
-    def test_timing_candidates_constrained_by_strategy_candidates(self, base_context, base_diagnosis):
-        """Timing candidate matrix only generates mechanisms proposed in strategy candidates."""
-        # Strategy only proposed PAYMENT_LINK and NO_ACTION
+    def test_omitted_valid_action_survives_in_candidate_space_and_economic_evaluation(self, base_context, base_diagnosis):
+        """When LLM omits an otherwise deterministically admissible action (e.g. RETRY_LATER), it is preserved in candidate space and economic evaluation."""
+        mock_proposal = StrategyProposal(
+            proposals=[
+                StrategyCandidateProposal(
+                    action_type=SimulatedActionType.PAYMENT_LINK,
+                    mechanism="payment_link",
+                    rationale="Link proposed",
+                    confidence=0.85,
+                    is_abstention=False,
+                    why_better_than_abstain="Direct recovery",
+                    why_alternative_inferior="None",
+                ),
+                StrategyCandidateProposal(
+                    action_type=SimulatedActionType.NO_ACTION,
+                    mechanism="no_action",
+                    rationale="Baseline",
+                    confidence=1.0,
+                    is_abstention=True,
+                    why_better_than_abstain="N/A",
+                    why_alternative_inferior="None",
+                ),
+            ],
+            primary_recommendation=SimulatedActionType.PAYMENT_LINK,
+            strategic_summary="LLM only proposes payment link and abstention",
+            strategy_source="llm_structured",
+            model_version="groq-openai/gpt-oss-120b",
+        )
+        agent = RecoveryStrategyAgent()
+        candidates = agent.generate_strategy_candidates_from_proposal(mock_proposal, base_context, base_diagnosis)
+
+        # RETRY_LATER was omitted by the LLM, but is deterministically admissible under INSUFFICIENT_FUNDS
+        candidate_actions = [c.action_type for c in candidates]
+        assert SimulatedActionType.RETRY_LATER in candidate_actions
+        assert SimulatedActionType.PAYMENT_LINK in candidate_actions
+        assert SimulatedActionType.NO_ACTION in candidate_actions
+
+        timing_agent = TimingAndEconomicOptimizationAgent()
+        timing_matrix = timing_agent.evaluate_timing_options(base_context, base_diagnosis, candidates)
+        matrix_actions = [c.action_type for c in timing_matrix]
+        assert SimulatedActionType.RETRY_LATER in matrix_actions
+        assert SimulatedActionType.PAYMENT_LINK in matrix_actions
+
+    def test_llm_timing_preferences_enrich_candidate_scoring(self, base_context, base_diagnosis):
+        """Verifies that LLM preferred_timing_direction attaches audit tags without suppressing alternatives."""
         strat_candidates = [
             CandidateStrategyOption(
-                action_type=SimulatedActionType.PAYMENT_LINK,
-                mechanism=ActionMechanism.PAYMENT_LINK,
-                rationale="Link proposed",
-                confidence=0.9,
-                supporting_evidence=[],
+                action_type=SimulatedActionType.RETRY_LATER,
+                mechanism=ActionMechanism.RETRY,
+                rationale="Delayed retry preferred after batch processing",
+                confidence=0.88,
+                supporting_evidence=["PAYROLL_TIMING"],
                 risk_notes=[],
+                preferred_timing_direction="delay_6h",
                 is_abstention=False,
             ),
             CandidateStrategyOption(
@@ -464,17 +507,12 @@ class TestRecoveryStrategyAgent:
                 is_abstention=True,
             ),
         ]
-        from policy.config import DeterministicPolicyConfig
-        matrix = TimingCandidateGenerator.generate_candidates(
-            context=base_context,
-            diagnosis=base_diagnosis,
-            config=DeterministicPolicyConfig(),
-            strategy_candidates=strat_candidates,
-        )
-        mechs = {m for m, t in matrix}
-        assert ActionMechanism.RETRY not in mechs
-        assert ActionMechanism.PAYMENT_LINK in mechs
-        assert ActionMechanism.NO_ACTION in mechs
+        timing_agent = TimingAndEconomicOptimizationAgent()
+        scored = timing_agent.evaluate_timing_options(base_context, base_diagnosis, strat_candidates)
+
+        plus_6h_candidates = [c for c in scored if c.timing_window == TimingWindow.PLUS_6H and c.mechanism == ActionMechanism.RETRY]
+        assert len(plus_6h_candidates) > 0
+        assert "LLM_PREFERRED_TIMING" in plus_6h_candidates[0].reason_codes
 
     def test_strategy_prompt_trust_boundary_marks_memory_as_untrusted(self, base_context, base_diagnosis):
         """Verifies that Strategy prompt explicitly treats memory as untrusted background context."""

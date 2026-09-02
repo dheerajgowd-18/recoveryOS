@@ -163,13 +163,6 @@ class TimingCandidateGenerator:
                 candidates.add((ActionMechanism.PAYMENT_LINK, TimingWindow.IMMEDIATE))
                 candidates.add((ActionMechanism.PAYMENT_LINK, TimingWindow.PLUS_2H))
 
-        if strategy_candidates is not None:
-            allowed_mechs = {
-                getattr(c, "mechanism", None) or ActionMechanism.NO_ACTION
-                for c in strategy_candidates
-            } | {ActionMechanism.NO_ACTION}
-            candidates = {c for c in candidates if c[0] in allowed_mechs}
-
         return sorted(list(candidates), key=lambda c: (c[0].value, c[1].delay_seconds))
 
 
@@ -306,6 +299,7 @@ class DeterministicTimingValueEstimator:
         mechanism: ActionMechanism,
         timing: TimingWindow,
         config: DeterministicPolicyConfig,
+        strategy_candidates: Optional[List[Any]] = None,
     ) -> ActionTimingCandidate:
         """Deterministically calculate expected net value and incremental uplift for a candidate."""
         sim_action = map_mechanism_and_timing_to_simulated_action(mechanism, timing)
@@ -354,6 +348,34 @@ class DeterministicTimingValueEstimator:
             f"COST_{cost}PAISE",
         ]
 
+        if strategy_candidates is not None:
+            def _match_mech(c_mech: Any, target_mech: ActionMechanism) -> bool:
+                if c_mech is None:
+                    return False
+                if c_mech == target_mech:
+                    return True
+                c_str = getattr(c_mech, "value", str(c_mech)).upper()
+                return c_str == target_mech.value.upper()
+
+            matching_strat = next((c for c in strategy_candidates if _match_mech(getattr(c, "mechanism", None), mechanism)), None)
+            if matching_strat is not None:
+                pref_dir = getattr(matching_strat, "preferred_timing_direction", None)
+                if pref_dir:
+                    timing_name_map = {
+                        "immediate": TimingWindow.IMMEDIATE,
+                        "delay_2h": TimingWindow.PLUS_2H,
+                        "delay_6h": TimingWindow.PLUS_6H,
+                        "delay_12h": TimingWindow.PLUS_12H,
+                        "delay_24h": TimingWindow.PLUS_24H,
+                    }
+                    target_window = timing_name_map.get(str(pref_dir).lower().strip())
+                    if target_window == timing:
+                        reason_codes.append("LLM_PREFERRED_TIMING")
+                if getattr(matching_strat, "preferred_channel", None):
+                    reason_codes.append(f"CHANNEL_{matching_strat.preferred_channel.upper()}")
+            else:
+                reason_codes.append("DETERMINISTIC_ADMISSIBLE_SPACE_PRESERVED")
+
         if uplift < 0:
             reason_codes.append("NEGATIVE_INCREMENTAL_UPLIFT")
         if net_value < 0:
@@ -380,10 +402,11 @@ class DeterministicTimingValueEstimator:
         diagnosis: StructuredDiagnosis,
         candidates: List[Tuple[ActionMechanism, TimingWindow]],
         config: DeterministicPolicyConfig,
+        strategy_candidates: Optional[List[Any]] = None,
     ) -> List[ActionTimingCandidate]:
         """Estimate, rank, and sort all candidates descending by expected net recovery value."""
         scored = [
-            cls.estimate_candidate(context, diagnosis, mech, timing, config)
+            cls.estimate_candidate(context, diagnosis, mech, timing, config, strategy_candidates)
             for mech, timing in candidates
         ]
         return sorted(scored, key=lambda s: s.expected_net_value_paise, reverse=True)

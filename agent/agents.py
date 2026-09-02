@@ -220,6 +220,37 @@ class RecoveryStrategyAgent:
                 ),
             )
 
+        # Deterministic Search-Space Preservation:
+        # LLM omission must not suppress deterministically admissible actions from economic valuation.
+        proposed_action_types = {c.action_type for c in candidates}
+        for adm_action in admissible:
+            if adm_action in proposed_action_types:
+                continue
+            if adm_action in (SimulatedActionType.RETRY_NOW, SimulatedActionType.RETRY_LATER):
+                if diagnosis.diagnosis_label == DiagnosisLabel.EXPIRED_PAYMENT_METHOD:
+                    continue
+                if context.attempt_count >= self.config.max_retry_attempts:
+                    continue
+
+            mech = (
+                ActionMechanism.NO_ACTION if adm_action == SimulatedActionType.NO_ACTION else (
+                    ActionMechanism.RETRY if adm_action in (SimulatedActionType.RETRY_NOW, SimulatedActionType.RETRY_LATER) else (
+                        ActionMechanism.PAYMENT_LINK if adm_action == SimulatedActionType.PAYMENT_LINK else ActionMechanism.REMINDER
+                    )
+                )
+            )
+            candidates.append(
+                CandidateStrategyOption(
+                    action_type=adm_action,
+                    mechanism=mech,
+                    confidence=0.50,
+                    rationale=f"Deterministically admissible fallback candidate ({adm_action.value}) preserved in economic search space.",
+                    is_abstention=(adm_action == SimulatedActionType.NO_ACTION),
+                    supporting_evidence=["DETERMINISTIC_SEARCH_SPACE_PRESERVED"],
+                    risk_notes=[],
+                )
+            )
+
         return candidates
 
     def generate_strategy_candidates(
@@ -266,6 +297,7 @@ class TimingAndEconomicOptimizationAgent:
             diagnosis=diagnosis,
             candidates=timing_candidates,
             config=self.config,
+            strategy_candidates=strategy_candidates,
         )
         return scored_timings
 

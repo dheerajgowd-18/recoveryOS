@@ -21,7 +21,7 @@ from intelligence.schemas import (
     StrategyProposal,
     StructuredDiagnosis,
 )
-from planner.timing import ActionMechanism
+from planner.timing import ActionMechanism, TimingWindow
 from policy.base import PolicyDecision
 from simulator.config import SimulatedActionType
 
@@ -39,7 +39,7 @@ class TestAgenticIntegrityE2E:
         # 1. Observable Context
         ctx = ObservableRecoveryContext(
             scenario_id="e2e_scen_low_val",
-            amount_in_paise=100,  # ₹1.00 transaction
+            amount_in_paise=10,  # ₹0.10 transaction (fees exceed transaction value)
             attempt_count=1,
             error_code="INSUFFICIENT_FUNDS",
             error_reason="insufficient_funds",
@@ -215,3 +215,100 @@ class TestAgenticIntegrityE2E:
         # Governor authorizes profitable action
         assert gov_verdict.decision_result == GovernorDecisionResult.ALLOW
         assert gov_verdict.selected_action == SimulatedActionType.PAYMENT_LINK
+
+    def test_e2e_scenario_3_model_omission_preserves_optimal_deterministic_candidate(self):
+        """Scenario 3: Model omits a better admissible candidate (e.g. proposes only PAYMENT_LINK and NO_ACTION on insufficient funds).
+
+        Flow:
+        ObservableContext (₹2,500.00 INSUFFICIENT_FUNDS) -> Diagnosis ->
+        StrategyProposal (omits RETRY_LATER) -> Admissibility (preserves RETRY_LATER) ->
+        Economics (Evaluates all safe candidates, finds RETRY_LATER at +6h is economically optimal) ->
+        Governor (ALLOWs RETRY_LATER).
+        """
+        # 1. Observable Context
+        ctx = ObservableRecoveryContext(
+            scenario_id="e2e_scen_transient_gateway",
+            amount_in_paise=250000,  # ₹2,500.00 transaction
+            attempt_count=1,
+            error_code="GATEWAY_TIMEOUT",
+            error_reason="gateway_error",
+        )
+
+        # 2. Structured Diagnosis
+        diag = StructuredDiagnosis(
+            diagnosis_label=DiagnosisLabel.TRANSIENT_GATEWAY_FAILURE,
+            confidence=0.88,
+            evidence_codes=["OBS_GATEWAY_OUTAGE"],
+            uncertainties=[],
+            recommended_candidate_actions=[SimulatedActionType.PAYMENT_LINK, SimulatedActionType.RETRY_LATER],
+            rationale="Transient gateway glitch; delayed retry is optimal.",
+            diagnosis_source="llm_structured",
+        )
+
+        # 3. Strategy Proposal that mistakenly omits RETRY_LATER
+        strategy_proposal = StrategyProposal(
+            proposals=[
+                StrategyCandidateProposal(
+                    action_type=SimulatedActionType.PAYMENT_LINK,
+                    mechanism="payment_link",
+                    rationale="Customer link",
+                    confidence=0.75,
+                    is_abstention=False,
+                    why_better_than_abstain="Direct recovery",
+                    why_alternative_inferior="None",
+                ),
+                StrategyCandidateProposal(
+                    action_type=SimulatedActionType.NO_ACTION,
+                    mechanism="no_action",
+                    rationale="Zero cost baseline",
+                    confidence=1.0,
+                    is_abstention=True,
+                    why_better_than_abstain="N/A",
+                    why_alternative_inferior="Fees",
+                ),
+            ],
+            primary_recommendation=SimulatedActionType.PAYMENT_LINK,
+            strategic_summary="LLM only proposes payment link",
+            strategy_source="llm_structured",
+            model_version="groq-openai/gpt-oss-120b",
+        )
+
+        # 4. Hard Deterministic Admissibility Check - preserves complete safe search space
+        strategy_agent = RecoveryStrategyAgent()
+        admissible_candidates = strategy_agent.generate_strategy_candidates_from_proposal(
+            proposal=strategy_proposal,
+            context=ctx,
+            diagnosis=diag,
+        )
+        candidate_actions = [c.action_type for c in admissible_candidates]
+        assert SimulatedActionType.RETRY_LATER in candidate_actions
+
+        # 5. Timing & Deterministic Economic Optimization
+        timing_agent = TimingAndEconomicOptimizationAgent()
+        evaluated_options = timing_agent.evaluate_timing_options(
+            context=ctx,
+            diagnosis=diag,
+            strategy_candidates=admissible_candidates,
+        )
+
+        best_option = evaluated_options[0]
+        # RETRY_LATER at +6h gives highest net return (high recovery probability with low ₹0.20 retry fee and 0 contact fatigue)
+        assert best_option.action_type == SimulatedActionType.RETRY_LATER
+        assert best_option.timing_window == TimingWindow.PLUS_6H
+
+        # 6. Recovery Governor Authorization
+        proposal = PolicyDecision(
+            action_type=best_option.action_type,
+            confidence=diag.confidence,
+            rationale="Delayed batch retry economically outperforms link dispatch.",
+            policy_name="RECOVERYOS_AGENTIC_V1",
+            reason_codes=best_option.reason_codes,
+            timing_window=best_option.timing_window.value,
+            delay_seconds=best_option.delay_seconds,
+            diagnosis=diag,
+        )
+        governor = RecoveryGovernor(merchant_policy=MerchantPolicy())
+        gov_verdict = governor.evaluate(context=ctx, diagnosis=diag, proposal=proposal)
+
+        assert gov_verdict.decision_result == GovernorDecisionResult.ALLOW
+        assert gov_verdict.selected_action == SimulatedActionType.RETRY_LATER
