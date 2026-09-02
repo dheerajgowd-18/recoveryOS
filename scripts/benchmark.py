@@ -59,6 +59,11 @@ def parse_args() -> argparse.Namespace:
         help="Economic churn friction penalty in paise (default: 250000 paise = ₹2,500)",
     )
     parser.add_argument(
+        "--compare-llm",
+        action="store_true",
+        help="Include RECOVERYOS_LLM_DRIVEN policy in the evaluation comparison cohort",
+    )
+    parser.add_argument(
         "--output-dir",
         type=str,
         default="reports",
@@ -85,6 +90,7 @@ def main() -> None:
         holdout_seeds=holdout_seeds,
         include_holdout=include_holdout,
         churn_penalty_paise=args.churn_penalty,
+        compare_llm=args.compare_llm,
         report_output_dir=args.output_dir,
     )
 

@@ -23,12 +23,14 @@ class DeterministicRecoveryPolicy(BasePolicy):
         self,
         config: Optional[DeterministicPolicyConfig] = None,
         diagnosis_provider: Optional[BaseDiagnosisProvider] = None,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
     ) -> None:
         self.config = config or DeterministicPolicyConfig()
         self.diagnosis_provider = diagnosis_provider or DeterministicDiagnosisProvider()
         super().__init__(
-            name="RECOVERYOS_DETERMINISTIC_V0",
-            description="Deterministic cost-aware RecoveryOS policy optimizing expected incremental recovery value.",
+            name=name or "RECOVERYOS_DETERMINISTIC_V0",
+            description=description or "Deterministic cost-aware RecoveryOS policy optimizing expected incremental recovery value.",
         )
 
     def decide(
@@ -159,4 +161,23 @@ class DeterministicRecoveryPolicy(BasePolicy):
             timing_window=timing_window,
             delay_seconds=delay_seconds,
             diagnosis=diag,
+        )
+
+
+class LLMDrivenRecoveryPolicy(DeterministicRecoveryPolicy):
+    """LLM-driven RecoveryOS policy pairing Groq structured diagnosis with deterministic economic scoring."""
+
+    def __init__(
+        self,
+        config: Optional[DeterministicPolicyConfig] = None,
+        diagnosis_provider: Optional[BaseDiagnosisProvider] = None,
+    ) -> None:
+        from intelligence.providers.groq_provider import GroqLLMDiagnosisProvider
+
+        provider = diagnosis_provider or GroqLLMDiagnosisProvider()
+        super().__init__(
+            config=config,
+            diagnosis_provider=provider,
+            name="RECOVERYOS_LLM_DRIVEN",
+            description="LLM-driven RecoveryOS policy pairing Groq open-weights inference with deterministic governance.",
         )

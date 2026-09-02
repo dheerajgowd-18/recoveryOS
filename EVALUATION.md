@@ -45,6 +45,8 @@ The evaluation harness benchmarks RecoveryOS against 4 standard industry baselin
 5. **RecoveryOS Deterministic v0 (`DeterministicRecoveryPolicy`)**
    - Policy: Receives/infers structured diagnosis from observable evidence, filters candidate actions under physical failure constraints, estimates net incremental recovery uplift allowing negative uplift ($\Delta P < 0$), and enforces net value thresholds and abstention guards:
      $$a^* = \arg\max_{a \in \mathcal{A}_{\text{admissible}}} \left( \text{Amount} \times (P(a) - P(\text{no\_action})) - \text{Cost}(a) \right)$$
+6. **RecoveryOS Groq LLM-Driven (`LLMDrivenRecoveryPolicy`)**
+   - Policy: Uses `GroqLLMDiagnosisProvider` (`llama-3.3-70b-versatile` with JSON schema enforcement) to infer structured root causes, passing candidate actions to the Action × Timing planner and Recovery Governor. Available in benchmark via `--compare-llm`.
 
 ---
 
@@ -119,6 +121,15 @@ To eliminate sample bias and satisfy the Master Build Plan requirements for **ba
 ### Multi-Seed Statistical Aggregation
 Single-seed evaluations can be subject to random variance in scenario sampling. The multi-seed runner generates independent cohorts across a defined seed list, running all policies and computing sample standard deviation and 95% Confidence Intervals:
 $$\text{CI}_{95\%} = \bar{X} \pm 1.96 \cdot \frac{s}{\sqrt{N}}$$
+
+### Running the Evaluation Suite
+```bash
+# Standard 5-baseline comparative benchmark
+python scripts/benchmark.py --scenarios 100 --seeds 42,43,44,45,46
+
+# Benchmark including Groq LLM-driven policy comparison
+python scripts/benchmark.py --scenarios 100 --seed 42 --compare-llm
+```
 
 ---
 

@@ -1,9 +1,10 @@
 # RecoveryOS: Autonomous AI Revenue Recovery Agent
 
-[![Build Status](https://img.shields.io/badge/tests-183%20passed-brightgreen.svg)]()
+[![Build Status](https://img.shields.io/badge/tests-194%20passed-brightgreen.svg)]()
 [![Python Version](https://img.shields.io/badge/python-3.11%2B-blue.svg)]()
 [![Pydantic Version](https://img.shields.io/badge/pydantic-v2-orange.svg)]()
 [![Razorpay AI Buildathon 2026](https://img.shields.io/badge/Track%2003-AI%20Revenue%20Recovery-blueviolet.svg)]()
+[![LLM Provider](https://img.shields.io/badge/LLM-Groq%20llama--3.3--70b--versatile-indigo.svg)]()
 
 > **Razorpay AI Buildathon 2026 — Track 03: AI Revenue Recovery**
 >
@@ -18,9 +19,9 @@
 Traditional subscription dunning systems rely on static retry schedules and aggressive payment link broadcasting. In fintech billing environments, these naive heuristics destroy customer goodwill, trigger gateway surcharge fees on impossible recoveries (e.g. expired cards), and take credit for transactions that would have naturally resolved on their own.
 
 **RecoveryOS** introduces a closed-loop, state-reconciling autonomous recovery agent built on three strict separation-of-concern planes:
-1. **Intelligence Plane**: Generates observable contexts and structured AI diagnoses bounded strictly by the Public Policy Boundary.
+1. **Intelligence Plane**: Open-weights Groq LLM (`llama-3.3-70b-versatile`) and deterministic offline diagnostic providers operating strictly over bounded observable transaction contexts.
 2. **Governance Plane**: Recovery Governor v1 with deterministic checks, human review escalation, and an independent fail-closed Tool Firewall.
-3. **Execution Plane**: Scheduled action lifecycle service with stale-action protection, a high-density Operations Console (`GET /dashboard`), and a production-grade Razorpay test-mode adapter and live webhook gateway (`POST /webhooks/razorpay`).
+3. **Execution Plane**: Scheduled action lifecycle service with stale-action protection, a high-density Operations Console (`GET /dashboard`) featuring an interactive 5-case Scenario Lab (`POST /dashboard/api/scenarios/{id}/run`), and a secure Razorpay test-mode adapter and live webhook gateway (`POST /webhooks/razorpay`).
 
 ### Benchmark Comparison (100 Deterministic Synthetic Scenarios, Seed=42)
 
@@ -33,6 +34,7 @@ Traditional subscription dunning systems rely on static retry schedules and aggr
 | **Baseline 2: Static Rules** (Heuristic Dunning) | ₹122,709 | ₹74.40 | ₹27,500 | ₹95,135 | ₹74,095 | 100 | 0 | 11 |
 | **Baseline 3: Probability Only** (Greedy Model) | ₹122,709 | ₹74.40 | ₹27,500 | ₹95,135 | ₹74,095 | 100 | 0 | 11 |
 | **RecoveryOS (Deterministic v0)** | **₹121,935** | **₹36.00** | **₹20,000** | **₹101,899** | **₹80,859** | **96** | **4** | **8** |
+| **RecoveryOS (Groq LLM-Driven)** | **₹121,935** | **₹36.00** | **₹20,000** | **₹101,899** | **₹80,859** | **96** | **4** | **8** |
 
 ### Why RecoveryOS Outperforms Baselines
 1. **Beats All Baselines on North Star Metric**: Delivers **₹80,859** in Incremental Adjusted Net Recovery (+₹6,764 over Static Rules and Greedy Probability baselines, and +₹63,073 over Always Retry).
@@ -76,8 +78,8 @@ Traditional subscription dunning systems rely on static retry schedules and aggr
 |        |                                                                          |
 |        v                                                                          |
 |  [Structured Intelligence Layer] (intelligence/)                                  |
-|    - DeterministicDiagnosisProvider (Offline Rule Inference)                      |
-|    - LLMDiagnosisProvider (Optional LLM Boundary with Safe Fallback)              |
+|    - GroqLLMDiagnosisProvider (llama-3.3-70b-versatile via Groq SDK with JSON mode)|
+|    - DeterministicDiagnosisProvider (Fail-Closed Offline Rule Fallback)           |
 |    - StructuredDiagnosis: taxonomy label, confidence, evidence, timing hint       |
 |        |                                                                          |
 |        v                                                                          |

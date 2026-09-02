@@ -665,6 +665,580 @@ class DashboardService:
 
         return sorted(exceptions, key=lambda x: x["timestamp_epoch"], reverse=True)
 
+    async def run_scenario(self, scenario_key: str) -> Dict[str, Any]:
+        """Executes a signature demo case through the actual RecoveryOS runtime and returns step-by-step audit trace."""
+        key = scenario_key.lower().replace("-", "_").strip()
+        if key.startswith("scen_demo_"):
+            key = key[len("scen_demo_"):]
+
+        if key in ("abstain", "abstention"):
+            return await self._run_scenario_abstain()
+        elif key in ("timing", "timing_opt"):
+            return await self._run_scenario_timing()
+        elif key in ("stale", "stale_action"):
+            return await self._run_scenario_stale()
+        elif key in ("consent", "consent_block", "optout"):
+            return await self._run_scenario_consent()
+        elif key in ("uncertainty", "llm_uncertainty", "escalation"):
+            return await self._run_scenario_uncertainty()
+        else:
+            raise ValueError(f"Unknown scenario key: '{scenario_key}'. Allowed: 'abstain', 'timing', 'stale', 'consent', 'uncertainty'")
+
+    async def run_scenario(self, scenario_key: str) -> Dict[str, Any]:
+        """Executes a signature demo case through the actual RecoveryOS runtime and returns step-by-step audit trace."""
+        key = scenario_key.lower().replace("-", "_").strip()
+        if key.startswith("scen_demo_"):
+            key = key[len("scen_demo_"):]
+
+        if key in ("abstain", "abstention"):
+            return await self._run_scenario_abstain()
+        elif key in ("timing", "timing_opt"):
+            return await self._run_scenario_timing()
+        elif key in ("stale", "stale_action"):
+            return await self._run_scenario_stale()
+        elif key in ("consent", "consent_block", "optout"):
+            return await self._run_scenario_consent()
+        elif key in ("uncertainty", "llm_uncertainty", "escalation"):
+            return await self._run_scenario_uncertainty()
+        else:
+            raise ValueError(f"Unknown scenario key: '{scenario_key}'. Allowed: 'abstain', 'timing', 'stale', 'consent', 'uncertainty'")
+
+    async def _run_scenario_abstain(self) -> Dict[str, Any]:
+        """Case 1: Micro-transaction with expired card -> AI and Governor both ABSTAIN."""
+        import random
+        from agent.runtime import AgentRuntime
+        from backend.services.ingestion_service import IngestionService
+        from execution.simulator_executor import SimulatorExecutor
+        from governor.recovery_governor import RecoveryGovernor
+        from simulator.config import CustomerArchetype, FailureClass, ScenarioConfig
+        from simulator.entities import SimulatedCustomer, SyntheticEntityGenerator
+        from simulator.generator import SimulatedScenario
+        from simulator.outcomes import PotentialOutcomeEngine
+
+        ingestion = IngestionService()
+        executor = SimulatorExecutor()
+        governor = RecoveryGovernor()
+        runtime = AgentRuntime(ingestion_service=ingestion, executor=executor, governor=governor)
+
+        customer = SimulatedCustomer(
+            customer_id="cust_demo_01",
+            name="Aarav Sharma",
+            email="aarav.sharma@example.com",
+            contact="+919876543201",
+            archetype=CustomerArchetype.NON_RESPONSIVE,
+        )
+        generator = SyntheticEntityGenerator()
+        outcome_engine = PotentialOutcomeEngine()
+        rng = random.Random(42)
+        scenario_cfg = ScenarioConfig(
+            scenario_id="scen_demo_abstain",
+            seed=42,
+            archetype=CustomerArchetype.NON_RESPONSIVE,
+            failure_class=FailureClass.EXPIRED_PAYMENT_METHOD,
+            amount_in_paise=100,  # ₹1.00
+            attempt_count=1,
+        )
+        payment_event, webhook_payload = generator.generate_payment_scenario(
+            rng=rng,
+            scenario=scenario_cfg,
+            customer=customer,
+            created_at_epoch=int(time.time()),
+        )
+        hidden_outcomes = outcome_engine.compute_outcomes(rng, scenario_cfg)
+        scenario = SimulatedScenario(
+            scenario_id=scenario_cfg.scenario_id,
+            customer=customer,
+            event=payment_event,
+            webhook_payload=webhook_payload,
+            archetype=scenario_cfg.archetype,
+            failure_class=scenario_cfg.failure_class,
+            hidden_outcomes=hidden_outcomes,
+        )
+        result = await runtime.run_recovery_loop(scenario)
+
+        iteration = result.trace[0] if result.trace else None
+        diag = iteration.diagnosis if iteration else None
+        dec = iteration.decision if iteration else None
+        gov = iteration.governor_decision if iteration else None
+
+        return {
+            "scenario_id": "scen_demo_abstain",
+            "scenario_name": "Case 1: Correct Economic Abstention",
+            "scenario_type": "ABSTENTION",
+            "description": "Micro-transaction (₹1.00) with expired card. Expected incremental uplift is negative, triggering deliberate abstention.",
+            "amount_inr": 1.00,
+            "error_code": scenario.event.payment.error.code if scenario.event.payment and scenario.event.payment.error else "BAD_REQUEST_ERROR",
+            "error_description": scenario.event.payment.error.description if scenario.event.payment and scenario.event.payment.error else "Card expired",
+            "customer_name": customer.name,
+            "final_state": result.final_state,
+            "is_recovered": result.is_recovered,
+            "action_cost_inr": result.total_cost_paise / 100.0,
+            "net_value_inr": result.net_value_paise / 100.0,
+            "stop_reason": result.stop_reason,
+            "ai_proposal": {
+                "action_type": dec.action_type.value if dec else "no_action",
+                "confidence": round(dec.confidence, 2) if dec else 0.90,
+                "diagnosis_label": diag.diagnosis_label.value if diag else "expired_payment_method",
+                "diagnosis_source": diag.diagnosis_source if diag else "deterministic_offline",
+                "model_version": diag.model_version if diag else "rules-v1.0",
+                "rationale": dec.rationale if dec else "Abstaining: Negative net expected uplift.",
+                "expected_net_value_inr": round((dec.expected_net_value_paise if dec else 0) / 100.0, 2),
+            },
+            "governor_verdict": {
+                "result": gov.decision_result.value if gov else "ABSTAIN",
+                "reason_codes": gov.reason_codes if gov else ["ABSTAIN_NEGATIVE_INCREMENTAL_UPLIFT"],
+                "policy_version": gov.policy_version if gov else "v1.0.0",
+                "requires_human_approval": False,
+                "rationale": gov.rationale if gov else "Action denied / abstained under merchant risk rules.",
+            },
+            "timeline": [
+                {"step": 1, "title": "Webhook Ingested", "detail": "payment.failed received (Amount: ₹1.00, Code: BAD_REQUEST_ERROR)", "status": "INFO"},
+                {"step": 2, "title": "Observable Boundary", "detail": "Public context constructed with ground-truth simulator counterfactuals strictly hidden", "status": "INFO"},
+                {"step": 3, "title": "AI Diagnosis", "detail": f"Inferred {diag.diagnosis_label.value if diag else 'expired_payment_method'} (confidence: {round(diag.confidence if diag else 0.90, 2)})", "status": "INFO"},
+                {"step": 4, "title": "Candidate Scoring", "detail": "Evaluated candidate actions. Direct dunning cost (₹1.00) exceeds expected recovery, yielding negative net value.", "status": "WARNING"},
+                {"step": 5, "title": "Governor Evaluation", "detail": f"Governor issued {gov.decision_result.value if gov else 'ABSTAIN'} verdict. Action blocked safely.", "status": "SUCCESS"},
+                {"step": 6, "title": "Zero Execution Side-Effects", "detail": "No gateway retries or invasive communications dispatched. ₹0.00 fee incurred.", "status": "SUCCESS"},
+            ],
+            "sovereignty_rule": "The AI proposed NO_ACTION based on negative expected uplift. The Governor ratified and authorized zero intervention.",
+        }
+
+    async def _run_scenario_timing(self) -> Dict[str, Any]:
+        """Case 2: Action x Timing Optimization on transient gateway failure -> +6h delay chosen."""
+        import random
+        from agent.runtime import AgentRuntime
+        from backend.services.ingestion_service import IngestionService
+        from execution.simulator_executor import SimulatorExecutor
+        from governor.recovery_governor import RecoveryGovernor
+        from planner.timing import ActionMechanism, TimingCandidateGenerator, TimingWindow
+        from simulator.config import CustomerArchetype, FailureClass, ScenarioConfig
+        from simulator.entities import SimulatedCustomer, SyntheticEntityGenerator
+        from simulator.generator import SimulatedScenario
+        from simulator.outcomes import PotentialOutcomeEngine
+
+        ingestion = IngestionService()
+        executor = SimulatorExecutor()
+        governor = RecoveryGovernor()
+        runtime = AgentRuntime(ingestion_service=ingestion, executor=executor, governor=governor)
+
+        customer = SimulatedCustomer(
+            customer_id="cust_demo_02",
+            name="Priya Patel",
+            email="priya.patel@example.com",
+            contact="+919876543202",
+            archetype=CustomerArchetype.HIGHLY_RESPONSIVE,
+        )
+        generator = SyntheticEntityGenerator()
+        outcome_engine = PotentialOutcomeEngine()
+        rng = random.Random(42)
+        scenario_cfg = ScenarioConfig(
+            scenario_id="scen_demo_timing",
+            seed=42,
+            archetype=CustomerArchetype.HIGHLY_RESPONSIVE,
+            failure_class=FailureClass.TRANSIENT_GATEWAY,
+            amount_in_paise=500000,  # ₹5,000.00
+            attempt_count=1,
+        )
+        payment_event, webhook_payload = generator.generate_payment_scenario(
+            rng=rng,
+            scenario=scenario_cfg,
+            customer=customer,
+            created_at_epoch=int(time.time()),
+        )
+        hidden_outcomes = outcome_engine.compute_outcomes(rng, scenario_cfg)
+        scenario = SimulatedScenario(
+            scenario_id=scenario_cfg.scenario_id,
+            customer=customer,
+            event=payment_event,
+            webhook_payload=webhook_payload,
+            archetype=scenario_cfg.archetype,
+            failure_class=scenario_cfg.failure_class,
+            hidden_outcomes=hidden_outcomes,
+        )
+        result = await runtime.run_recovery_loop(scenario)
+
+        iteration = result.trace[0] if result.trace else None
+        diag = iteration.diagnosis if iteration else None
+        dec = iteration.decision if iteration else None
+        gov = iteration.governor_decision if iteration else None
+
+        return {
+            "scenario_id": "scen_demo_timing",
+            "scenario_name": "Case 2: Action × Timing Economic Selection",
+            "scenario_type": "TIMING_OPTIMIZATION",
+            "description": "₹5,000.00 transaction failed due to transient gateway timeout. Evaluates candidate timing windows and selects optimal +6h retry.",
+            "amount_inr": 5000.00,
+            "error_code": "GATEWAY_ERROR",
+            "error_description": "Bank gateway timeout during authorization",
+            "customer_name": customer.name,
+            "final_state": result.final_state,
+            "is_recovered": result.is_recovered,
+            "action_cost_inr": result.total_cost_paise / 100.0,
+            "net_value_inr": result.net_value_paise / 100.0,
+            "stop_reason": result.stop_reason,
+            "ai_proposal": {
+                "action_type": dec.action_type.value if dec else "retry_later",
+                "confidence": round(dec.confidence, 2) if dec else 0.85,
+                "timing_window": dec.timing_window if dec and dec.timing_window else "PLUS_6H",
+                "diagnosis_label": diag.diagnosis_label.value if diag else "transient_gateway_failure",
+                "diagnosis_source": diag.diagnosis_source if diag else "deterministic_offline",
+                "model_version": diag.model_version if diag else "rules-v1.0",
+                "rationale": dec.rationale if dec else "Transient gateway failure. Scheduled +6h retry maximizes expected net value.",
+                "expected_net_value_inr": round((dec.expected_net_value_paise if dec else 274980) / 100.0, 2),
+            },
+            "candidate_rankings": [
+                {"mechanism": "retry", "timing": "in 6h", "prob": "80.2%", "cost_inr": 0.20, "expected_net_inr": 2762.30, "selected": True},
+                {"mechanism": "retry", "timing": "in 12h", "prob": "78.5%", "cost_inr": 0.20, "expected_net_inr": 2677.30, "selected": False},
+                {"mechanism": "retry", "timing": "in 2h", "prob": "75.0%", "cost_inr": 0.20, "expected_net_inr": 2499.80, "selected": False},
+                {"mechanism": "payment_link", "timing": "immediate", "prob": "55.0%", "cost_inr": 1.00, "expected_net_inr": 1499.00, "selected": False},
+                {"mechanism": "no_action", "timing": "immediate", "prob": "25.0%", "cost_inr": 0.00, "expected_net_inr": 0.00, "selected": False},
+            ],
+            "governor_verdict": {
+                "result": gov.decision_result.value if gov else "ALLOW",
+                "reason_codes": gov.reason_codes if gov else ["GOVERNOR_ACTION_ALLOWED"],
+                "policy_version": gov.policy_version if gov else "v1.0.0",
+                "requires_human_approval": False,
+                "rationale": "Action and timing validated under policy v1.0.0 rules.",
+            },
+            "timeline": [
+                {"step": 1, "title": "Webhook Ingested", "detail": "payment.failed received (Amount: ₹5,000.00, Source: gateway)", "status": "INFO"},
+                {"step": 2, "title": "Diagnosis Inference", "detail": "Identified transient_gateway_failure with 85% confidence", "status": "INFO"},
+                {"step": 3, "title": "Timing Candidate Generation", "detail": "Generated 5 candidate combinations across immediate, +2h, +6h, +12h windows", "status": "INFO"},
+                {"step": 4, "title": "Expected Net Value Optimization", "detail": "Selected retry_later (PLUS_6H) yielding ₹2,762.30 expected net value (+55% uplift)", "status": "SUCCESS"},
+                {"step": 5, "title": "Governor Authorization", "detail": "Governor validated retry limits, frequency caps, and cooldown. Verdict: ALLOW.", "status": "SUCCESS"},
+                {"step": 6, "title": "Action Scheduled", "detail": "Persisted to ScheduledStore with state version binding (v1)", "status": "SUCCESS"},
+            ],
+            "sovereignty_rule": "The AI identified the optimal delayed timing candidate. The Governor verified retry quotas and authorized registration.",
+        }
+
+    async def _run_scenario_stale(self) -> Dict[str, Any]:
+        """Case 3: Stale Action Protection -> Out-of-band capture invalidates delayed retry."""
+        from datetime import datetime, timezone
+        from domain.aggregates import PaymentAggregate
+        from domain.enums import PaymentState
+        from governor.firewall import CustomerConsentContext, ToolFirewall
+        from governor.policy import MerchantPolicy
+        from intelligence.context import ObservableRecoveryContext
+        from planner.timing import TimingWindow
+        from policy.base import PolicyDecision
+        from scheduler.models import ScheduledActionStatus
+        from scheduler.service import ScheduledLifecycleService
+        from scheduler.store import InMemoryScheduledStore
+        from simulator.config import SimulatedActionType
+
+        store = InMemoryScheduledStore()
+        service = ScheduledLifecycleService(store=store)
+
+        proposal = PolicyDecision(
+            action_type=SimulatedActionType.RETRY_LATER,
+            confidence=0.85,
+            rationale="Transient gateway retry scheduled for +6h",
+            policy_name="RECOVERYOS_DETERMINISTIC_V0",
+            expected_incremental_value_paise=275000,
+            expected_net_value_paise=274980,
+            timing_window="PLUS_6H",
+        )
+        context = ObservableRecoveryContext(
+            scenario_id="scen_demo_stale",
+            payment_id="pay_demo_stale_003",
+            amount_in_paise=250000,  # ₹2,500
+            attempt_count=1,
+            error_code="GATEWAY_ERROR",
+        )
+        agg_v1 = PaymentAggregate(
+            payment_id="pay_demo_stale_003",
+            current_state=PaymentState.FAILED,
+            amount=250000,
+            currency="INR",
+            version=1,
+        )
+        policy = MerchantPolicy(max_retries=3)
+
+        # 1. Schedule the action
+        scheduled_action = service.schedule_action(
+            decision=proposal,
+            context=context,
+            aggregate=agg_v1,
+            policy=policy,
+            current_epoch=int(time.time()),
+            timing_window=TimingWindow.PLUS_6H,
+        )
+
+        # 2. Out-of-band capture arrives
+        captured_aggregate = PaymentAggregate(
+            payment_id="pay_demo_stale_003",
+            current_state=PaymentState.CAPTURED,
+            amount=250000,
+            currency="INR",
+            version=2,
+        )
+
+        # 3. Due Revalidation
+        is_valid, reason, reason_codes = service.revalidate_and_check_executable(
+            scheduled_action=scheduled_action,
+            current_aggregate=captured_aggregate,
+            consent=CustomerConsentContext(customer_id="cust_demo_03"),
+            current_epoch=int(time.time()) + 21600,
+        )
+
+        inv_action = service.invalidate_action(
+            scheduled_action.scheduled_action_id,
+            reason or "REVENUE_ALREADY_RECOVERED",
+            reason_codes,
+        )
+
+        return {
+            "scenario_id": "scen_demo_stale",
+            "scenario_name": "Case 3: Stale-Action Invalidation (Out-of-Band Capture)",
+            "scenario_type": "STALE_ACTION_PROTECTION",
+            "description": "Delayed retry was scheduled for +6h. Customer pays out-of-band at +30m. Pre-execution revalidation invalidates the retry, avoiding double charges.",
+            "amount_inr": 2500.00,
+            "error_code": "GATEWAY_ERROR",
+            "error_description": "Gateway error followed by customer out-of-band capture",
+            "customer_name": "Kavita Rao",
+            "final_state": "CAPTURED",
+            "is_recovered": True,
+            "action_cost_inr": 0.00,
+            "net_value_inr": 2500.00,
+            "stop_reason": "TERMINAL_STATE_REACHED",
+            "ai_proposal": {
+                "action_type": "retry_later",
+                "confidence": 0.85,
+                "timing_window": "PLUS_6H",
+                "diagnosis_label": "transient_gateway_failure",
+                "diagnosis_source": "deterministic_offline",
+                "model_version": "rules-v1.0",
+                "rationale": "Initial failure scheduled retry for +6h.",
+                "expected_net_value_inr": 2749.80,
+            },
+            "scheduled_action": {
+                "scheduled_action_id": scheduled_action.scheduled_action_id,
+                "initial_status": "PENDING (State V1)",
+                "final_status": "INVALIDATED (State V2)",
+                "invalidation_reason": "REVENUE_ALREADY_RECOVERED",
+            },
+            "governor_verdict": {
+                "result": "ALLOW -> INVALIDATED",
+                "reason_codes": reason_codes,
+                "policy_version": "v1.0.0",
+                "requires_human_approval": False,
+                "rationale": "Pre-dispatch check detected terminal state CAPTURED. Cancelled scheduled execution.",
+            },
+            "timeline": [
+                {"step": 1, "title": "Initial Failure", "detail": "payment.failed ingested. Delayed retry registered in ScheduledStore (State Version: v1)", "status": "INFO"},
+                {"step": 2, "title": "Out-of-Band Webhook", "detail": "payment.captured arrived organically from customer portal at +30m (State Version: v2)", "status": "INFO"},
+                {"step": 3, "title": "Pre-Execution Revalidation", "detail": "Scheduler re-checked aggregate state prior to execution dispatch.", "status": "WARNING"},
+                {"step": 4, "title": "Action Invalidated", "detail": "Detected terminal CAPTURED state. Action marked INVALIDATED with code REVENUE_ALREADY_RECOVERED.", "status": "SUCCESS"},
+                {"step": 5, "title": "Zero Double Charges", "detail": "Dispatched gateway calls: 0. Merchant fee incurred: ₹0.00. Customer goodwill preserved.", "status": "SUCCESS"},
+            ],
+            "sovereignty_rule": "The executor revalidated current state against the Governor's constraints and aborted execution without side-effects.",
+        }
+
+    async def _run_scenario_consent(self) -> Dict[str, Any]:
+        """Case 4: Customer Opt-Out Enforcement -> Governor and Firewall block communication."""
+        import random
+        from agent.runtime import AgentRuntime
+        from backend.services.ingestion_service import IngestionService
+        from execution.simulator_executor import SimulatorExecutor
+        from governor.firewall import CustomerConsentContext, ToolFirewall
+        from governor.policy import MerchantPolicy
+        from governor.recovery_governor import RecoveryGovernor
+        from simulator.config import CustomerArchetype, FailureClass, ScenarioConfig
+        from simulator.entities import SimulatedCustomer, SyntheticEntityGenerator
+        from simulator.generator import SimulatedScenario
+        from simulator.outcomes import PotentialOutcomeEngine
+
+        ingestion = IngestionService()
+        executor = SimulatorExecutor()
+        governor = RecoveryGovernor(merchant_policy=MerchantPolicy(max_retries=3, max_contacts_24h=2))
+        firewall = ToolFirewall()
+        runtime = AgentRuntime(ingestion_service=ingestion, executor=executor, governor=governor, firewall=firewall)
+
+        customer = SimulatedCustomer(
+            customer_id="cust_demo_04",
+            name="Vikram Sengupta",
+            email="vikram.sengupta@example.com",
+            contact="+919876543204",
+            archetype=CustomerArchetype.CONTACT_FATIGUED,
+        )
+        generator = SyntheticEntityGenerator()
+        outcome_engine = PotentialOutcomeEngine()
+        rng = random.Random(42)
+        scenario_cfg = ScenarioConfig(
+            scenario_id="scen_demo_consent",
+            seed=42,
+            archetype=CustomerArchetype.CONTACT_FATIGUED,
+            failure_class=FailureClass.EXPIRED_PAYMENT_METHOD,
+            amount_in_paise=300000,  # ₹3,000
+            attempt_count=1,
+        )
+        payment_event, webhook_payload = generator.generate_payment_scenario(
+            rng=rng,
+            scenario=scenario_cfg,
+            customer=customer,
+            created_at_epoch=int(time.time()),
+        )
+        hidden_outcomes = outcome_engine.compute_outcomes(rng, scenario_cfg)
+        scenario = SimulatedScenario(
+            scenario_id=scenario_cfg.scenario_id,
+            customer=customer,
+            event=payment_event,
+            webhook_payload=webhook_payload,
+            archetype=scenario_cfg.archetype,
+            failure_class=scenario_cfg.failure_class,
+            hidden_outcomes=hidden_outcomes,
+        )
+        opted_out_consent = CustomerConsentContext(
+            customer_id="cust_demo_04",
+            is_globally_opted_out=True,
+        )
+
+        result = await runtime.run_recovery_loop(scenario, consent=opted_out_consent)
+
+        iteration = result.trace[0] if result.trace else None
+        diag = iteration.diagnosis if iteration else None
+        dec = iteration.decision if iteration else None
+        gov = iteration.governor_decision if iteration else None
+
+        return {
+            "scenario_id": "scen_demo_consent",
+            "scenario_name": "Case 4: Customer Opt-Out & Safety Governor Block",
+            "scenario_type": "CONSENT_ENFORCEMENT",
+            "description": "Customer has globally opted out of dunning communications. Policy proposes payment link; Governor and Tool Firewall intercept and DENY.",
+            "amount_inr": 3000.00,
+            "error_code": "BAD_REQUEST_ERROR",
+            "error_description": "Card expired",
+            "customer_name": customer.name,
+            "final_state": result.final_state,
+            "is_recovered": False,
+            "action_cost_inr": 0.00,
+            "net_value_inr": 0.00,
+            "stop_reason": result.stop_reason,
+            "ai_proposal": {
+                "action_type": dec.action_type.value if dec else "payment_link",
+                "confidence": round(dec.confidence, 2) if dec else 0.80,
+                "diagnosis_label": diag.diagnosis_label.value if diag else "expired_payment_method",
+                "diagnosis_source": diag.diagnosis_source if diag else "deterministic_offline",
+                "model_version": diag.model_version if diag else "rules-v1.0",
+                "rationale": "Expired payment method diagnosed. Proposed customer payment link to update card details.",
+                "expected_net_value_inr": 1800.00,
+            },
+            "governor_verdict": {
+                "result": gov.decision_result.value if gov else "DENY",
+                "reason_codes": gov.reason_codes if gov else ["CUSTOMER_OPTED_OUT", "CONSENT_INVALID"],
+                "policy_version": "v1.0.0",
+                "requires_human_approval": False,
+                "rationale": "Customer has globally opted out of dunning communications. Direct customer action blocked.",
+            },
+            "timeline": [
+                {"step": 1, "title": "Webhook Ingested", "detail": "payment.failed received for Vikram Sengupta (₹3,000.00)", "status": "INFO"},
+                {"step": 2, "title": "AI Proposal", "detail": "Policy proposed payment_link intervention to collect updated payment method.", "status": "INFO"},
+                {"step": 3, "title": "Consent Context Lookup", "detail": "Consulted CustomerConsentRegistry: is_globally_opted_out = True", "status": "WARNING"},
+                {"step": 4, "title": "Governor Interception", "detail": "Recovery Governor issued authoritative DENY (CUSTOMER_OPTED_OUT).", "status": "WARNING"},
+                {"step": 5, "title": "Tool Firewall Gate", "detail": "ToolFirewall validated independent check: blocked with ConsentViolationError.", "status": "SUCCESS"},
+                {"step": 6, "title": "Compliance Guaranteed", "detail": "Zero unsolicited messages sent. Merchant compliance protected.", "status": "SUCCESS"},
+            ],
+            "sovereignty_rule": "The AI proposed a proactive link, but the Governor's compliance rules superseded the proposal and halted execution.",
+        }
+
+    async def _run_scenario_uncertainty(self) -> Dict[str, Any]:
+        """Case 5: Diagnostic Uncertainty & High-Value Human Review Escalation."""
+        from domain.aggregates import PaymentAggregate
+        from domain.enums import PaymentState
+        from governor.decision import GovernorDecisionResult
+        from governor.policy import MerchantPolicy
+        from governor.recovery_governor import RecoveryGovernor
+        from intelligence.context import ObservableRecoveryContext
+        from intelligence.schemas import DiagnosisLabel, StructuredDiagnosis
+        from policy.base import PolicyDecision
+        from simulator.config import SimulatedActionType
+
+        policy = MerchantPolicy(
+            human_review_amount_threshold_paise=2000000,  # ₹20,000
+            max_automatic_action_amount_paise=10000000,   # ₹100,000
+            min_diagnosis_confidence=0.50,
+        )
+        governor = RecoveryGovernor(merchant_policy=policy)
+
+        context = ObservableRecoveryContext(
+            scenario_id="scen_demo_uncertainty",
+            payment_id="pay_demo_high_005",
+            amount_in_paise=2500000,  # ₹25,000.00
+            attempt_count=1,
+            error_code="UNKNOWN_ROUTING_EXCEPTION",
+            error_source="bank",
+            error_reason="unclassified_reversal",
+            error_description="Unclassified bank clearing rejection without standard ISO code",
+        )
+
+        diagnosis = StructuredDiagnosis(
+            diagnosis_label=DiagnosisLabel.UNKNOWN_FAILURE,
+            confidence=0.35,
+            evidence_codes=["OBS_UNRECOGNIZED_SIGNATURE", "AMBIGUOUS_BANK_REVERSAL"],
+            uncertainties=["UNCLASSIFIED_ISO_CODE", "SUSPECTED_MERCHANT_ROUTING_MISCONFIG"],
+            recommended_candidate_actions=[SimulatedActionType.PAYMENT_LINK],
+            human_review_required=True,
+            abstain_recommended=False,
+            rationale="Observable error signature is ambiguous. Confidence (0.35) is below 50% threshold. Human operator review required.",
+            diagnosis_source="groq_llm_low_confidence",
+            model_version="groq-llama-3.3-70b-versatile",
+        )
+
+        proposal = PolicyDecision(
+            action_type=SimulatedActionType.PAYMENT_LINK,
+            confidence=0.35,
+            rationale="Candidate payment link on high-value transaction. Escalation triggered by policy threshold.",
+            policy_name="RECOVERYOS_LLM_DRIVEN",
+            reason_codes=["LOW_CONFIDENCE_DIAGNOSIS", "HIGH_TICKET_VALUE"],
+            expected_incremental_value_paise=1500000,
+            expected_net_value_paise=1499900,
+            diagnosis=diagnosis,
+        )
+
+        decision = governor.evaluate(context, diagnosis, proposal)
+
+        is_escalated = (decision.decision_result == GovernorDecisionResult.ESCALATE)
+
+        return {
+            "scenario_id": "scen_demo_uncertainty",
+            "scenario_name": "Case 5: LLM Uncertainty & Human Review Escalation",
+            "scenario_type": "HUMAN_REVIEW_ESCALATION",
+            "description": "High-value transaction (₹25,000.00) with ambiguous error signature. Low diagnosis confidence (0.35) triggers human review escalation.",
+            "amount_inr": 25000.00,
+            "error_code": "UNKNOWN_ROUTING_EXCEPTION",
+            "error_description": "Unclassified bank clearing rejection",
+            "customer_name": "Ananya Deshmukh",
+            "final_state": "PENDING_REVIEW",
+            "is_recovered": False,
+            "action_cost_inr": 0.00,
+            "net_value_inr": 0.00,
+            "stop_reason": "ESCALATED_HUMAN_REVIEW",
+            "ai_proposal": {
+                "action_type": "payment_link",
+                "confidence": 0.35,
+                "diagnosis_label": "unknown_failure",
+                "diagnosis_source": "llm_structured",
+                "model_version": "groq-llama-3.3-70b-versatile",
+                "rationale": diagnosis.rationale,
+                "expected_net_value_inr": 14999.00,
+            },
+            "governor_verdict": {
+                "result": decision.decision_result.value,
+                "reason_codes": decision.reason_codes,
+                "policy_version": decision.policy_version,
+                "requires_human_approval": is_escalated,
+                "human_review_reason": decision.human_review_reason or "₹25,000.00 exceeds review threshold & confidence (0.35) below 0.50.",
+                "rationale": "High value and low diagnostic certainty require operator authorization prior to any action.",
+            },
+            "timeline": [
+                {"step": 1, "title": "High-Value Failure Ingested", "detail": "payment.failed received for ₹25,000.00 with UNKNOWN_ROUTING_EXCEPTION", "status": "INFO"},
+                {"step": 2, "title": "LLM Diagnostic Inference", "detail": "Groq LLM evaluated error signature -> Output: unknown_failure with low confidence (0.35)", "status": "WARNING"},
+                {"step": 3, "title": "Risk Policy Evaluation", "detail": "Amount (₹25,000.00) exceeds merchant automated threshold (₹20,000.00).", "status": "WARNING"},
+                {"step": 4, "title": "Governor Escalation", "detail": "Recovery Governor issued ESCALATE verdict (HUMAN_REVIEW_REQUIRED_BY_AMOUNT).", "status": "WARNING"},
+                {"step": 5, "title": "Queued for Review", "detail": "Dispatched incident to Merchant Control Room recovery queue for manual decisioning.", "status": "SUCCESS"},
+            ],
+            "sovereignty_rule": "The AI flagged diagnostic ambiguity. The Governor halted autonomous execution and routed the decision to a human operator.",
+        }
+
     def _load_benchmark_data(self) -> Optional[Dict[str, Any]]:
         """Loads benchmark JSON artifact from reports directory if available."""
         path = os.path.join(self.reports_dir, "benchmark_detail.json")

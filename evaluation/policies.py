@@ -6,6 +6,8 @@ from intelligence.schemas import StructuredDiagnosis
 from policy.base import BasePolicy, PolicyDecision
 from simulator.config import SimulatedActionType
 
+from policy.deterministic import DeterministicRecoveryPolicy, LLMDrivenRecoveryPolicy
+
 __all__ = [
     "BasePolicy",
     "PolicyDecision",
@@ -13,6 +15,8 @@ __all__ = [
     "AlwaysRetryPolicy",
     "StaticRulePolicy",
     "ProbabilityOnlyPolicy",
+    "DeterministicRecoveryPolicy",
+    "LLMDrivenRecoveryPolicy",
 ]
 
 

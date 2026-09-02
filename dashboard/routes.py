@@ -67,3 +67,15 @@ async def get_policies_api() -> Dict[str, Any]:
 async def get_exceptions_api() -> List[Dict[str, Any]]:
     """Returns notable exceptions: stale scheduled actions, consent blocks, and human escalations."""
     return dashboard_service.get_exceptions()
+
+
+@router.post("/dashboard/api/scenarios/{scenario_id}/run", response_model=Dict[str, Any], summary="Execute Scenario Lab Simulation")
+@router.get("/dashboard/api/scenarios/{scenario_id}/run", response_model=Dict[str, Any], summary="Execute Scenario Lab Simulation")
+async def run_scenario_api(scenario_id: str) -> Dict[str, Any]:
+    """Executes a signature demo case through the live RecoveryOS runtime and returns audit trace."""
+    try:
+        return await dashboard_service.run_scenario(scenario_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Scenario execution failed: {str(e)}") from e

@@ -49,6 +49,9 @@ class BenchmarkConfig(BaseModel):
     churn_penalty_paise: int = Field(
         default=DEFAULT_CHURN_PENALTY_PAISE_PER_CUSTOMER, description="Standard benchmark churn penalty in paise"
     )
+    compare_llm: bool = Field(
+        default=False, description="Whether to include RECOVERYOS_LLM_DRIVEN in benchmark evaluation cohort"
+    )
     report_output_dir: str = Field(default="reports", description="Destination directory for benchmark reports")
 
 
@@ -128,13 +131,17 @@ class BenchmarkRunner:
 
     def get_default_policies(self) -> List[BasePolicy]:
         """Returns the canonical benchmark policy cohort."""
-        return [
+        policies: List[BasePolicy] = [
             NoActionPolicy(),
             AlwaysRetryPolicy(),
             StaticRulePolicy(),
             ProbabilityOnlyPolicy(),
             DeterministicRecoveryPolicy(),
         ]
+        if self.config.compare_llm:
+            from policy.deterministic import LLMDrivenRecoveryPolicy
+            policies.append(LLMDrivenRecoveryPolicy())
+        return policies
 
     def _compute_distribution(self, values: List[float]) -> MetricDistribution:
         """Computes statistical distribution with sample std and 95% confidence interval."""

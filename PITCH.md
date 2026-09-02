@@ -4,7 +4,7 @@
 
 ## 1. Five-Minute Pitch Script
 
-### [0:00–0:45] The Hook & Problem (Operations Console)
+### [0:00–0:45] The Hook & Problem: The Real Problem in Dunning
 > *"Judges, in subscription fintech, most failed-payment dunning systems suffer from a fatal flaw: they treat revenue recovery as a messaging volume problem rather than a sequential causal decision problem. They spam payment links, hammer gateways on expired cards, and take credit for payments customers would have made organically anyway.*
 >
 > *Today, we present **RecoveryOS**—an autonomous, safety-governed AI revenue recovery agent. Our North Star metric is **Incremental Adjusted Net Recovery** ($\Delta Y_{\text{adj}} = Y(a) - Y(\text{no\_action}) - \text{Action Costs} - \text{Churn Penalty}$). On our Operations Console, you immediately see not just gross recoveries, but incremental alpha, customer friction avoided, and policy compliance."*
