@@ -59,7 +59,18 @@ async def test_case_replay_canonical_contract_for_all_verdicts(case_id, expected
         assert "execution" in data and isinstance(data["execution"], dict)
         assert "stop_reason" in data and isinstance(data["stop_reason"], str)
 
-        # Explainability contract
+        # Decision Anatomy Matrix Contract
+        assert "decision_anatomy" in data and isinstance(data["decision_anatomy"], dict)
+        anatomy = data["decision_anatomy"]
+        assert "observable_event" in anatomy
+        assert "inferred_diagnosis" in anatomy
+        assert "candidate_scoring_matrix" in anatomy
+        assert "governor_safety_gate" in anatomy
+        assert "tool_firewall_gate" in anatomy
+        assert "state_version_binding" in anatomy
+        assert "final_audit" in anatomy
+
+        # Analytical explanations contract
         assert "why_acted" in data and len(data["why_acted"]) > 0
         assert "why_did_not_act" in data and len(data["why_did_not_act"]) > 0
 
