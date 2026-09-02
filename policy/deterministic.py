@@ -125,6 +125,7 @@ class DeterministicRecoveryPolicy(BasePolicy):
                 expected_net_value_paise=0,
                 expected_incremental_value_paise=0,
                 diagnosis=diag,
+                strategy_source="deterministic_offline",
             )
 
         # 7. Optimal Active Intervention Selection
@@ -161,6 +162,7 @@ class DeterministicRecoveryPolicy(BasePolicy):
             timing_window=timing_window,
             delay_seconds=delay_seconds,
             diagnosis=diag,
+            strategy_source="deterministic_offline",
         )
 
 

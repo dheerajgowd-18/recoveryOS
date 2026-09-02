@@ -1,4 +1,5 @@
 """Evaluation harness orchestrator executing policies and governance checks against synthetic scenarios."""
+from enum import Enum
 from typing import Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -35,6 +36,13 @@ FAILURE_CLASS_TO_DIAGNOSIS_LABEL = {
 }
 
 
+class EvaluationExecutionMode(str, Enum):
+    """Execution mode for benchmark and evaluation runs."""
+    OFFLINE_REPLAY = "OFFLINE_REPLAY"
+    LIVE_LLM = "LIVE_LLM"
+    STRICT_NO_FALLBACK = "STRICT_NO_FALLBACK"
+
+
 class EvaluationHarness:
     """Batch evaluation harness comparing policy interventions and governance verdicts against hidden potential outcomes."""
 
@@ -43,11 +51,13 @@ class EvaluationHarness:
         churn_penalty_paise_per_customer: int = DEFAULT_CHURN_PENALTY_PAISE_PER_CUSTOMER,
         diagnosis_provider: Optional[BaseDiagnosisProvider] = None,
         merchant_policy: Optional[MerchantPolicy] = None,
+        mode: EvaluationExecutionMode = EvaluationExecutionMode.OFFLINE_REPLAY,
     ) -> None:
         self.churn_penalty_paise_per_customer = churn_penalty_paise_per_customer
         self.diagnosis_provider = diagnosis_provider or DeterministicDiagnosisProvider()
         self.merchant_policy = merchant_policy or MerchantPolicy()
         self.governor = RecoveryGovernor(merchant_policy=self.merchant_policy)
+        self.mode = mode
 
     def evaluate_policy(
         self,
@@ -95,7 +105,12 @@ class EvaluationHarness:
             is_low_conf = "ABSTAIN_LOW_CONFIDENCE_DIAGNOSIS" in gov_decision.reason_codes or "ABSTAIN_LOW_CONFIDENCE_DIAGNOSIS" in proposal.reason_codes
             is_neg_uplift = "ABSTAIN_NEGATIVE_UPLIFT" in gov_decision.reason_codes or "ABSTAIN_NEGATIVE_UPLIFT" in proposal.reason_codes
 
-            if diag_to_check and diag_to_check.diagnosis_source == "deterministic_fallback":
+            diag_source = diag_to_check.diagnosis_source if diag_to_check else "deterministic_offline"
+            strat_source = proposal.strategy_source or "deterministic_offline"
+
+            if diag_source == "deterministic_fallback":
+                fallback_count += 1
+            if strat_source == "deterministic_fallback":
                 fallback_count += 1
 
             is_sched = (gov_decision.delay_seconds > 0 or gov_decision.timing_window in ("PLUS_2H", "PLUS_6H", "PLUS_12H", "PLUS_24H")) and effective_action != SimulatedActionType.NO_ACTION
@@ -113,7 +128,8 @@ class EvaluationHarness:
                 is_immediate=is_immed,
                 predicted_diagnosis=diag_to_check.diagnosis_label.value if diag_to_check else None,
                 diagnosis_confidence=diag_to_check.confidence if diag_to_check else None,
-                diagnosis_source=diag_to_check.diagnosis_source if diag_to_check else None,
+                diagnosis_source=diag_source,
+                strategy_source=strat_source,
                 diagnosis_correct=diag_correct,
                 is_low_confidence_abstention=is_low_conf,
                 is_negative_uplift_abstention=is_neg_uplift,

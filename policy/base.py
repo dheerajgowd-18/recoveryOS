@@ -1,6 +1,6 @@
 """Base policy abstract class and policy decision models."""
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import Any, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from intelligence.context import ObservableRecoveryContext
@@ -22,6 +22,8 @@ class PolicyDecision(BaseModel):
     timing_window: Optional[str] = Field(default=None, description="Timing window bucket (e.g. IMMEDIATE, PLUS_2H, PLUS_6H)")
     delay_seconds: int = Field(default=0, ge=0, description="Scheduled delay in seconds")
     diagnosis: Optional[StructuredDiagnosis] = Field(default=None, description="Structured diagnosis utilized in decisioning")
+    strategy_source: Optional[str] = Field(default=None, description="Strategy provider source (e.g. deterministic_offline, llm_structured, cached_llm, deterministic_fallback)")
+    strategy_proposal: Optional[Any] = Field(default=None, description="Strategy proposal utilized in decisioning")
 
 
 class BasePolicy(ABC):

@@ -230,8 +230,14 @@ class AgenticGraphRecoveryPolicy(BasePolicy):
         # 2. LLM / Offline Root-Cause Diagnosis
         diag = diagnosis or self.diagnosis_agent.diagnose_sync(context, mem_bundle)
 
-        # 3. Strategy Candidate Generation
-        strategy_candidates = self.strategy_agent.generate_strategy_candidates(
+        # 3. Strategy Reasoning & Candidate Generation
+        strategy_proposal = self.strategy_agent.propose_strategy(
+            context=context,
+            diagnosis=diag,
+            memory_bundle=mem_bundle,
+        )
+        strategy_candidates = self.strategy_agent.generate_strategy_candidates_from_proposal(
+            proposal=strategy_proposal,
             context=context,
             diagnosis=diag,
             memory_bundle=mem_bundle,
@@ -245,6 +251,7 @@ class AgenticGraphRecoveryPolicy(BasePolicy):
         )
 
         best_timing = timing_candidates[0] if timing_candidates else None
+        strat_src = strategy_proposal.strategy_source
 
         if best_timing and best_timing.action_type != SimulatedActionType.NO_ACTION and best_timing.expected_uplift >= 0.0 and best_timing.expected_net_value_paise >= 0:
             return PolicyDecision(
@@ -258,6 +265,8 @@ class AgenticGraphRecoveryPolicy(BasePolicy):
                 timing_window=best_timing.timing_window.value,
                 delay_seconds=best_timing.delay_seconds,
                 diagnosis=diag,
+                strategy_source=strat_src,
+                strategy_proposal=strategy_proposal,
             )
         else:
             return PolicyDecision(
@@ -269,5 +278,7 @@ class AgenticGraphRecoveryPolicy(BasePolicy):
                 expected_net_value_paise=0,
                 expected_incremental_value_paise=0,
                 diagnosis=diag,
+                strategy_source=strat_src,
+                strategy_proposal=strategy_proposal,
             )
 

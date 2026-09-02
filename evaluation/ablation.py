@@ -22,27 +22,29 @@ class AblationPolicyCohort:
     """Creates the 3 canonical ablation variants."""
 
     @staticmethod
-    def get_cohort() -> List[BasePolicy]:
-        from agent.agents import DiagnosisAgent, RecoveryStrategyAgent
+    def get_cohort(strict_no_fallback: bool = False) -> List[BasePolicy]:
         from intelligence.providers.deterministic import DeterministicDiagnosisProvider
-        from intelligence.providers.llm_provider import LLMDiagnosisProvider
-        from intelligence.providers.strategy_provider import (
-            DeterministicStrategyProvider,
-            LLMStrategyProvider,
-        )
+        from intelligence.providers.groq_provider import GroqLLMDiagnosisProvider
 
         # Variant A: Pure Deterministic Offline (Rules Diagnosis + Rules Strategy)
-        det_policy = DeterministicRecoveryPolicy()
+        det_policy = DeterministicRecoveryPolicy(
+            diagnosis_provider=DeterministicDiagnosisProvider(),
+        )
         det_policy.name = "A_DETERMINISTIC_DIAG_AND_STRAT"
         det_policy.description = "Ablation A: Deterministic Rule-Based Diagnosis + Deterministic Strategy Candidates"
 
         # Variant B: Hybrid (LLM Diagnosis + Deterministic Strategy)
-        hybrid_policy = LLMDrivenRecoveryPolicy()
+        hybrid_policy = LLMDrivenRecoveryPolicy(
+            diagnosis_provider=GroqLLMDiagnosisProvider(strict_no_fallback=strict_no_fallback),
+        )
         hybrid_policy.name = "B_LLM_DIAG_DETERMINISTIC_STRAT"
         hybrid_policy.description = "Ablation B: Groq GPT-OSS-120B Diagnosis + Deterministic Strategy Heuristics"
 
         # Variant C: Full Agentic (LLM Diagnosis + LLM Strategy + Deterministic Economics + Governor)
         agentic_policy = AgenticGraphRecoveryPolicy()
+        if strict_no_fallback:
+            agentic_policy.diagnosis_agent.provider.strict_no_fallback = True
+            agentic_policy.strategy_agent.provider.strict_no_fallback = True
         agentic_policy.name = "C_LLM_DIAG_AND_LLM_STRAT"
         agentic_policy.description = "Ablation C: Groq GPT-OSS-120B Diagnosis + Groq GPT-OSS-120B Strategy + Deterministic Economics"
 
@@ -64,8 +66,9 @@ class AblationResult(BaseModel):
 class AblationRunner:
     """Executes controlled ablation studies across synthetic scenarios."""
 
-    def __init__(self, output_dir: str = "reports") -> None:
+    def __init__(self, output_dir: str = "reports", strict_no_fallback: bool = False) -> None:
         self.output_dir = output_dir
+        self.strict_no_fallback = strict_no_fallback
         self.harness = EvaluationHarness()
 
     def run_ablation(
@@ -81,7 +84,7 @@ class AblationRunner:
             batch = sim.generate_batch(SimulatorConfig(seed=seed, num_scenarios=scenarios_per_seed))
             all_scenarios.extend(batch)
 
-        policies = AblationPolicyCohort.get_cohort()
+        policies = AblationPolicyCohort.get_cohort(strict_no_fallback=self.strict_no_fallback)
         results: Dict[str, EvaluationResult] = {}
 
         for p in policies:
@@ -99,15 +102,27 @@ class AblationRunner:
         summary_dict = {}
         for p_name, r in results.items():
             diag_counts = dict(r.metrics.diagnosis_source_counts)
-            if p_name.startswith("A_"):
+            strat_counts = dict(r.metrics.strategy_source_counts)
+
+            # Determine dominant diagnosis source from runtime telemetry
+            if diag_counts.get("llm_structured", 0) > 0:
+                diag_src = "llm_structured"
+            elif diag_counts.get("cached_llm", 0) > 0:
+                diag_src = "cached_llm"
+            elif diag_counts.get("deterministic_fallback", 0) > 0:
+                diag_src = "deterministic_fallback"
+            else:
                 diag_src = "deterministic_offline"
-                strat_src = "deterministic_fallback"
-            elif p_name.startswith("B_"):
-                diag_src = "llm_structured" if r.metrics.deterministic_fallback_count == 0 else "deterministic_fallback"
+
+            # Determine dominant strategy source from runtime telemetry
+            if strat_counts.get("llm_structured", 0) > 0:
+                strat_src = "llm_structured"
+            elif strat_counts.get("cached_llm", 0) > 0:
+                strat_src = "cached_llm"
+            elif strat_counts.get("deterministic_fallback", 0) > 0:
                 strat_src = "deterministic_fallback"
             else:
-                diag_src = "llm_structured" if r.metrics.deterministic_fallback_count == 0 else "deterministic_fallback"
-                strat_src = "llm_structured"
+                strat_src = "deterministic_offline"
 
             summary_dict[p_name] = {
                 "gross_recovered_paise": r.metrics.gross_recovered_amount_paise,
@@ -121,7 +136,13 @@ class AblationRunner:
                 "diagnosis_source": diag_src,
                 "strategy_source": strat_src,
                 "diagnosis_source_counts": diag_counts,
-                "fallback_count": r.metrics.deterministic_fallback_count,
+                "strategy_source_counts": strat_counts,
+                "diagnosis_live_calls": r.metrics.diagnosis_live_call_count,
+                "diagnosis_cache_hits": r.metrics.diagnosis_cache_hit_count,
+                "diagnosis_fallbacks": r.metrics.diagnosis_fallback_count,
+                "strategy_live_calls": r.metrics.strategy_live_call_count,
+                "strategy_cache_hits": r.metrics.strategy_cache_hit_count,
+                "strategy_fallbacks": r.metrics.strategy_fallback_count,
             }
 
         ablation_summary = AblationResult(
@@ -140,12 +161,23 @@ class AblationRunner:
         os.makedirs(self.output_dir, exist_ok=True)
         report_path = os.path.join(self.output_dir, "ablation_summary.md")
 
+        # Detect overall execution mode from cohort sources
+        has_live = any(
+            c.get("diagnosis_live_calls", 0) > 0 or c.get("strategy_live_calls", 0) > 0
+            for c in summary.cohort_results.values()
+        )
+        has_cache = any(
+            c.get("diagnosis_cache_hits", 0) > 0 or c.get("strategy_cache_hits", 0) > 0
+            for c in summary.cohort_results.values()
+        )
+        mode_label = "LIVE_LLM" if has_live else ("OFFLINE_REPLAY (Cached Responses)" if has_cache else "OFFLINE_REPLAY (Deterministic Simulation)")
+
         lines = [
             "# RecoveryOS Ablation Study Summary",
             "",
             f"- **Cohort Size**: {summary.total_scenarios} scenarios (Seeds: {summary.seeds})",
             f"- **AI Model**: `openai/gpt-oss-120b` via Groq",
-            f"- **Evaluation Mode**: Deterministic Replay / Controlled Simulation",
+            f"- **Evaluation Mode**: {mode_label}",
             "",
             "## Cohort Performance Comparison",
             "",
@@ -166,13 +198,13 @@ class AblationRunner:
             "",
             "## Variant Provenance & Provider Tracking",
             "",
-            "| Variant | Diagnosis Source | Strategy Source | Fallbacks |",
-            "|---|---|---|---|",
+            "| Variant | Diagnosis Source | Strategy Source | Diag Fallbacks | Strat Fallbacks |",
+            "|---|---|---|---|---|",
         ])
 
         for name, data in summary.cohort_results.items():
             lines.append(
-                f"| `{name}` | `{data['diagnosis_source']}` | `{data['strategy_source']}` | {data['fallback_count']} |"
+                f"| `{name}` | `{data['diagnosis_source']}` | `{data['strategy_source']}` | {data['diagnosis_fallbacks']} | {data['strategy_fallbacks']} |"
             )
 
         lines.extend([

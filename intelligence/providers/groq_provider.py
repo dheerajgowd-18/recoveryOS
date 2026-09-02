@@ -39,6 +39,7 @@ class GroqLLMDiagnosisProvider(LLMDiagnosisProvider):
         max_retries: Optional[int] = None,
         fallback_provider: Optional[DeterministicDiagnosisProvider] = None,
         client: Optional[Any] = None,
+        strict_no_fallback: bool = False,
     ) -> None:
         effective_key = api_key or os.getenv("GROQ_API_KEY") or default_llm_config.api_key
         effective_model = model_id or os.getenv("GROQ_MODEL_ID") or DEFAULT_GROQ_MODEL
@@ -53,6 +54,7 @@ class GroqLLMDiagnosisProvider(LLMDiagnosisProvider):
             max_retries=max_retries,
             fallback_provider=fallback_provider,
             client=client,
+            strict_no_fallback=strict_no_fallback,
         )
         self.model_id = effective_model
 

@@ -36,7 +36,8 @@ class ScenarioEvaluationRecord(BaseModel):
     incremental_amount_paise: int = Field(..., description="Causal revenue caused by intervention (Recovered - Natural)")
     predicted_diagnosis: Optional[str] = Field(default=None, description="Inferred diagnosis label")
     diagnosis_confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Diagnosis confidence")
-    diagnosis_source: Optional[str] = Field(default=None, description="Provider source (e.g. deterministic_offline, llm)")
+    diagnosis_source: Optional[str] = Field(default=None, description="Provider source (e.g. deterministic_offline, llm_structured, cached_llm, deterministic_fallback)")
+    strategy_source: Optional[str] = Field(default=None, description="Strategy provider source (e.g. deterministic_offline, llm_structured, cached_llm, deterministic_fallback)")
     diagnosis_correct: Optional[bool] = Field(default=None, description="Whether predicted diagnosis matched hidden ground truth")
     is_low_confidence_abstention: bool = Field(default=False, description="Whether policy abstained due to low confidence")
     is_negative_uplift_abstention: bool = Field(default=False, description="Whether policy abstained due to negative uplift")
@@ -77,7 +78,14 @@ class EvaluationMetrics(BaseModel):
     average_customer_fatigue: float = Field(..., ge=0.0, le=1.0, description="Mean customer contact fatigue score")
     diagnosis_accuracy: float = Field(default=0.0, ge=0.0, le=1.0, description="Proportion of diagnoses correctly identifying true failure class")
     diagnosis_source_counts: Dict[str, int] = Field(default_factory=dict, description="Counts of diagnoses by provider source")
-    deterministic_fallback_count: int = Field(default=0, ge=0, description="Count of fallback invocations to offline rules")
+    strategy_source_counts: Dict[str, int] = Field(default_factory=dict, description="Counts of strategies by provider source")
+    diagnosis_live_call_count: int = Field(default=0, ge=0, description="Count of live LLM diagnosis calls")
+    diagnosis_cache_hit_count: int = Field(default=0, ge=0, description="Count of cached LLM diagnosis hits")
+    diagnosis_fallback_count: int = Field(default=0, ge=0, description="Count of fallback invocations for diagnosis")
+    strategy_live_call_count: int = Field(default=0, ge=0, description="Count of live LLM strategy calls")
+    strategy_cache_hit_count: int = Field(default=0, ge=0, description="Count of cached LLM strategy hits")
+    strategy_fallback_count: int = Field(default=0, ge=0, description="Count of fallback invocations for strategy")
+    deterministic_fallback_count: int = Field(default=0, ge=0, description="Total fallback invocations to offline rules")
     invalid_llm_output_count: int = Field(default=0, ge=0, description="Count of malformed LLM responses rejected")
     low_confidence_abstention_count: int = Field(default=0, ge=0, description="Count of abstentions driven by low confidence")
     negative_uplift_abstention_count: int = Field(default=0, ge=0, description="Count of abstentions driven by negative expected uplift")
@@ -119,6 +127,7 @@ class MetricCalculator:
         predicted_diagnosis: Optional[str] = None,
         diagnosis_confidence: Optional[float] = None,
         diagnosis_source: Optional[str] = None,
+        strategy_source: Optional[str] = None,
         diagnosis_correct: Optional[bool] = None,
         is_low_confidence_abstention: bool = False,
         is_negative_uplift_abstention: bool = False,
@@ -169,6 +178,7 @@ class MetricCalculator:
             predicted_diagnosis=predicted_diagnosis,
             diagnosis_confidence=diagnosis_confidence,
             diagnosis_source=diagnosis_source,
+            strategy_source=strategy_source,
             diagnosis_correct=diagnosis_correct,
             is_low_confidence_abstention=is_low_confidence_abstention,
             is_negative_uplift_abstention=is_negative_uplift_abstention,
@@ -216,6 +226,13 @@ class MetricCalculator:
                 average_customer_fatigue=0.0,
                 diagnosis_accuracy=0.0,
                 diagnosis_source_counts={},
+                strategy_source_counts={},
+                diagnosis_live_call_count=0,
+                diagnosis_cache_hit_count=0,
+                diagnosis_fallback_count=0,
+                strategy_live_call_count=0,
+                strategy_cache_hit_count=0,
+                strategy_fallback_count=0,
                 deterministic_fallback_count=0,
                 invalid_llm_output_count=0,
                 low_confidence_abstention_count=0,
@@ -265,11 +282,24 @@ class MetricCalculator:
         diag_evaluated = [r for r in records if r.diagnosis_correct is not None]
         accuracy = (sum(1 for r in diag_evaluated if r.diagnosis_correct) / len(diag_evaluated)) if diag_evaluated else 1.0
 
-        # Source counts
-        source_counts: Dict[str, int] = {}
+        # Diagnosis and Strategy source counts
+        diag_source_counts: Dict[str, int] = {}
+        strat_source_counts: Dict[str, int] = {}
         for r in records:
             if r.diagnosis_source:
-                source_counts[r.diagnosis_source] = source_counts.get(r.diagnosis_source, 0) + 1
+                diag_source_counts[r.diagnosis_source] = diag_source_counts.get(r.diagnosis_source, 0) + 1
+            if r.strategy_source:
+                strat_source_counts[r.strategy_source] = strat_source_counts.get(r.strategy_source, 0) + 1
+
+        diag_live = diag_source_counts.get("llm_structured", 0)
+        diag_cached = diag_source_counts.get("cached_llm", 0)
+        diag_fallback = diag_source_counts.get("deterministic_fallback", 0)
+
+        strat_live = strat_source_counts.get("llm_structured", 0)
+        strat_cached = strat_source_counts.get("cached_llm", 0)
+        strat_fallback = strat_source_counts.get("deterministic_fallback", 0)
+
+        total_fallbacks = deterministic_fallback_count or (diag_fallback + strat_fallback)
 
         low_conf_count = sum(1 for r in records if r.is_low_confidence_abstention)
         neg_uplift_count = sum(1 for r in records if r.is_negative_uplift_abstention)
@@ -319,8 +349,15 @@ class MetricCalculator:
             average_recovery_delay_seconds=round(total_delay / total_recovered_count, 2) if total_recovered_count > 0 else 0.0,
             average_customer_fatigue=round(total_fatigue / total_scenarios, 4),
             diagnosis_accuracy=round(accuracy, 4),
-            diagnosis_source_counts=source_counts,
-            deterministic_fallback_count=deterministic_fallback_count,
+            diagnosis_source_counts=diag_source_counts,
+            strategy_source_counts=strat_source_counts,
+            diagnosis_live_call_count=diag_live,
+            diagnosis_cache_hit_count=diag_cached,
+            diagnosis_fallback_count=diag_fallback,
+            strategy_live_call_count=strat_live,
+            strategy_cache_hit_count=strat_cached,
+            strategy_fallback_count=strat_fallback,
+            deterministic_fallback_count=total_fallbacks,
             invalid_llm_output_count=invalid_llm_output_count,
             low_confidence_abstention_count=low_conf_count,
             negative_uplift_abstention_count=neg_uplift_count,

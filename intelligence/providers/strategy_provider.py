@@ -116,8 +116,13 @@ class BaseStrategyProvider(ABC):
 class DeterministicStrategyProvider(BaseStrategyProvider):
     """Deterministic offline strategy reasoner providing safe, explainable fallback."""
 
-    def __init__(self, config: Optional[DeterministicPolicyConfig] = None) -> None:
+    def __init__(
+        self,
+        config: Optional[DeterministicPolicyConfig] = None,
+        is_fallback: bool = False,
+    ) -> None:
         self.config = config or DeterministicPolicyConfig()
+        self.is_fallback = is_fallback
 
     def propose_sync(
         self,
@@ -127,36 +132,18 @@ class DeterministicStrategyProvider(BaseStrategyProvider):
         admissible_actions: Optional[List[SimulatedActionType]] = None,
         constraints: Optional[Dict[str, Any]] = None,
     ) -> StrategyProposal:
-        customer_summary = (memory_bundle.customer_summary or {}) if memory_bundle else {}
-        operational_context = (memory_bundle.operational_context or {}) if memory_bundle else {}
-
-        if memory_bundle and hasattr(memory_bundle, "retrieved_items"):
-            for item in memory_bundle.retrieved_items:
-                content = getattr(item, "content", {})
-                if isinstance(content, dict):
-                    if "is_vip" in content and "is_vip" not in customer_summary:
-                        customer_summary["is_vip"] = content["is_vip"]
-                    if "preferred_channel" in content and "preferred_channel" not in customer_summary:
-                        customer_summary["preferred_channel"] = content["preferred_channel"]
-                    if "contacts_in_last_24h" in content and "contacts_in_last_24h" not in operational_context:
-                        operational_context["contacts_in_last_24h"] = content["contacts_in_last_24h"]
-
-        is_vip = bool(customer_summary.get("is_vip", False))
-        preferred_channel = customer_summary.get("preferred_channel", "email")
-        contacts_24h = int(operational_context.get("contacts_in_last_24h", context.contacts_in_last_24h or 0))
-        is_fatigued = contacts_24h >= 2
-
+        """Deterministically generates candidate strategy proposals based on failure diagnosis and observable context."""
         candidate_proposals: List[StrategyCandidateProposal] = []
+        is_vip = context.amount_in_paise >= self.config.high_value_threshold_paise
+        is_fatigued = context.contacts_in_last_24h > 0 or context.contacts_in_last_7d >= 2
+        preferred_channel = "whatsapp" if is_vip else "email"
 
-        # 1. Baseline Abstention Candidate
-        abstain_rat = "Zero-cost natural baseline avoiding gateway fees and customer contact fatigue."
-        if is_fatigued:
-            abstain_rat += " Recommended due to elevated contact fatigue in last 24h."
+        # 1. First-class reference baseline
         candidate_proposals.append(
             StrategyCandidateProposal(
                 action_type=SimulatedActionType.NO_ACTION,
                 mechanism="no_action",
-                rationale=abstain_rat,
+                rationale="Zero-cost natural recovery baseline; avoids unnecessary customer contact friction.",
                 confidence=1.0,
                 supporting_evidence=["NATURAL_ORGANIC_BASELINE"] + (["CONTACT_FATIGUE_PREVENTION"] if is_fatigued else []),
                 risk_notes=["Zero active intervention"],
@@ -225,20 +212,24 @@ class DeterministicStrategyProvider(BaseStrategyProvider):
                 )
             )
 
+        source_name = "deterministic_fallback" if self.is_fallback else "deterministic_offline"
+        model_ver = f"rules-fallback-{self.config.policy_version}" if self.is_fallback else f"rules-offline-{self.config.policy_version}"
+        summary_prefix = "Deterministic Strategy fallback" if self.is_fallback else "Deterministic Strategy heuristics"
+
         non_abstain = [c for c in candidate_proposals if not c.is_abstention and "PHYSICAL_IMPOSSIBILITY" not in str(c.risk_notes)]
         if non_abstain and diagnosis.confidence >= self.config.confidence_threshold and not diagnosis.abstain_recommended:
             primary_act = non_abstain[0].action_type
-            summary = f"Deterministic Strategy fallback recommends '{primary_act.value}' with {len(candidate_proposals)} options evaluated."
+            summary = f"{summary_prefix} recommends '{primary_act.value}' with {len(candidate_proposals)} options evaluated."
         else:
             primary_act = SimulatedActionType.NO_ACTION
-            summary = "Deterministic Strategy fallback recommends deliberate abstention (NO_ACTION)."
+            summary = f"{summary_prefix} recommends deliberate abstention (NO_ACTION)."
 
         return StrategyProposal(
             proposals=candidate_proposals,
             primary_recommendation=primary_act,
             strategic_summary=summary,
-            strategy_source="deterministic_fallback",
-            model_version=f"rules-fallback-{self.config.policy_version}",
+            strategy_source=source_name,
+            model_version=model_ver,
         )
 
     async def propose(
@@ -275,6 +266,7 @@ class LLMStrategyProvider(BaseStrategyProvider):
         client: Optional[Any] = None,
         replay_cache: Optional[LLMReplayCache] = None,
         system_prompt: Optional[str] = None,
+        strict_no_fallback: bool = False,
     ) -> None:
         cfg = config or default_llm_config
         self.provider = cfg.provider or DEFAULT_LLM_PROVIDER
@@ -283,11 +275,12 @@ class LLMStrategyProvider(BaseStrategyProvider):
         self.base_url = base_url or cfg.base_url or DEFAULT_GROQ_BASE_URL
         self.timeout_seconds = timeout_seconds if timeout_seconds is not None else cfg.timeout_seconds
         self.max_retries = max_retries if max_retries is not None else cfg.max_retries
-        self.fallback_provider = fallback_provider or DeterministicStrategyProvider()
+        self.fallback_provider = fallback_provider or DeterministicStrategyProvider(is_fallback=True)
         self._client = client
         self.replay_cache = replay_cache if replay_cache is not None else LLMReplayCache()
         self.system_prompt = system_prompt or DEFAULT_STRATEGY_SYSTEM_PROMPT
         self.prompt_version = STRATEGY_PROMPT_VERSION
+        self.strict_no_fallback = strict_no_fallback
 
         # Telemetry counters
         self.total_invocations: int = 0
@@ -547,6 +540,8 @@ class LLMStrategyProvider(BaseStrategyProvider):
 
         # 2. Check API key / client
         if not self.api_key and self._client is None:
+            if self.strict_no_fallback:
+                raise RuntimeError("Strict LLM execution failed in LLMStrategyProvider: No API key or client available and no cached replay found.")
             self.fallback_count += 1
             return self.fallback_provider.propose_sync(context, diagnosis, memory_bundle, admissible_actions, constraints)
 
@@ -592,6 +587,9 @@ class LLMStrategyProvider(BaseStrategyProvider):
             except Exception as e:
                 last_exception = e
 
+        if self.strict_no_fallback:
+            raise RuntimeError(f"Strict LLM execution failed in LLMStrategyProvider: Live API call failed with {type(last_exception).__name__}: {last_exception}")
+
         # Fallback on failure
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
         self.last_latency_ms = elapsed_ms
@@ -631,6 +629,8 @@ class LLMStrategyProvider(BaseStrategyProvider):
             return cached_strat
 
         if not self.api_key and self._client is None:
+            if self.strict_no_fallback:
+                raise RuntimeError("Strict LLM execution failed in LLMStrategyProvider: No API key or client available and no cached replay found.")
             self.fallback_count += 1
             return self.fallback_provider.propose_sync(context, diagnosis, memory_bundle, admissible_actions, constraints)
 

@@ -69,6 +69,11 @@ def parse_args() -> argparse.Namespace:
         help="Execute the 3-variant ablation study (Rules vs LLM-Diag vs LLM-Diag+LLM-Strat)",
     )
     parser.add_argument(
+        "--strict-no-fallback",
+        action="store_true",
+        help="Enforce strict execution where LLM provider failure raises an error rather than falling back to offline rules",
+    )
+    parser.add_argument(
         "--output-dir",
         type=str,
         default="reports",
@@ -183,9 +188,15 @@ def main() -> None:
         print("\n" + "=" * 80)
         print("  EXECUTING ABLATION STUDY (Rules vs LLM-Diag vs Full Agentic)")
         print("=" * 80)
-        ablation_runner = AblationRunner(output_dir=args.output_dir)
+        ablation_runner = AblationRunner(output_dir=args.output_dir, strict_no_fallback=args.strict_no_fallback)
         ab_res = ablation_runner.run_ablation(seeds=dev_seeds, scenarios_per_seed=args.scenarios)
         print(f"  [SAVED] ablation_summary -> {os.path.join(args.output_dir, 'ablation_summary.md')}")
+        print("\n  Ablation Variant Telemetry & Provenance:")
+        print(f"  {'Variant':<32} | {'Diagnosis Source':<24} | {'Strategy Source':<24} | {'Diag FB':<8} | {'Strat FB':<8}")
+        print("  " + "-" * 106)
+        for vname, vdata in ab_res.cohort_results.items():
+            print(f"  {vname:<32} | {vdata['diagnosis_source']:<24} | {vdata['strategy_source']:<24} | {vdata['diagnosis_fallbacks']:<8} | {vdata['strategy_fallbacks']:<8}")
+        print("-" * 80)
         print(f"  LLM Diagnosis Incremental Uplift (B - A)            : INR {ab_res.diagnosis_contribution_uplift_paise / 100:,.2f}")
         print(f"  Incremental Value of Full Agentic Strategy Layer (C - B): INR {ab_res.strategy_layer_incremental_value_paise / 100:,.2f}")
         print(f"  Total Combined AI Layer Value (C - A)               : INR {ab_res.total_ai_layer_uplift_paise / 100:,.2f}")

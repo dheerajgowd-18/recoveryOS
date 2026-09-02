@@ -87,6 +87,7 @@ class LLMDiagnosisProvider(BaseDiagnosisProvider):
         client: Optional[Any] = None,
         replay_cache: Optional[LLMReplayCache] = None,
         system_prompt: Optional[str] = None,
+        strict_no_fallback: bool = False,
     ) -> None:
         cfg = config or default_llm_config
         self.provider = cfg.provider or DEFAULT_LLM_PROVIDER
@@ -100,6 +101,7 @@ class LLMDiagnosisProvider(BaseDiagnosisProvider):
         self.replay_cache = replay_cache if replay_cache is not None else LLMReplayCache()
         self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
         self.prompt_version = cfg.prompt_version or PROMPT_VERSION
+        self.strict_no_fallback = strict_no_fallback
 
         # Operational telemetry counters
         self.total_invocations: int = 0
@@ -319,6 +321,8 @@ class LLMDiagnosisProvider(BaseDiagnosisProvider):
 
         # 2. Check API key / client configuration
         if not self.api_key and self._client is None:
+            if self.strict_no_fallback:
+                raise RuntimeError("Strict LLM execution failed in LLMDiagnosisProvider: No API key or client available and no cached replay found.")
             self.fallback_count += 1
             fallback_diag = self.fallback_provider.diagnose_sync(context, memory_bundle)
             wrapped = self._wrap_fallback(fallback_diag, "FALLBACK_NO_API_KEY")
@@ -365,6 +369,9 @@ class LLMDiagnosisProvider(BaseDiagnosisProvider):
                 last_exception = e
             except Exception as e:
                 last_exception = e
+
+        if self.strict_no_fallback:
+            raise RuntimeError(f"Strict LLM execution failed in LLMDiagnosisProvider: Live API call failed with {type(last_exception).__name__}: {last_exception}")
 
         # All attempts failed -> fallback
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
@@ -415,6 +422,8 @@ class LLMDiagnosisProvider(BaseDiagnosisProvider):
 
         # 2. Check API key
         if not self.api_key and self._client is None:
+            if self.strict_no_fallback:
+                raise RuntimeError("Strict LLM execution failed in LLMDiagnosisProvider: No API key or client available and no cached replay found.")
             self.fallback_count += 1
             fallback_diag = self.fallback_provider.diagnose_sync(context, memory_bundle)
             return self._wrap_fallback(fallback_diag, "FALLBACK_NO_API_KEY")
