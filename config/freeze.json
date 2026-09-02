@@ -1,0 +1,37 @@
+{
+  "project_name": "RecoveryOS",
+  "track": "Track 03: AI Revenue Recovery",
+  "buildathon": "Razorpay AI Buildathon 2026",
+  "submission_version": "2.0.0",
+  "freeze_timestamp_utc": "2026-09-02T14:30:00Z",
+  "reproducibility": {
+    "development_seeds": [42, 43, 44],
+    "holdout_seeds": [45, 46],
+    "default_scenario_count": 1000,
+    "scenario_schema_version": "2.0.0"
+  },
+  "governance": {
+    "policy_version": "v2.0.0",
+    "diagnosis_provider": "deterministic-v1",
+    "economic_parameters": {
+      "churn_penalty_paise": 250000,
+      "link_action_cost_paise": 100,
+      "reminder_action_cost_paise": 50,
+      "retry_action_cost_paise": 20,
+      "no_action_cost_paise": 0
+    },
+    "default_limits": {
+      "max_retries": 3,
+      "max_contacts_24h": 2,
+      "max_contacts_7d": 4,
+      "cooldown_seconds": 7200,
+      "max_automatic_action_amount_paise": 500000,
+      "human_review_amount_threshold_paise": 500000
+    }
+  },
+  "north_star_metric": {
+    "name": "Incremental Adjusted Net Recovery",
+    "formula": "Delta_Y_adj = Y(a) - Y(no_action) - Action_Costs - Churn_Penalty",
+    "unit": "paise"
+  }
+}

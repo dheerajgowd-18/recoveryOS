@@ -15,8 +15,14 @@ class ScenarioEvaluationRecord(BaseModel):
     scenario_id: str = Field(..., description="Unique scenario identifier")
     policy_name: str = Field(..., description="Name of the evaluating policy")
     chosen_action: SimulatedActionType = Field(..., description="Action selected by policy / Governor")
+    timing_window: Optional[str] = Field(default=None, description="Timing window selected")
+    delay_seconds: int = Field(default=0, ge=0, description="Scheduled delay in seconds")
     is_intervention: bool = Field(..., description="Whether chosen action is an active intervention (not NO_ACTION)")
     is_abstention: bool = Field(..., description="Whether chosen action is NO_ACTION")
+    is_scheduled: bool = Field(default=False, description="Whether action was scheduled for future execution")
+    is_immediate: bool = Field(default=False, description="Whether action was executed immediately")
+    scheduled_invalidated: bool = Field(default=False, description="Whether scheduled action was invalidated")
+    scheduled_expired: bool = Field(default=False, description="Whether scheduled action expired")
     recovered: bool = Field(..., description="Whether revenue was captured under chosen action")
     recovered_amount_paise: int = Field(default=0, ge=0, description="Amount recovered in paise")
     action_cost_paise: int = Field(default=0, ge=0, description="Direct cost of chosen action in paise")
@@ -86,6 +92,12 @@ class EvaluationMetrics(BaseModel):
     contact_limit_block_count: int = Field(default=0, ge=0, description="Count of communications blocked by contact limit")
     low_confidence_block_count: int = Field(default=0, ge=0, description="Count of actions blocked due to low confidence")
     low_value_abstention_count: int = Field(default=0, ge=0, description="Count of abstentions due to low expected value")
+    actions_scheduled_count: int = Field(default=0, ge=0, description="Count of actions scheduled for future execution")
+    actions_executed_immediately_count: int = Field(default=0, ge=0, description="Count of actions executed immediately")
+    scheduled_actions_invalidated_count: int = Field(default=0, ge=0, description="Count of scheduled actions invalidated prior to execution")
+    scheduled_actions_expired_count: int = Field(default=0, ge=0, description="Count of scheduled actions expired past recovery window")
+    timing_governor_block_count: int = Field(default=0, ge=0, description="Count of actions blocked due to timing constraints")
+    timing_governor_defer_count: int = Field(default=0, ge=0, description="Count of actions deferred due to timing cooldown")
 
 
 class MetricCalculator:
@@ -98,6 +110,12 @@ class MetricCalculator:
         chosen_action: SimulatedActionType,
         chosen_outcome: ActionOutcome,
         natural_outcome: ActionOutcome,
+        timing_window: Optional[str] = None,
+        delay_seconds: int = 0,
+        is_scheduled: bool = False,
+        is_immediate: bool = False,
+        scheduled_invalidated: bool = False,
+        scheduled_expired: bool = False,
         predicted_diagnosis: Optional[str] = None,
         diagnosis_confidence: Optional[float] = None,
         diagnosis_source: Optional[str] = None,
@@ -122,12 +140,21 @@ class MetricCalculator:
         is_retry_limit = "RETRY_LIMIT_REACHED" in reason_codes
         is_contact_limit = "CONTACT_LIMIT_REACHED" in reason_codes
 
+        computed_is_sched = is_scheduled or (delay_seconds > 0 and is_intervention)
+        computed_is_immed = is_immediate or (delay_seconds == 0 and is_intervention)
+
         return ScenarioEvaluationRecord(
             scenario_id=scenario_id,
             policy_name=policy_name,
             chosen_action=chosen_action,
+            timing_window=timing_window,
+            delay_seconds=delay_seconds,
             is_intervention=is_intervention,
             is_abstention=is_abstention,
+            is_scheduled=computed_is_sched,
+            is_immediate=computed_is_immed,
+            scheduled_invalidated=scheduled_invalidated,
+            scheduled_expired=scheduled_expired,
             recovered=chosen_outcome.recovered,
             recovered_amount_paise=recovered_amount,
             action_cost_paise=chosen_outcome.action_cost_paise,
@@ -204,6 +231,12 @@ class MetricCalculator:
                 contact_limit_block_count=0,
                 low_confidence_block_count=0,
                 low_value_abstention_count=0,
+                actions_scheduled_count=0,
+                actions_executed_immediately_count=0,
+                scheduled_actions_invalidated_count=0,
+                scheduled_actions_expired_count=0,
+                timing_governor_block_count=0,
+                timing_governor_defer_count=0,
             )
 
         interventions = sum(1 for r in records if r.is_intervention)
@@ -254,6 +287,14 @@ class MetricCalculator:
         low_conf_block = sum(1 for r in records if "DIAGNOSIS_CONFIDENCE_TOO_LOW" in r.governor_reason_codes)
         low_val_abstain = sum(1 for r in records if "EXPECTED_VALUE_BELOW_THRESHOLD" in r.governor_reason_codes)
 
+        # Timing and scheduling metrics
+        actions_scheduled = sum(1 for r in records if r.is_scheduled)
+        actions_immediate = sum(1 for r in records if r.is_immediate)
+        sched_invalid = sum(1 for r in records if r.scheduled_invalidated or "STALE_OR_INVALID_SCHEDULED_ACTION" in r.governor_reason_codes)
+        sched_expired = sum(1 for r in records if r.scheduled_expired or "TIMING_EXPIRED_BEFORE_EXECUTION" in r.governor_reason_codes)
+        timing_block = sum(1 for r in records if "TIMING_OUTSIDE_RECOVERY_WINDOW" in r.governor_reason_codes or "TIMING_NOT_PERMITTED_BY_POLICY" in r.governor_reason_codes or "TIMING_VIOLATES_CONTACT_LIMIT" in r.governor_reason_codes)
+        timing_defer = sum(1 for r in records if "TIMING_VIOLATES_COOLDOWN" in r.governor_reason_codes or "COOLDOWN_ACTIVE" in r.governor_reason_codes)
+
         return EvaluationMetrics(
             policy_name=policy_name,
             total_scenarios=total_scenarios,
@@ -294,4 +335,10 @@ class MetricCalculator:
             contact_limit_block_count=contact_limit_block,
             low_confidence_block_count=low_conf_block,
             low_value_abstention_count=low_val_abstain,
+            actions_scheduled_count=actions_scheduled,
+            actions_executed_immediately_count=actions_immediate,
+            scheduled_actions_invalidated_count=sched_invalid,
+            scheduled_actions_expired_count=sched_expired,
+            timing_governor_block_count=timing_block,
+            timing_governor_defer_count=timing_defer,
         )

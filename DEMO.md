@@ -1,54 +1,71 @@
-# RecoveryOS Signature Showcase & Interactive Demo Guide
+# RecoveryOS Signature Showcase & 5-Minute Demo Guide
 
-This document outlines the step-by-step interactive CLI demonstration for evaluating RecoveryOS.
+This document provides the choreographed 5-minute demonstration guide and walkthrough for the Razorpay AI Buildathon 2026 panel judges.
 
 ---
 
 ## 1. Quickstart Execution Commands
 
-To execute the entire test suite and signature demonstration in your terminal:
-
 ```bash
-# Step 1: Run the full automated test suite (89 passing tests)
-python -m pytest -v
+# Step 1: Run the full automated test suite (183 passing tests)
+make test
+# (or: python -m pytest -v)
 
-# Step 2: Run the 5 signature demo cases CLI showcase
-python scripts/demo.py
+# Step 2: Run the 5 signature demo cases CLI showcase (< 5 seconds)
+make demo
+# (or: python scripts/demo.py)
+
+# Step 3: Launch the Operations Console Dashboard
+uvicorn backend.app:app --host 127.0.0.1 --port 8000
+# Open http://127.0.0.1:8000/dashboard in your browser
 ```
 
 ---
 
-## 2. Walkthrough of the 5 Signature Demo Cases
+## 2. Five-Minute Live Demo & Video Choreography
 
-### Case 1: Correct Abstention (Avoiding Value-Destructive Actions)
-- **Context**: A micro-transaction of ₹1.00 (`100` paise) fails due to `EXPIRED_PAYMENT_METHOD`.
-- **What the Judge Sees**:
-  ```text
-  [RESULT] Stop Reason : POLICY_ABSTAINED
-  [RESULT] Final State : failed
-  [RESULT] Total Cost  : INR 0.00
-  [AUDIT]  Rationale   : Abstaining: Expected incremental recovery value does not justify intervention cost or risk.
-  ```
-- **Why It Matters**: Naive agents unconditionally spam payment links costing ₹1.00 in messaging fees + customer friction, resulting in negative net revenue. RecoveryOS evaluates the economic equation and actively chooses `NO_ACTION`.
-- **What to Say**: *"Notice that RecoveryOS evaluates the expected net value before acting. Because the intervention cost equals or exceeds the amount at risk, the agent intentionally abstains, preserving both margin and customer goodwill."*
+### [0:00–0:45] The Hook & Problem (Operations Console)
+- **Visual**: Show the dark-themed **Operations Console Dashboard** (`GET /dashboard`). Point to the top KPI strip: *Revenue at Risk*, *Gross Recovered*, *Incremental Net Recovery*, *Adjusted Net Recovery*, and *Interventions Avoided*.
+- **Narrative**:
+  > *"Judges, traditional dunning treats failed payments as a brute-force messaging volume problem. They hammer gateways on expired cards, spam payment links, and claim credit for payments customers would have made organically anyway. RecoveryOS transforms revenue recovery into a sequential, causal decision problem. We measure **Incremental Adjusted Net Recovery**—net recovery above organic baseline minus direct costs and customer churn penalties."*
 
----
+### [0:45–2:00] Signature Cases 1 & 2: Timing Optimization & Economic Abstention
+- **Visual**: Run `make demo` (Cases 1 & 2).
+- **Case 1: Intelligent Abstention**:
+  - Show micro-transaction (₹1.00) with `EXPIRED_PAYMENT_METHOD` failure.
+  - Show RecoveryOS output: `Stop Reason: POLICY_ABSTAINED`, `Verdict: ABSTAIN`, `Cost: ₹0.00`.
+  - Explain: *"A naive agent spends ₹1.00 to recover ₹1.00 on an expired card. RecoveryOS calculates negative net value uplift and intentionally abstains."*
+- **Case 2: Action × Timing Optimization**:
+  - Show ₹5,000 transaction with `TRANSIENT_GATEWAY` failure.
+  - Point to the candidate evaluation matrix comparing immediate retry, +6h retry, +12h retry, +24h retry, and links.
+  - Highlight chosen action: `retry_later` (window: `PLUS_6H`) yielding ₹2,762.30 expected net value (+55% uplift over natural baseline).
 
-### Case 2: Delayed Retry Economic Selection (Candidate Comparison)
-- **Context**: A ₹5,000.00 transaction fails with a `TRANSIENT_GATEWAY` error.
-- **What the Judge Sees**:
-  ```text
-  Candidate Action   | Est Prob   | Action Cost  | Exp Net Value  | Selected?
-  ----------------------------------------------------------------------
-  retry_later        | 80.0%      | INR 0.20     | INR 2749.80    | YES (Optimal)
-  retry_now          | 75.0%      | INR 0.20     | INR 2499.80    | no
-  payment_link       | 55.0%      | INR 1.00     | INR 1499.00    | no
-  reminder           | 45.0%      | INR 0.50     | INR 999.50     | no
-  no_action          | 25.0%      | INR 0.00     | INR 0.00       | no
-  ----------------------------------------------------------------------
-  ```
-- **Why It Matters**: Instead of spamming an immediate retry (which often hits the same lingering gateway downtime) or sending an invasive link, RecoveryOS compares all candidates and selects the optimal timed retry (`RETRY_LATER`), generating ₹2,749.80 in expected net value.
-- **What to Say**: *"Here we inspect the internal decision matrix. RecoveryOS ranks all admissible candidates by expected net value uplift. Notice that a timed backoff retry achieves higher expected net value than an immediate retry or an expensive payment link."*
+### [2:00–3:00] Signature Cases 3 & 4: Stale-Action Protection & Safety Opt-Out
+- **Visual**: Run `make demo` (Cases 3 & 4) and view **Case Decision Replay** on dashboard.
+- **Case 3: Stale-Action Protection (Out-of-Band Capture)**:
+  - Show delayed action scheduled for +6h.
+  - Show customer paying organically at +30m via `payment.captured` webhook.
+  - Show pre-execution revalidation detecting terminal state and outputting `INVALIDATED` (`REVENUE_ALREADY_RECOVERED`), avoiding double-charging the customer.
+- **Case 4: Safety Governor & Consent Enforcement**:
+  - Show customer with active global opt-out preference.
+  - Show Governor intercepting dunning proposal, outputting `DENY` (`CUSTOMER_OPTED_OUT`), and halting execution safely with ₹0.00 cost.
+
+### [3:00–4:15] The Evaluation Lab (Multi-Seed Proof & Sensitivity)
+- **Visual**: Switch to **Evaluation Lab** tab on the dashboard or display benchmark results.
+- **Data Highlight**:
+  - 100-scenario multi-seed evaluation: RecoveryOS achieves **₹80,859** Incremental Adjusted Net Recovery (+₹6,764 over static heuristics, +₹63,073 over Always Retry).
+  - 27% churn reduction (8 churned customers vs 11 under Static Rules).
+  - 52% cost reduction (₹36.00 total action costs vs ₹74.40).
+  - Oracle hindsight regret analysis proving near-optimal decision efficiency.
+  - Economic sensitivity matrix proving positive alpha across low, medium, and high customer friction parameters.
+
+### [4:15–5:00] Architectural Governance & Close
+- **Visual**: Return to **Control Room** view and show the 3 architectural planes:
+  1. *Intelligence Plane*: Observable context boundary with structured AI diagnosis.
+  2. *Governance Plane*: Deterministic Recovery Governor with human review escalation and Tool Firewall.
+  3. *Execution Plane*: Scheduled lifecycle manager, fail-closed Razorpay adapter, and immutable append-only decision replay log.
+- **Closing Statement**:
+  > *"Our core design principle is clear: **The model proposes. The Governor authorizes. The executor acts.** RecoveryOS gives merchants an autonomous, provably safe, and economically sound revenue recovery engine. Thank you."*
 
 ---
 

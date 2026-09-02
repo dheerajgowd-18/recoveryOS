@@ -1,0 +1,69 @@
+"""FastAPI routes for the RecoveryOS Operations Console & Dashboard."""
+import os
+from typing import Any, Dict, List
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+
+from dashboard.service import dashboard_service
+
+# Locate templates directory
+templates_dir = os.path.join(os.path.dirname(__file__), "templates")
+templates = Jinja2Templates(directory=templates_dir)
+
+router = APIRouter(tags=["Operations Console"])
+
+
+@router.get("/dashboard", response_class=HTMLResponse, summary="Operations Console HTML UI")
+async def get_dashboard(request: Request) -> HTMLResponse:
+    """Renders the main browser-based RecoveryOS Operations Console dashboard."""
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context={
+            "title": "RecoveryOS Operations Console",
+            "version": "v1.5.0",
+        },
+    )
+
+
+@router.get("/dashboard/api/control-room", response_model=Dict[str, Any], summary="Control Room Overview API")
+async def get_control_room_api() -> Dict[str, Any]:
+    """Returns executive KPI strip, real-time activity stream, and operational status."""
+    return dashboard_service.get_control_room_data()
+
+
+@router.get("/dashboard/api/recovery-queue", response_model=List[Dict[str, Any]], summary="Recovery Queue API")
+async def get_recovery_queue_api() -> List[Dict[str, Any]]:
+    """Returns prioritized operational queue of recovery opportunities."""
+    return dashboard_service.get_recovery_queue()
+
+
+@router.get("/dashboard/api/cases/{case_id}/replay", response_model=Dict[str, Any], summary="Case Decision Replay API")
+async def get_case_replay_api(case_id: str) -> Dict[str, Any]:
+    """Returns chronological decision trace, candidate evaluations, and explanations for a case."""
+    replay = dashboard_service.get_case_replay(case_id)
+    if not replay:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Recovery case with ID '{case_id}' was not found in the decision audit log.",
+        )
+    return replay
+
+
+@router.get("/dashboard/api/evaluation", response_model=Dict[str, Any], summary="Evaluation Lab API")
+async def get_evaluation_api() -> Dict[str, Any]:
+    """Returns benchmark baseline comparisons, Oracle ceiling, regret stats, and sensitivity grid."""
+    return dashboard_service.get_evaluation_data()
+
+
+@router.get("/dashboard/api/policies", response_model=Dict[str, Any], summary="Merchant Policies API")
+async def get_policies_api() -> Dict[str, Any]:
+    """Returns active merchant policy configuration, frequency limits, and automation mode (read-only)."""
+    return dashboard_service.get_policies()
+
+
+@router.get("/dashboard/api/exceptions", response_model=List[Dict[str, Any]], summary="Operational Exceptions API")
+async def get_exceptions_api() -> List[Dict[str, Any]]:
+    """Returns notable exceptions: stale scheduled actions, consent blocks, and human escalations."""
+    return dashboard_service.get_exceptions()

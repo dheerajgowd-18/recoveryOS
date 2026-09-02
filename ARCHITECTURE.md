@@ -97,6 +97,36 @@ This document provides a comprehensive technical overview of the architecture, c
 - **Human Review Escalator (`governor/human_review.py`)**: Routes ambiguous, high-value, or low-confidence decisions to human review with explicit stop reasons and reason codes.
 - **Tool Firewall (`governor/firewall.py`)**: Acts as an independent second line of defense immediately prior to adapter dispatch, enforcing strict schema validation and execution key idempotency locks.
 
-### 3.8 Audit & Decision Replay Engine (`audit/`)
-- **Immutable Decision Log (`audit/decision_log.py`)**: Stores complete decision records including observable context snapshots, structured diagnosis, Governor verdict, candidate score arrays, chosen action, confidence, and execution outcomes.
-- **Replay Engine (`audit/replay.py`)**: Reconstructs historical decision states, structured diagnoses, Governor verdicts, and score breakdowns by `decision_id` for compliance audits and post-mortem analysis.
+### 3.8 Action × Timing Decision Model & Scheduled-Action Lifecycle (`planner/`, `scheduler/`)
+- **Action Mechanisms & Discrete Timing Windows (`planner/timing.py`)**: Formalizes explicit action mechanisms (`NO_ACTION`, `RETRY`, `PAYMENT_LINK`, `REMINDER`, `HUMAN_REVIEW`) across discrete timing buckets (`IMMEDIATE` [0s], `PLUS_2H` [7,200s], `PLUS_6H` [21,600s], `PLUS_12H` [43,200s], `PLUS_24H` [86,400s]).
+- **Candidate Generator (`TimingCandidateGenerator`)**: Generates admissible (Mechanism × Timing Window) candidate pairs bounded by failure physics (e.g. no retries on expired cards, immediate retry only on attempt 1 when allowed, delayed retries for transient gateway timeouts).
+- **Deterministic Timing Estimator (`DeterministicTimingValueEstimator`)**: Transparent mathematical scoring of expected net value without simulator oracle leakage:
+  $$\text{ExpNetValue} = (\text{Amount} \times (P_{\text{mech}}(\text{timing}) \times \text{Confidence} - P_{\text{natural}})) - \text{Cost}_{\text{mech}}$$
+- **Scheduled Action Store (`scheduler/store.py`)**: Thread-safe in-memory store indexing active scheduled actions by ID, payment ID, and execution idempotency key.
+- **Scheduled Lifecycle Service (`scheduler/service.py`)**: Manages the complete lifecycle:
+  1. *Schedule*: Persists delayed actions with status `PENDING`, `expected_state_version`, and `expires_at_epoch`.
+  2. *Revalidation*: Pre-execution state verification checking current aggregate version, terminal status, and window expiry (`STATE_VERSION_MISMATCH`, `REVENUE_ALREADY_RECOVERED`, `TIMING_EXPIRED_BEFORE_EXECUTION`).
+  3. *Invalidation*: Cancels stale actions if payment is captured or refunded out-of-band.
+  4. *Execution*: Passes valid due actions through `ToolFirewall` gating to execution.
+
+### 3.9 Audit & Decision Replay Engine (`audit/`)
+- **Immutable Decision Log (`audit/decision_log.py`)**: Stores complete decision records including observable context snapshots, structured diagnosis, Governor verdict, timing window, delay seconds, scheduled action ID, candidate score arrays, chosen action, confidence, and execution outcomes.
+- **Replay Engine (`audit/replay.py`)**: Reconstructs historical decision states, structured diagnoses, Governor verdicts, timing windows, and score breakdowns by `decision_id` for compliance audits and post-mortem analysis.
+
+### 3.10 Operations Console & Dashboard Architecture (`dashboard/`)
+- **Web Interface Architecture (`dashboard/routes.py`, `dashboard/templates/dashboard.html`)**: FastAPI-served single-page console built with Jinja2 templates, Tailwind CSS, and Alpine.js. Operates with 0 Node.js build dependencies.
+- **Aggregated Data Service (`dashboard/service.py`)**: `DashboardService` singleton querying across in-memory decision logs, scheduled action registries, merchant governance policies, and on-disk benchmark evaluation reports (`reports/benchmark_detail.json`).
+- **Strict Observable Boundary Protection**: Ensures no unobservable simulator ground truth ($Y(a)$ potential outcomes, customer archetypes) is ever exposed through dashboard APIs.
+- **Five Core Operational Views**:
+  1. *Merchant Control Room (`GET /dashboard/api/control-room`)*: Live surveillance of Revenue at Risk, Gross Recovered, Incremental Net Recovery, Interventions Avoided, and real-time event telemetry.
+  2. *Recovery Queue (`GET /dashboard/api/recovery-queue`)*: Ledger of failed transactions ranked by recovery priority and expected incremental value.
+  3. *Case Decision Replay (`GET /dashboard/api/cases/{case_id}/replay`)*: Step-by-step chronological audit provenance reconstructing "Why We Acted" vs "Why We Did Not Act".
+  4. *Evaluation Lab (`GET /dashboard/api/evaluation`)*: Statistical baseline comparison table, theoretical Oracle hindsight ceiling, regret distribution, and multi-parameter sensitivity grid.
+  5. *Exceptions & Audit (`GET /dashboard/api/exceptions`)*: Real-time exceptions log monitoring stale action invalidations, consent opt-outs, and human review escalations.
+
+### 3.11 Razorpay Gateway Integration & Test Adapter (`ingestion/`, `execution/`)
+- **HMAC SHA-256 Webhook Verification (`ingestion/razorpay_webhook.py`, `backend/dependencies/security.py`)**: Validates the raw request body bytes against the `X-Razorpay-Signature` header using `hmac.compare_digest` in constant time. Malformed or unverified payloads are dropped with HTTP 401 Unauthorized before reaching application state.
+- **Razorpay Test-Mode Execution Adapter (`execution/razorpay_adapter.py`)**:
+  - Implements the `RecoveryExecutor` contract to call real Razorpay Test APIs via asynchronous HTTP (`httpx`).
+  - Methods include `fetch_payment_status(payment_id)` and `create_payment_link(payment_id, amount, customer_details)`.
+  - **Fail-Closed Credential Security**: Reads `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` from environment variables. If unconfigured or detected as placeholder text, the adapter safely fails closed, logging a sanitized warning and emitting an abstention/failure record without exposing secrets or crashing.

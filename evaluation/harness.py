@@ -100,12 +100,19 @@ class EvaluationHarness:
             if diag_to_check and diag_to_check.diagnosis_source == "deterministic_fallback":
                 fallback_count += 1
 
+            is_sched = (gov_decision.delay_seconds > 0 or gov_decision.timing_window in ("PLUS_2H", "PLUS_6H", "PLUS_12H", "PLUS_24H")) and effective_action != SimulatedActionType.NO_ACTION
+            is_immed = not is_sched and effective_action != SimulatedActionType.NO_ACTION
+
             record = MetricCalculator.create_record(
                 scenario_id=scenario.scenario_id,
                 policy_name=policy.name,
                 chosen_action=effective_action,
                 chosen_outcome=chosen_outcome,
                 natural_outcome=natural_outcome,
+                timing_window=gov_decision.timing_window,
+                delay_seconds=gov_decision.delay_seconds,
+                is_scheduled=is_sched,
+                is_immediate=is_immed,
                 predicted_diagnosis=diag_to_check.diagnosis_label.value if diag_to_check else None,
                 diagnosis_confidence=diag_to_check.confidence if diag_to_check else None,
                 diagnosis_source=diag_to_check.diagnosis_source if diag_to_check else None,

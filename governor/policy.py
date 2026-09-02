@@ -38,4 +38,6 @@ class MerchantPolicy(BaseModel):
         ],
         description="Whitelist of recovery action types approved by merchant",
     )
+    allow_delayed_execution: bool = Field(default=True, description="Whether merchant permits scheduled future actions")
+    min_delayed_diagnosis_confidence: float = Field(default=0.50, ge=0.0, le=1.0, description="Minimum diagnosis confidence for scheduled execution")
     consent_behavior: str = Field(default="STRICT_OPT_OUT", description="Consent enforcement mode (e.g. STRICT_OPT_OUT)")

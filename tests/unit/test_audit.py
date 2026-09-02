@@ -8,6 +8,8 @@ from evaluation.harness import EvaluationHarness
 from evaluation.metrics import DEFAULT_CHURN_PENALTY_PAISE_PER_CUSTOMER, EvaluationMetrics, MetricCalculator, ScenarioEvaluationRecord
 from evaluation.policies import AlwaysRetryPolicy, NoActionPolicy, ProbabilityOnlyPolicy, StaticRulePolicy
 from execution.simulator_executor import SimulatorExecutor
+from intelligence.schemas import DiagnosisLabel
+from policy.config import DeterministicPolicyConfig
 from policy.deterministic import DeterministicRecoveryPolicy
 from scripts.demo import (
     demo_case_1_abstention,
@@ -238,7 +240,17 @@ class TestAuditAndReplay:
     @pytest.mark.anyio
     async def test_replay_engine_reconstruction(self):
         """ReplayEngine must faithfully reconstruct decision traces from runtime outputs."""
-        runtime = AgentRuntime()
+        priors = {
+            DiagnosisLabel.TRANSIENT_GATEWAY_FAILURE: {
+                SimulatedActionType.NO_ACTION: 0.25,
+                SimulatedActionType.RETRY_NOW: 0.85,
+                SimulatedActionType.RETRY_LATER: 0.80,
+                SimulatedActionType.PAYMENT_LINK: 0.55,
+                SimulatedActionType.REMINDER: 0.45,
+            }
+        }
+        policy = DeterministicRecoveryPolicy(config=DeterministicPolicyConfig(allow_immediate_retry=True, estimated_action_priors=priors))
+        runtime = AgentRuntime(policy=policy)
         replay_engine = ReplayEngine()
 
         customer = SimulatedCustomer(

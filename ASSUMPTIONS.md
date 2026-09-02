@@ -57,5 +57,9 @@ This document explicitly details all foundational assumptions, modeling abstract
 ## 4. Systems & Persistence Assumptions
 
 ### 4.1 In-Memory Reference Storage
-- **Assumption**: For standalone testing and submission evaluation, `InMemoryEventStore`, `InMemoryIdempotencyTracker`, and `DecisionLogStore` operate in process memory.
-- **Implication**: Production deployments require distributed, persistent infrastructure (e.g. PostgreSQL event streams, Redis distributed locks, and S3 compliance logs).
+- **Assumption**: For standalone testing and submission evaluation, `InMemoryEventStore`, `InMemoryIdempotencyTracker`, `InMemoryScheduledStore`, and `DecisionLogStore` operate in process memory.
+- **Implication**: Production deployments require distributed, persistent infrastructure (e.g. PostgreSQL event streams, Redis distributed locks, temporal queues, and S3 compliance logs).
+
+### 4.2 Discrete Timing Windows & State Versioning
+- **Assumption**: Action timing is modeled across discrete candidate windows (`IMMEDIATE`, `PLUS_2H`, `PLUS_6H`, `PLUS_12H`, `PLUS_24H`) with expected net recovery estimates parameterized per mechanism-window pair. Scheduled actions record the aggregate state version at creation (`expected_state_version`) and revalidate against current aggregate state prior to execution.
+- **Implication**: Discrete timing provides deterministic, verifiable scheduling benchmarks. Production deployments can extend this with continuous-time survival analysis or time-to-event uplift models while preserving the Governor revalidation and stale invalidation lifecycle.

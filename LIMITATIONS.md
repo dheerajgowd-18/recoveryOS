@@ -19,9 +19,9 @@ In accordance with Track 03 engineering rigor, this document details the archite
 - **Current Implementation**: RecoveryOS acts as an autonomous execution agent making discrete per-cycle decisions (`NO_ACTION`, `RETRY_LATER`, `PAYMENT_LINK`, `REMINDER`).
 - **Limitation**: The agent does not engage in interactive, multi-turn natural language negotiations (e.g. conversational WhatsApp back-and-forth negotiating custom installment plans). Such workflows require human-in-the-loop escalation gates.
 
-### 1.4 Coarse Timing Selection vs Continuous Delay Optimization
-- **Current Implementation**: The policy chooses between discrete candidate actions (`RETRY_NOW` vs `RETRY_LATER` representing an optimal backoff window).
-- **Limitation**: The system does not compute continuous hour-by-hour timing windows or custom payday alignment. Durable scheduling is modeled via delay tags and backoff representations rather than an external distributed timer daemon.
+### 1.4 Discrete Bucket Timing Selection vs Continuous Delay Optimization
+- **Current Implementation**: The policy evaluates candidates across 5 discrete timing buckets (`IMMEDIATE`, `PLUS_2H`, `PLUS_6H`, `PLUS_12H`, `PLUS_24H`) and manages lifecycle state through `ScheduledLifecycleService`.
+- **Limitation**: The system does not perform continuous-time survival analysis, continuous mathematical delay optimization, or individual customer payday alignment. Discrete buckets provide transparent and verifiable deterministic scheduling benchmarks, but are not claimed to be a continuous causal timing optimizer.
 
 ### 1.5 Headless API & CLI Interface vs Operations Console
 - **Current Implementation**: RecoveryOS exposes a headless Python API, an interactive CLI audit tool (`scripts/demo.py`), and programmatic replay capabilities.

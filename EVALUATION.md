@@ -66,8 +66,13 @@ The evaluation harness benchmarks RecoveryOS against 4 standard industry baselin
 | **Fallback Count** | $\sum \mathbb{I}(\text{Source} = \text{fallback})$ | Invocations safely fallen back to deterministic offline rules |
 | **Governor Allowed** | $\sum \mathbb{I}(\text{Gov} = \text{ALLOW})$ | Total proposed actions approved by the Recovery Governor |
 | **Governor Denied** | $\sum \mathbb{I}(\text{Gov} = \text{DENY})$ | Total proposed actions blocked by merchant policies or limits |
+| **Governor Deferred** | $\sum \mathbb{I}(\text{Gov} = \text{DEFER})$ | Total actions postponed due to active cooldown windows |
 | **Human Escalations** | $\sum \mathbb{I}(\text{Gov} = \text{ESCALATE})$ | Total high-value or ambiguous cases routed to human review |
 | **Governor Abstentions** | $\sum \mathbb{I}(\text{Gov} = \text{ABSTAIN})$ | Total zero-intervention baseline decisions confirmed |
+| **Actions Scheduled** | $\sum \mathbb{I}(\text{Timing} \neq \text{IMMEDIATE})$ | Total actions persisted into the scheduled action lifecycle |
+| **Immediate Actions** | $\sum \mathbb{I}(\text{Timing} = \text{IMMEDIATE})$ | Total actions executed immediately without delay |
+| **Scheduled Invalidated** | $\sum \mathbb{I}(\text{Status} = \text{INVALIDATED})$ | Total scheduled actions canceled pre-execution due to organic capture |
+| **Scheduled Expired** | $\sum \mathbb{I}(\text{Status} = \text{EXPIRED})$ | Total scheduled actions expired past the recovery window |
 
 ---
 
@@ -85,6 +90,17 @@ baseline_2_static_rules      | INR 122,709 | INR 74.40  | INR 27,500 | INR 95,13
 baseline_3_probability_only  | INR 122,709 | INR 74.40  | INR 27,500 | INR 95,135   | INR 74,095   | 100   | 0     | 11   
 RECOVERYOS_DETERMINISTIC_V0  | INR 121,935 | INR 36.00  | INR 20,000 | INR 101,899  | INR 80,859   | 96    | 4     | 8    
 -------------------------------------------------------------------------------------------------------------------
+
+  GOVERNOR & SCHEDULER OPERATIONAL AUDIT COUNTERS:
+--------------------------------------------------------------------------------------------------------------
+Policy                       | Gov Allow | Gov Deny | Gov Abstain | Gov Defer | Human Review | Scheduled | Immediate
+--------------------------------------------------------------------------------------------------------------
+baseline_0_no_action         | 0         | 0        | 100         | 0         | 0            | 0         | 0
+baseline_1_always_retry      | 100       | 0        | 0           | 0         | 0            | 0         | 100
+baseline_2_static_rules      | 100       | 0        | 0           | 0         | 0            | 0         | 100
+baseline_3_probability_only  | 100       | 0        | 0           | 0         | 0            | 0         | 100
+RECOVERYOS_DETERMINISTIC_V0  | 96        | 0        | 4           | 0         | 0            | 75        | 21
+--------------------------------------------------------------------------------------------------------------
 ```
 
 ### Key Benchmark Takeaways
@@ -92,3 +108,93 @@ RECOVERYOS_DETERMINISTIC_V0  | INR 121,935 | INR 36.00  | INR 20,000 | INR 101,8
 2. **27% Lower Customer Churn**: RecoveryOS reduces customer churn from 11 churned customers down to 8 by eliminating spammy payment links on transient failures.
 3. **52% Action Cost Savings**: RecoveryOS incurs only ₹36.00 in execution costs compared to ₹74.40 under static rule heuristics.
 4. **Active Abstention (4 Avoided Actions)**: Correctly identifies micro-transactions with negative expected net recovery and refrains from wasteful dunning.
+5. **Operational Timing Optimization**: RecoveryOS schedules 75 delayed retries at high-success windows (e.g. +6h) while executing 21 immediate actions only when justified.
+
+---
+
+## 6. Expanded Evaluation Lab & Multi-Seed Methodology
+
+To eliminate sample bias and satisfy the Master Build Plan requirements for **batch proof**, RecoveryOS provides an expanded multi-seed benchmark runner (`evaluation/benchmark_runner.py`, `scripts/benchmark.py`).
+
+### Multi-Seed Statistical Aggregation
+Single-seed evaluations can be subject to random variance in scenario sampling. The multi-seed runner generates independent cohorts across a defined seed list, running all policies and computing sample standard deviation and 95% Confidence Intervals:
+$$\text{CI}_{95\%} = \bar{X} \pm 1.96 \cdot \frac{s}{\sqrt{N}}$$
+
+---
+
+## 7. Development vs. Holdout Dataset Split
+
+To prevent overfitting heuristic priors or policy parameters, the benchmark runner supports explicit split segregation:
+
+| Split Name | Seed Range | Purpose | Usage In Policy Tuning |
+| :--- | :--- | :--- | :--- |
+| **Development Set** | Seeds `42, 43, 44` (3,000 scenarios) | Hyperparameter calibration, timing curve tuning | Permitted |
+| **Holdout Set** | Seeds `45, 46` (2,000 scenarios) | Generalization verification on unseen scenarios | **Strictly Prohibited (Frozen)** |
+| **Combined Cohort** | Seeds `42–46` (5,000 scenarios) | Full population statistical benchmark & reports | Summary reporting |
+
+---
+
+## 8. Theoretical Counterfactual Oracle Benchmark
+
+The **Oracle Policy** (`evaluation/oracle.py`) acts as a diagnostic mathematical upper bound. It possesses perfect evaluator-side hindsight of the secret counterfactual potential outcome vector $Y(a)$ and selects the action maximizing incremental adjusted net recovery over the organic baseline:
+$$a^* = \arg\max_{a \in \mathcal{A}} \left[ \text{AdjustedNet}(a) - \text{AdjustedNet}(\text{NO\_ACTION}) \right]$$
+
+### Efficiency & Gap Metrics
+- **Oracle Incremental Adjusted Net**: Theoretical maximum possible incremental net recovery over $Y(\text{no\_action})$ ($\ge 0$).
+- **RecoveryOS Incremental Adjusted Net**: Realized incremental adjusted net recovery over natural recovery.
+- **Incremental Gap**: $\text{Oracle Incremental Adjusted Net} - \text{RecoveryOS Incremental Adjusted Net}$.
+- **Oracle Efficiency %**: $\frac{\text{RecoveryOS Incremental Adjusted Net}}{\text{Oracle Incremental Adjusted Net}} \times 100\%$.
+
+> [!NOTE]
+> The Oracle is never exposed to the agent or policy runtime. It is strictly evaluated post-hoc by the evaluation harness.
+
+---
+
+## 9. Decision Regret Calculation & Exact Mathematical Reconciliation
+
+For each scenario $i$, decision regret is computed evaluator-side against the optimal counterfactual choice:
+$$\text{Regret}_i = \text{OracleIncrementalAdjustedNet}_i - \text{ChosenIncrementalAdjustedNet}_i \ge 0$$
+
+Because the natural baseline is identical for both terms within scenario $i$:
+$$\text{Regret}_i = \text{RealizedAdjustedNet}(\text{OracleAction}_i) - \text{RealizedAdjustedNet}(\text{ChosenAction}_i)$$
+
+### Exact Population Reconciliation Identity
+Summing across all evaluated scenarios $i=1 \dots N$:
+$$\text{Total Regret} = \sum_{i=1}^N \text{Regret}_i = \sum_{i=1}^N \text{OracleIncrNet}_i - \sum_{i=1}^N \text{ChosenIncrNet}_i \equiv \text{Incremental Gap}$$
+$$\text{Mean Regret} = \frac{\text{Total Regret}}{N} = \frac{\text{Incremental Gap}}{N}$$
+
+The evaluation lab computes:
+- **Total Regret**: Cumulative economic value left on the table across the entire cohort (identically equals the Incremental Gap).
+- **Mean Regret** ($\bar{R}$): Average regret in paise per scenario.
+- **Median Regret**: Robust median measure of decision friction.
+- **P95 Regret ($P_{95}$)**: 95th percentile tail risk and failure bound.
+- **Zero-Regret Rate**: Proportion of scenarios where RecoveryOS made the bit-identical optimal choice to the Oracle.
+
+---
+
+## 10. Multi-Parameter Economic Sensitivity Matrix
+
+To prove robustness across different business models and cost regimes, the sensitivity engine (`evaluation/sensitivity.py`) performs a grid sweep across:
+- **Churn Friction Penalties**: ₹1,000, ₹2,500, ₹5,000 per churned customer.
+- **Action Cost Multipliers**: $0.5\times$ (low gateway fees), $1.0\times$ (standard), $2.0\times$ (high fees/surcharges).
+
+For each cell in the grid, the analyzer recalculates net economics and verifies whether RecoveryOS maintains superior incremental adjusted net recovery over all baseline benchmarks (`recoveryos_wins_bool`).
+
+---
+
+## 11. CLI Execution Guide
+
+### Fast 100-Scenario Interactive Showcase
+```bash
+python scripts/demo.py
+```
+
+### Multi-Seed Development & Holdout Benchmark (5,000 Scenarios)
+```bash
+python scripts/benchmark.py --scenarios 1000 --seeds 42,43,44 --holdout-seeds 45,46
+```
+
+### Single Seed Benchmark
+```bash
+python scripts/benchmark.py --scenarios 100 --seed 42
+```

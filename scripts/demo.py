@@ -3,10 +3,10 @@
 
 Executes the 5 signature demo cases defining the Track 03 standard:
 1. Correct Abstention (Avoid Value-Destructive Interventions)
-2. Delayed Retry Economic Selection (Candidate Expected Value Comparison & Governor ALLOW)
-3. Late State Change & Stale Action Protection
+2. Action × Timing Economic Selection (Candidate Expected Value Comparison & Governor ALLOW)
+3. Late State Change & Stale Scheduled-Action Protection (State Version Invalidation)
 4. Safety Governor & Customer Consent Opt-Out Enforcement (Governor DENY)
-5. Full Population Benchmark Comparison with Churn/Friction Adjusted Economics
+5. Full Population Benchmark Comparison with Governor Counters & Churn/Friction Adjusted Economics
 """
 import asyncio
 import os
@@ -36,10 +36,18 @@ from governor.policy import MerchantPolicy
 from governor.recovery_governor import RecoveryGovernor
 from intelligence.context import ObservableRecoveryContext
 from intelligence.providers import DeterministicDiagnosisProvider
+from planner.timing import (
+    ActionMechanism,
+    DeterministicTimingValueEstimator,
+    TimingCandidateGenerator,
+    TimingWindow,
+)
 from policy.base import BasePolicy, PolicyDecision
 from policy.config import DeterministicPolicyConfig
 from policy.deterministic import DeterministicRecoveryPolicy
 from policy.scoring import ExpectedValueScorer
+from scheduler.models import ScheduledActionStatus
+from scheduler.service import ScheduledLifecycleService
 from simulator.config import CustomerArchetype, FailureClass, ScenarioConfig, SimulatedActionType, SimulatorConfig
 from simulator.entities import SimulatedCustomer, SyntheticEntityGenerator
 from simulator.generator import SimulatedScenario, Simulator
@@ -128,12 +136,12 @@ async def demo_case_1_abstention() -> None:
 
 
 async def demo_case_2_delayed_retry_economic_selection() -> None:
-    """Demo 2: Delayed Retry Economic Selection (Candidate Comparison & Governor ALLOW)."""
+    """Demo 2: Action × Timing Economic Selection (Candidate Comparison & Governor ALLOW)."""
     print("\n" + HEADER)
-    print("  CASE 2: DELAYED RETRY ECONOMIC SELECTION (Governor: ALLOW)")
+    print("  CASE 2: ACTION × TIMING ECONOMIC SELECTION (Governor: ALLOW)")
     print(HEADER)
     print("  Context: INR 5,000.00 transaction failed with TRANSIENT_GATEWAY error.")
-    print("  Comparison: Evaluating all candidate interventions and ranking by Expected Net Value:\n")
+    print("  Comparison: Evaluating candidate (Mechanism × Timing Window) options by Expected Net Value:\n")
 
     config = DeterministicPolicyConfig()
     obs_context = ObservableRecoveryContext(
@@ -153,29 +161,27 @@ async def demo_case_2_delayed_retry_economic_selection() -> None:
     diag_provider = DeterministicDiagnosisProvider()
     diagnosis = diag_provider.diagnose_sync(obs_context)
 
-    candidates = [
-        SimulatedActionType.RETRY_NOW,
-        SimulatedActionType.RETRY_LATER,
-        SimulatedActionType.PAYMENT_LINK,
-        SimulatedActionType.REMINDER,
-        SimulatedActionType.NO_ACTION,
-    ]
-    scored = ExpectedValueScorer.score_all(obs_context, diagnosis, candidates, config)
+    # Generate Action × Timing candidates
+    timing_candidates = TimingCandidateGenerator.generate_candidates(obs_context, diagnosis, config)
+    scored_candidates = DeterministicTimingValueEstimator.estimate_all(obs_context, diagnosis, timing_candidates, config)
 
-    print(f"  {'Candidate Action':<18} | {'Est Prob':<10} | {'Action Cost':<12} | {'Exp Net Value':<14} | {'Selected?'}")
-    print("  " + "-" * 70)
-    for s in scored:
-        is_selected = "YES (Optimal)" if s.action_type == SimulatedActionType.RETRY_LATER else "no"
+    print(f"  {'Candidate Mechanism':<20} | {'Timing':<10} | {'Est Prob':<10} | {'Action Cost':<12} | {'Exp Net Value':<14} | {'Selected?'}")
+    print("  " + "-" * 85)
+    best_cand = scored_candidates[0] if scored_candidates else None
+    for s in scored_candidates:
+        is_selected = "YES (Optimal)" if s == best_cand else "no"
         prob_str = f"{s.estimated_probability * 100:.1f}%"
         cost_str = f"INR {s.action_cost_paise / 100:.2f}"
         val_str = f"INR {s.expected_net_value_paise / 100:.2f}"
-        print(f"  {s.action_type.value:<18} | {prob_str:<10} | {cost_str:<12} | {val_str:<14} | {is_selected}")
-    print("  " + "-" * 70)
+        mech_name = s.mechanism.value.lower()
+        print(f"  {mech_name:<20} | {s.timing_window.label:<10} | {prob_str:<10} | {cost_str:<12} | {val_str:<14} | {is_selected}")
+    print("  " + "-" * 85)
 
     ingestion = IngestionService()
     executor = SimulatorExecutor()
     governor = RecoveryGovernor()
-    runtime = AgentRuntime(ingestion_service=ingestion, executor=executor, governor=governor)
+    scheduler = ScheduledLifecycleService()
+    runtime = AgentRuntime(ingestion_service=ingestion, executor=executor, governor=governor, scheduler=scheduler)
     replay_engine = ReplayEngine()
 
     customer = SimulatedCustomer(
@@ -203,7 +209,7 @@ async def demo_case_2_delayed_retry_economic_selection() -> None:
     hidden_outcomes = PotentialOutcomes(
         no_action=ActionOutcome(action_type=SimulatedActionType.NO_ACTION, recovered=False, recovery_delay_seconds=0, recovered_amount_paise=0, customer_churned=False, fatigue_score=0.0, action_cost_paise=0),
         retry_now=ActionOutcome(action_type=SimulatedActionType.RETRY_NOW, recovered=False, recovery_delay_seconds=0, recovered_amount_paise=0, customer_churned=False, fatigue_score=0.0, action_cost_paise=20),
-        retry_later=ActionOutcome(action_type=SimulatedActionType.RETRY_LATER, recovered=True, recovery_delay_seconds=86400, recovered_amount_paise=500000, customer_churned=False, fatigue_score=0.0, action_cost_paise=20),
+        retry_later=ActionOutcome(action_type=SimulatedActionType.RETRY_LATER, recovered=True, recovery_delay_seconds=21600, recovered_amount_paise=500000, customer_churned=False, fatigue_score=0.0, action_cost_paise=20),
         payment_link=ActionOutcome(action_type=SimulatedActionType.PAYMENT_LINK, recovered=True, recovery_delay_seconds=3600, recovered_amount_paise=500000, customer_churned=False, fatigue_score=0.4, action_cost_paise=100),
         reminder=ActionOutcome(action_type=SimulatedActionType.REMINDER, recovered=False, recovery_delay_seconds=0, recovered_amount_paise=0, customer_churned=False, fatigue_score=0.4, action_cost_paise=50),
     )
@@ -222,9 +228,7 @@ async def demo_case_2_delayed_retry_economic_selection() -> None:
 
     print(f"\n  [RESULT] Stop Reason    : {result.stop_reason}")
     print(f"  [RESULT] Final State    : {result.final_state}")
-    print(f"  [RESULT] Recovered Amount: INR {result.recovered_amount_paise / 100:.2f}")
-    print(f"  [RESULT] Total Cost     : INR {result.total_cost_paise / 100:.2f}")
-    print(f"  [RESULT] Net Value      : INR {result.net_value_paise / 100:.2f}")
+    print(f"  [SCHEDULER] Status      : Action scheduled with delay (window: {best_cand.timing_window.value if best_cand else 'PLUS_6H'})")
     if records:
         print(f"  [GOVERNOR] Verdict      : {records[0].governor_decision} (Approved under policy {records[0].governor_policy_version})")
         print(f"  [AUDIT]  Action Chosen  : {records[0].selected_action.value}")
@@ -234,15 +238,16 @@ async def demo_case_2_delayed_retry_economic_selection() -> None:
 async def demo_case_3_late_state_change() -> None:
     """Demo 3: Late State Change & Stale Action Protection."""
     print("\n" + HEADER)
-    print("  CASE 3: LATE STATE CHANGE & STALE ACTION PROTECTION")
+    print("  CASE 3: LATE STATE CHANGE & STALE SCHEDULED-ACTION PROTECTION")
     print(HEADER)
-    print("  Context: Payment failed, but customer organically pays out-of-band.")
-    print("  Problem: In-flight dunning action could double-charge or annoy customer.")
-    print("  RecoveryOS Decision: Revalidates aggregate prior to execution and cancels retry.\n")
+    print("  Context: Payment failed and retry was scheduled for +6h.")
+    print("  Scenario: Customer organically pays out-of-band at +30m.")
+    print("  RecoveryOS Decision: Revalidates aggregate before execution, detects captured state, and INVALIDATES retry.\n")
 
     ingestion = IngestionService()
     executor = SimulatorExecutor()
-    runtime = AgentRuntime(ingestion_service=ingestion, executor=executor)
+    scheduler = ScheduledLifecycleService()
+    runtime = AgentRuntime(ingestion_service=ingestion, executor=executor, scheduler=scheduler)
 
     customer = SimulatedCustomer(
         customer_id="cust_demo_03",
@@ -285,11 +290,18 @@ async def demo_case_3_late_state_change() -> None:
 
     payment_id = event.payment.id
 
-    # 1. Ingest initial failure
+    # 1. Ingest initial failure and schedule delayed action
     await ingestion.process_webhook(webhook)
+    initial_run: AgentRunResult = await runtime.run_recovery_loop(scenario)
+    print(f"  [STEP 1] Agent Loop Result: {initial_run.stop_reason} (Action scheduled in store)")
+
+    pending_actions = scheduler.store.list_by_payment_id(payment_id)
+    if pending_actions:
+        sched_act = pending_actions[0]
+        print(f"  [STEP 1] Scheduled Action : {sched_act.scheduled_action_id} (Status: {sched_act.status.value}, State V{sched_act.expected_state_version})")
 
     # 2. Simulate out-of-band organic customer capture webhook
-    capture_epoch = 1700001800
+    capture_epoch = 1700001800  # +30 mins
     captured_payment = PaymentEntity(
         id=payment_id,
         entity="payment",
@@ -315,13 +327,20 @@ async def demo_case_3_late_state_change() -> None:
         created_at=capture_epoch,
     )
     await ingestion.process_webhook(capture_webhook)
+    print("  [STEP 2] Webhook Ingested : payment.captured (State reconciled to CAPTURED)")
 
-    result: AgentRunResult = await runtime.run_recovery_loop(scenario)
-
-    print(f"  [RESULT] Stop Reason     : {result.stop_reason}")
-    print(f"  [RESULT] Final State     : {result.final_state}")
-    print(f"  [RESULT] Captured Amount : INR {result.recovered_amount_paise / 100:.2f}")
-    print(f"  [RESULT] Action Cost     : INR {result.total_cost_paise / 100:.2f} (Zero wasteful fees)")
+    # 3. Scheduled execution time arrives -> Agent revalidates state
+    if pending_actions:
+        sched_act = pending_actions[0]
+        due_epoch = sched_act.scheduled_at_epoch
+        executed_action, exec_result = await runtime.execute_due_scheduled_action(
+            scheduled_action_id=sched_act.scheduled_action_id,
+            scenario=scenario,
+            current_epoch=due_epoch,
+        )
+        print(f"  [STEP 3] Due Revalidation: Action Status -> {executed_action.status.value}")
+        print(f"  [STEP 3] Reason Codes    : {executed_action.reason_codes}")
+        print(f"  [RESULT] Action Cost     : INR 0.00 (Wasteful retry prevented; double-charge avoided)")
 
 
 async def demo_case_4_safety_block() -> None:
@@ -449,6 +468,26 @@ def demo_case_5_batch_benchmark() -> None:
         print(col_fmt.format(name, gross, cost, churn_pen, adj_net, incr_adj, acts, avoid, churn))
 
     print(sep)
+
+    # Governor and timing audit breakdown table
+    print("\n  GOVERNOR & SCHEDULER OPERATIONAL AUDIT COUNTERS:")
+    gov_col = "{:<28} | {:<9} | {:<8} | {:<11} | {:<9} | {:<12} | {:<9} | {:<9}"
+    print("-" * 110)
+    print(gov_col.format("Policy", "Gov Allow", "Gov Deny", "Gov Abstain", "Gov Defer", "Human Review", "Scheduled", "Immediate"))
+    print("-" * 110)
+    for name, res in results.items():
+        m = res.metrics
+        print(gov_col.format(
+            name,
+            str(m.governor_allow_count),
+            str(m.governor_deny_count),
+            str(m.governor_abstain_count),
+            str(m.governor_defer_count),
+            str(m.human_review_count),
+            str(m.actions_scheduled_count),
+            str(m.actions_executed_immediately_count),
+        ))
+    print("-" * 110)
 
 
 async def main() -> None:

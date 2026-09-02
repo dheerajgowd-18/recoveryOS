@@ -19,6 +19,8 @@ class PolicyDecision(BaseModel):
     reason_codes: List[str] = Field(default_factory=list, description="Machine-readable audit reason tags")
     expected_net_value_paise: Optional[int] = Field(default=None, description="Estimated net recovery in paise")
     expected_incremental_value_paise: Optional[int] = Field(default=None, description="Estimated incremental uplift in paise")
+    timing_window: Optional[str] = Field(default=None, description="Timing window bucket (e.g. IMMEDIATE, PLUS_2H, PLUS_6H)")
+    delay_seconds: int = Field(default=0, ge=0, description="Scheduled delay in seconds")
     diagnosis: Optional[StructuredDiagnosis] = Field(default=None, description="Structured diagnosis utilized in decisioning")
 
 

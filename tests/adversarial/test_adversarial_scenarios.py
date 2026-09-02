@@ -249,7 +249,8 @@ class TestAgentRuntimeAdversarialFaultHandling:
         scenario = create_sample_scenario("scen_adv_timeout")
         fault_config = ExecutionFaultConfig(force_timeout=True)
         faulty_executor = SimulatorExecutor(fault_config=fault_config)
-        runtime = AgentRuntime(executor=faulty_executor)
+        forced_policy = ForcedActionPolicy(action_type=SimulatedActionType.RETRY_NOW)
+        runtime = AgentRuntime(policy=forced_policy, executor=faulty_executor)
 
         result: AgentRunResult = await runtime.run_recovery_loop(scenario)
 
@@ -265,7 +266,8 @@ class TestAgentRuntimeAdversarialFaultHandling:
         scenario = create_sample_scenario("scen_adv_conn_err")
         fault_config = ExecutionFaultConfig(force_connection_error=True)
         faulty_executor = SimulatorExecutor(fault_config=fault_config)
-        runtime = AgentRuntime(executor=faulty_executor)
+        forced_policy = ForcedActionPolicy(action_type=SimulatedActionType.RETRY_NOW)
+        runtime = AgentRuntime(policy=forced_policy, executor=faulty_executor)
 
         result: AgentRunResult = await runtime.run_recovery_loop(scenario)
 

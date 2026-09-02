@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RecoveryOS — Operations Console</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            850: '#111827',
+                            900: '#0f172a',
+                            950: '#030712',
+                        },
+                        brand: {
+                            500: '#0284c7',
+                            600: '#0369a1',
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Alpine.js CDN -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .tabular-nums { font-variant-numeric: tabular-nums; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #030712; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #334155; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen antialiased flex flex-col font-sans" x-data="dashboardApp()" x-init="initApp()">
+
+    <!-- Top Navigation Bar -->
+    <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+            <!-- Left Branding -->
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-2.5">
+                    <div class="w-7 h-7 rounded bg-blue-600 flex items-center justify-center font-bold text-white text-sm shadow-sm">
+                        R
+                    </div>
+                    <span class="font-semibold text-slate-100 tracking-tight text-base">RecoveryOS</span>
+                    <span class="text-xs font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">v1.5.0</span>
+                </div>
+                <div class="hidden md:flex items-center space-x-2 pl-3 border-l border-slate-800 text-xs text-slate-400">
+                    <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span class="font-mono">LIVE OPERATIONS</span>
+                    <span class="text-slate-600">|</span>
+                    <span>Merchant: <strong class="text-slate-300 font-mono" x-text="policies.merchant_id || 'mer_rzp_live_2026'"></strong></span>
+                </div>
+            </div>
+
+            <!-- Center Navigation Tabs -->
+            <nav class="flex space-x-1 sm:space-x-2">
+                <button @click="setTab('control_room')"
+                    :class="activeTab === 'control_room' ? 'bg-slate-800 text-white border-b-2 border-blue-500' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'"
+                    class="px-3 py-1.5 rounded-t text-xs sm:text-sm font-medium transition-colors flex items-center space-x-1.5">
+                    <span>Control Room</span>
+                </button>
+                <button @click="setTab('queue')"
+                    :class="activeTab === 'queue' ? 'bg-slate-800 text-white border-b-2 border-blue-500' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'"
+                    class="px-3 py-1.5 rounded-t text-xs sm:text-sm font-medium transition-colors flex items-center space-x-1.5">
+                    <span>Recovery Queue</span>
+                    <span class="px-1.5 py-0.2 rounded-full bg-blue-950 text-blue-400 border border-blue-800 text-xs font-mono" x-text="queue.length"></span>
+                </button>
+                <button @click="setTab('replay')"
+                    :class="activeTab === 'replay' ? 'bg-slate-800 text-white border-b-2 border-blue-500' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'"
+                    class="px-3 py-1.5 rounded-t text-xs sm:text-sm font-medium transition-colors flex items-center space-x-1.5">
+                    <span>Case Replay</span>
+                </button>
+                <button @click="setTab('evaluation')"
+                    :class="activeTab === 'evaluation' ? 'bg-slate-800 text-white border-b-2 border-blue-500' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'"
+                    class="px-3 py-1.5 rounded-t text-xs sm:text-sm font-medium transition-colors flex items-center space-x-1.5">
+                    <span>Evaluation Lab</span>
+                </button>
+                <button @click="setTab('exceptions')"
+                    :class="activeTab === 'exceptions' ? 'bg-slate-800 text-white border-b-2 border-blue-500' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'"
+                    class="px-3 py-1.5 rounded-t text-xs sm:text-sm font-medium transition-colors flex items-center space-x-1.5">
+                    <span>Exceptions & Audit</span>
+                    <span x-show="exceptions.length > 0" class="px-1.5 py-0.2 rounded-full bg-amber-950 text-amber-400 border border-amber-800 text-xs font-mono" x-text="exceptions.length"></span>
+                </button>
+            </nav>
+
+            <!-- Right Controls -->
+            <div class="flex items-center space-x-3">
+                <button @click="refreshAll()" :disabled="loading" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition text-xs flex items-center space-x-1">
+                    <svg class="w-3.5 h-3.5" :class="{'animate-spin': loading}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    <span class="hidden sm:inline">Refresh</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+
+        <!-- ========================================== -->
+        <!-- TAB 1: CONTROL ROOM                       -->
+        <!-- ========================================== -->
+        <div x-show="activeTab === 'control_room'" x-cloak class="space-y-6">
+            <!-- Header Title -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-slate-800/80 gap-2">
+                <div>
+                    <h1 class="text-lg font-semibold text-slate-100">Merchant Control Room</h1>
+                    <p class="text-xs text-slate-400">Autonomous revenue recovery surveillance, economic yield, and policy safety telemetry.</p>
+                </div>
+                <div class="flex items-center space-x-3 text-xs">
+                    <div class="px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-slate-300 font-mono">
+                        Automation Mode: <span class="text-emerald-400 font-semibold" x-text="controlRoom.agent_mode || 'AUTONOMOUS'"></span>
+                    </div>
+                    <div class="px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-slate-300 font-mono">
+                        System: <span class="text-emerald-400 font-semibold">HEALTHY</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Compact KPI Strip -->
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                <div class="p-3.5 rounded-lg bg-slate-900 border border-slate-800 flex flex-col justify-between">
+                    <span class="text-xs text-slate-400 font-medium">Revenue at Risk</span>
+                    <div class="mt-2 flex items-baseline justify-between">
+                        <span class="text-lg sm:text-xl font-bold font-mono tabular-nums text-slate-100" x-text="'₹' + formatInr(controlRoom.revenue_at_risk_inr)"></span>
+                    </div>
+                    <span class="text-[10px] text-slate-500 mt-1 font-mono">Active cohort failed payments</span>
+                </div>
+
+                <div class="p-3.5 rounded-lg bg-slate-900 border border-slate-800 flex flex-col justify-between">
+                    <span class="text-xs text-slate-400 font-medium">Gross Recovered</span>
+                    <div class="mt-2 flex items-baseline justify-between">
+                        <span class="text-lg sm:text-xl font-bold font-mono tabular-nums text-emerald-400" x-text="'₹' + formatInr(controlRoom.gross_recovered_inr)"></span>
+                    </div>
+                    <span class="text-[10px] text-emerald-500/80 mt-1 font-mono">Captured revenue</span>
+                </div>
+
+                <div class="p-3.5 rounded-lg bg-slate-900 border border-blue-900/60 bg-gradient-to-b from-blue-950/20 to-slate-900 flex flex-col justify-between">
+                    <span class="text-xs text-blue-400 font-semibold">Incremental Net Recovery</span>
+                    <div class="mt-2 flex items-baseline justify-between">
+                        <span class="text-lg sm:text-xl font-bold font-mono tabular-nums text-blue-300" x-text="'₹' + formatInr(controlRoom.incremental_recovered_inr)"></span>
+                    </div>
+                    <span class="text-[10px] text-blue-400/80 mt-1 font-mono">True causal uplift over baseline</span>
+                </div>
+
+                <div class="p-3.5 rounded-lg bg-slate-900 border border-slate-800 flex flex-col justify-between">
+                    <span class="text-xs text-slate-400 font-medium">Adjusted Net Recovery</span>
+                    <div class="mt-2 flex items-baseline justify-between">
+                        <span class="text-lg sm:text-xl font-bold font-mono tabular-nums text-slate-200" x-text="'₹' + formatInr(controlRoom.net_adjusted_recovery_inr)"></span>
+                    </div>
+                    <span class="text-[10px] text-slate-500 mt-1 font-mono">Net of gateway costs & churn penalty</span>
+                </div>
+
+                <div class="p-3.5 rounded-lg bg-slate-900 border border-slate-800 col-span-2 md:col-span-4 lg:col-span-1 flex flex-col justify-between">
+                    <span class="text-xs text-slate-400 font-medium">Active Opportunities</span>
+                    <div class="mt-2 flex items-baseline justify-between">
+                        <span class="text-lg sm:text-xl font-bold font-mono tabular-nums text-amber-400" x-text="controlRoom.open_recovery_opportunities || 0"></span>
+                        <span class="text-xs text-slate-400 font-mono" x-text="controlRoom.actions_executed + ' executed'"></span>
+                    </div>
+                    <span class="text-[10px] text-slate-500 mt-1 font-mono" x-text="controlRoom.actions_avoided + ' deliberately avoided'"></span>
+                </div>
+            </div>
+
+            <!-- Secondary Operational Metric Grid -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div class="p-2.5 rounded bg-slate-900/60 border border-slate-800/80 flex items-center justify-between">
+                    <span class="text-slate-400">Interventions Executed:</span>
+                    <span class="font-mono font-bold text-slate-200" x-text="controlRoom.actions_executed"></span>
+                </div>
+                <div class="p-2.5 rounded bg-slate-900/60 border border-slate-800/80 flex items-center justify-between">
+                    <span class="text-slate-400">Interventions Avoided:</span>
+                    <span class="font-mono font-bold text-emerald-400" x-text="controlRoom.actions_avoided"></span>
+                </div>
+                <div class="p-2.5 rounded bg-slate-900/60 border border-slate-800/80 flex items-center justify-between">
+                    <span class="text-slate-400">Policy / Consent Blocks:</span>
+                    <span class="font-mono font-bold text-rose-400" x-text="controlRoom.policy_blocks"></span>
+                </div>
+                <div class="p-2.5 rounded bg-slate-900/60 border border-slate-800/80 flex items-center justify-between">
+                    <span class="text-slate-400">Human Reviews Escalated:</span>
+                    <span class="font-mono font-bold text-amber-400" x-text="controlRoom.human_reviews"></span>
+                </div>
+            </div>
+
+            <!-- Real-Time Activity Feed & Operational Status -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Activity Feed Table (2 Cols) -->
+                <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-lg overflow-hidden flex flex-col">
+                    <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                            <h2 class="text-xs font-semibold text-slate-200 tracking-wide uppercase">Real-Time Autonomous Activity Stream</h2>
+                        </div>
+                        <span class="text-[11px] font-mono text-slate-400" x-text="controlRoom.recent_activity ? controlRoom.recent_activity.length + ' latest events' : ''"></span>
+                    </div>
+
+                    <div class="overflow-x-auto flex-1">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-950/60 text-slate-400 border-b border-slate-800 font-mono text-[11px]">
+                                <tr>
+                                    <th class="px-3.5 py-2">Timestamp</th>
+                                    <th class="px-3.5 py-2">Payment ID</th>
+                                    <th class="px-3.5 py-2">Amount</th>
+                                    <th class="px-3.5 py-2">Diagnosis</th>
+                                    <th class="px-3.5 py-2">Action</th>
+                                    <th class="px-3.5 py-2">Governor</th>
+                                    <th class="px-3.5 py-2 text-right">Inspect</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800/60 text-slate-300">
+                                <template x-for="item in controlRoom.recent_activity" :key="item.decision_id">
+                                    <tr class="hover:bg-slate-800/40 transition-colors">
+                                        <td class="px-3.5 py-2 font-mono text-slate-400" x-text="item.time_str"></td>
+                                        <td class="px-3.5 py-2 font-mono text-slate-200" x-text="item.payment_id"></td>
+                                        <td class="px-3.5 py-2 font-mono font-semibold tabular-nums text-slate-100" x-text="'₹' + item.amount_inr.toFixed(2)"></td>
+                                        <td class="px-3.5 py-2">
+                                            <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-300 border border-slate-700" x-text="item.diagnosis"></span>
+                                        </td>
+                                        <td class="px-3.5 py-2 font-mono" x-text="item.action + ' (' + item.timing + ')'"></td>
+                                        <td class="px-3.5 py-2">
+                                            <span :class="{
+                                                'bg-emerald-950 text-emerald-300 border-emerald-800': item.governor === 'ALLOW',
+                                                'bg-rose-950 text-rose-300 border-rose-800': item.governor === 'DENY',
+                                                'bg-amber-950 text-amber-300 border-amber-800': item.governor === 'ESCALATE' || item.governor === 'DEFER',
+                                                'bg-slate-800 text-slate-300 border-slate-700': item.governor === 'ABSTAIN'
+                                            }" class="px-1.5 py-0.5 rounded text-[10px] font-mono border font-semibold" x-text="item.governor"></span>
+                                        </td>
+                                        <td class="px-3.5 py-2 text-right">
+                                            <button @click="inspectCase(item.decision_id)" class="text-blue-400 hover:text-blue-300 text-xs font-mono underline">
+                                                Replay &rarr;
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Right Side: Active Policy Snapshot (1 Col) -->
+                <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-4 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                            <h3 class="text-xs font-semibold text-slate-200 uppercase tracking-wide">Governor Policy Parameters</h3>
+                            <span class="text-[10px] font-mono text-emerald-400 bg-emerald-950 px-1.5 py-0.5 rounded border border-emerald-800">ENFORCED</span>
+                        </div>
+                        <div class="mt-3 space-y-2.5 text-xs">
+                            <div class="flex justify-between items-center text-slate-400">
+                                <span>Policy Version:</span>
+                                <span class="font-mono text-slate-200" x-text="policies.policy_version || 'v1.0.0'"></span>
+                            </div>
+                            <div class="flex justify-between items-center text-slate-400">
+                                <span>Autonomous Limit:</span>
+                                <span class="font-mono text-slate-200" x-text="'₹' + (policies.max_autonomous_amount_inr || 100000).toLocaleString()"></span>
+                            </div>
+                            <div class="flex justify-between items-center text-slate-400">
+                                <span>Auto-Escalate Threshold:</span>
+                                <span class="font-mono text-slate-200" x-text="'₹' + (policies.auto_escalate_amount_inr || 50000).toLocaleString()"></span>
+                            </div>
+                            <div class="flex justify-between items-center text-slate-400">
+                                <span>Max Total Retries:</span>
+                                <span class="font-mono text-slate-200" x-text="policies.max_retry_attempts_total || 3"></span>
+                            </div>
+                            <div class="flex justify-between items-center text-slate-400">
+                                <span>24h Contact Limit:</span>
+                                <span class="font-mono text-slate-200" x-text="policies.contact_limit_24h || 2"></span>
+                            </div>
+                            <div class="flex justify-between items-center text-slate-400">
+                                <span>Min Cooldown:</span>
+                                <span class="font-mono text-slate-200" x-text="(policies.min_cooldown_hours_between_attempts || 4) + ' hours'"></span>
+                            </div>
+                            <div class="flex justify-between items-center text-slate-400">
+                                <span>Explicit Consent Req:</span>
+                                <span class="font-mono text-emerald-400" x-text="policies.require_explicit_consent_for_contact ? 'YES (STRICT)' : 'NO'"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-2.5 rounded bg-slate-950 border border-slate-800 text-[11px] text-slate-400">
+                        <strong class="text-slate-300">Tool Firewall Notice:</strong> Independent second line of defense validates state version and customer consent immediately prior to adapter dispatch.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- TAB 2: RECOVERY QUEUE                     -->
+        <!-- ========================================== -->
+        <div x-show="activeTab === 'queue'" x-cloak class="space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-slate-800/80 gap-2">
+                <div>
+                    <h1 class="text-lg font-semibold text-slate-100">Recovery Queue</h1>
+                    <p class="text-xs text-slate-400">Operational ledger of failed transactions, candidate uplift valuations, and governance statuses.</p>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <input type="text" x-model="searchQuery" placeholder="Filter by Payment ID, Diagnosis..." class="px-3 py-1.5 rounded bg-slate-900 border border-slate-800 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 w-64">
+                </div>
+            </div>
+
+            <!-- Queue Table -->
+            <div class="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-950 text-slate-400 border-b border-slate-800 font-mono text-[11px]">
+                            <tr>
+                                <th class="px-3.5 py-2.5">Priority</th>
+                                <th class="px-3.5 py-2.5">Payment ID</th>
+                                <th class="px-3.5 py-2.5">Amount</th>
+                                <th class="px-3.5 py-2.5">State</th>
+                                <th class="px-3.5 py-2.5">Root Diagnosis</th>
+                                <th class="px-3.5 py-2.5">Recommended Action</th>
+                                <th class="px-3.5 py-2.5">Timing Window</th>
+                                <th class="px-3.5 py-2.5">Expected Uplift</th>
+                                <th class="px-3.5 py-2.5">Governor Verdict</th>
+                                <th class="px-3.5 py-2.5 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800/60 text-slate-300">
+                            <template x-for="item in filteredQueue" :key="item.case_id">
+                                <tr class="hover:bg-slate-800/40 transition-colors cursor-pointer" @click="inspectCase(item.case_id)">
+                                    <td class="px-3.5 py-2.5 font-mono">
+                                        <span :class="{
+                                            'text-rose-400 font-bold': item.priority === 'CRITICAL',
+                                            'text-amber-400 font-semibold': item.priority === 'HIGH',
+                                            'text-blue-400': item.priority === 'MEDIUM',
+                                            'text-slate-400': item.priority === 'LOW'
+                                        }" x-text="item.priority"></span>
+                                    </td>
+                                    <td class="px-3.5 py-2.5 font-mono font-medium text-slate-200" x-text="item.payment_id"></td>
+                                    <td class="px-3.5 py-2.5 font-mono font-bold tabular-nums text-slate-100" x-text="'₹' + item.amount_inr.toFixed(2)"></td>
+                                    <td class="px-3.5 py-2.5">
+                                        <span :class="{
+                                            'bg-emerald-950 text-emerald-300 border-emerald-800': item.current_state === 'CAPTURED',
+                                            'bg-purple-950 text-purple-300 border-purple-800': item.current_state === 'SCHEDULED',
+                                            'bg-rose-950 text-rose-300 border-rose-800': item.current_state === 'FAILED' || item.current_state === 'OPTED_OUT',
+                                            'bg-amber-950 text-amber-300 border-amber-800': item.current_state === 'ESCALATED'
+                                        }" class="px-2 py-0.5 rounded text-[10px] font-mono border font-semibold" x-text="item.current_state"></span>
+                                    </td>
+                                    <td class="px-3.5 py-2.5">
+                                        <div class="flex items-center space-x-1.5">
+                                            <span class="font-medium text-slate-200" x-text="item.diagnosis_label"></span>
+                                            <span class="text-[10px] font-mono text-slate-400" x-text="'(' + item.diagnosis_confidence + '%)'"></span>
+                                        </div>
+                                    </td>
+                                    <td class="px-3.5 py-2.5 font-mono text-slate-200" x-text="item.recommended_action"></td>
+                                    <td class="px-3.5 py-2.5 font-mono text-slate-400" x-text="item.timing_window"></td>
+                                    <td class="px-3.5 py-2.5 font-mono font-semibold tabular-nums text-blue-400" x-text="'₹' + item.expected_incremental_value_inr.toFixed(2)"></td>
+                                    <td class="px-3.5 py-2.5">
+                                        <span :class="{
+                                            'bg-emerald-950 text-emerald-300 border-emerald-800': item.governance_status === 'ALLOW',
+                                            'bg-rose-950 text-rose-300 border-rose-800': item.governance_status === 'DENY',
+                                            'bg-amber-950 text-amber-300 border-amber-800': item.governance_status === 'ESCALATE' || item.governance_status === 'DEFER',
+                                            'bg-slate-800 text-slate-300 border-slate-700': item.governance_status === 'ABSTAIN'
+                                        }" class="px-1.5 py-0.5 rounded text-[10px] font-mono border font-semibold" x-text="item.governance_status"></span>
+                                    </td>
+                                    <td class="px-3.5 py-2.5 text-right font-mono text-blue-400 hover:text-blue-300">
+                                        Replay &rarr;
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- TAB 3: CASE REPLAY                        -->
+        <!-- ========================================== -->
+        <div x-show="activeTab === 'replay'" x-cloak class="space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-slate-800/80 gap-2">
+                <div>
+                    <h1 class="text-lg font-semibold text-slate-100">Case Decision Replay</h1>
+                    <p class="text-xs text-slate-400">Step-by-step provenance reconstruction of autonomous reasoning, risk boundaries, and Governor decisions.</p>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <label class="text-xs text-slate-400">Select Case:</label>
+                    <select x-model="selectedCaseId" @change="fetchCaseReplay(selectedCaseId)" class="px-3 py-1.5 rounded bg-slate-900 border border-slate-800 text-xs text-slate-200 font-mono focus:outline-none focus:border-blue-500">
+                        <template x-for="item in queue" :key="item.case_id">
+                            <option :value="item.case_id" x-text="item.payment_id + ' (₹' + item.amount_inr.toFixed(2) + ' - ' + item.diagnosis_label + ')'"></option>
+                        </template>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Active Case Header Banner -->
+            <div x-show="currentReplay" class="p-4 rounded-lg bg-slate-900 border border-slate-800 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-mono">
+                <div>
+                    <span class="text-slate-500 text-[10px] block">PAYMENT ID</span>
+                    <span class="text-slate-100 font-bold text-sm" x-text="currentReplay?.payment_id"></span>
+                </div>
+                <div>
+                    <span class="text-slate-500 text-[10px] block">AMOUNT</span>
+                    <span class="text-slate-100 font-bold text-sm" x-text="'₹' + (currentReplay?.amount_inr || 0).toFixed(2)"></span>
+                </div>
+                <div>
+                    <span class="text-slate-500 text-[10px] block">FINAL STATUS</span>
+                    <span class="text-emerald-400 font-bold text-sm" x-text="currentReplay?.current_state"></span>
+                </div>
+                <div>
+                    <span class="text-slate-500 text-[10px] block">TIMESTAMP</span>
+                    <span class="text-slate-300" x-text="currentReplay?.timestamp_str"></span>
+                </div>
+            </div>
+
+            <!-- Why We Acted / Why We Did Not Act Explanation Cards -->
+            <div x-show="currentReplay" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                <div class="p-4 rounded-lg bg-blue-950/20 border border-blue-900/40 space-y-1.5">
+                    <div class="flex items-center space-x-1.5 text-blue-400 font-semibold">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <span>Why We Acted (Autonomous Rationale)</span>
+                    </div>
+                    <p class="text-slate-300 leading-relaxed" x-text="currentReplay?.why_acted"></p>
+                </div>
+
+                <div class="p-4 rounded-lg bg-slate-900 border border-slate-800 space-y-1.5">
+                    <div class="flex items-center space-x-1.5 text-slate-300 font-semibold">
+                        <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                        <span>Why We Did Not Act / Alternatives Excluded</span>
+                    </div>
+                    <p class="text-slate-300 leading-relaxed" x-text="currentReplay?.why_did_not_act"></p>
+                </div>
+            </div>
+
+            <!-- Chronological Decision Steps Timeline -->
+            <div x-show="currentReplay" class="space-y-4">
+                <h3 class="text-xs font-semibold text-slate-200 tracking-wide uppercase">Chronological Decision Execution Trace</h3>
+
+                <div class="space-y-3 relative before:absolute before:inset-0 before:left-3.5 before:w-0.5 before:bg-slate-800">
+                    <template x-for="step in currentReplay?.steps" :key="step.step_index">
+                        <div class="relative flex items-start space-x-3 pl-8">
+                            <!-- Bullet Icon -->
+                            <div class="absolute left-1.5 top-2.5 w-4 h-4 rounded-full bg-slate-900 border-2 border-blue-500 flex items-center justify-center -translate-x-1/2">
+                                <span class="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+                            </div>
+
+                            <!-- Step Content Card -->
+                            <div class="w-full bg-slate-900 border border-slate-800 rounded-lg p-3.5 space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-2">
+                                        <span class="text-xs font-mono text-slate-500" x-text="'STEP ' + step.step_index"></span>
+                                        <h4 class="text-xs font-bold text-slate-100" x-text="step.title"></h4>
+                                    </div>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-slate-800 text-blue-300 border border-slate-700" x-text="step.badge"></span>
+                                </div>
+
+                                <p class="text-xs text-slate-300" x-text="step.explanation"></p>
+
+                                <!-- Details JSON Snapshot -->
+                                <div class="mt-2 p-2.5 rounded bg-slate-950 border border-slate-850 font-mono text-[11px] text-slate-400 overflow-x-auto">
+                                    <pre x-text="JSON.stringify(step.details, null, 2)"></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- TAB 4: EVALUATION LAB                     -->
+        <!-- ========================================== -->
+        <div x-show="activeTab === 'evaluation'" x-cloak class="space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-slate-800/80 gap-2">
+                <div>
+                    <h1 class="text-lg font-semibold text-slate-100">Evaluation Lab</h1>
+                    <p class="text-xs text-slate-400">Batch proof, multi-seed statistical aggregation, theoretical Oracle ceiling, and regret bounds.</p>
+                </div>
+                <div class="flex items-center space-x-2 text-xs font-mono">
+                    <span class="px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-slate-300">
+                        Scenarios: <strong class="text-blue-400" x-text="evalData.config?.total_scenarios || 0"></strong>
+                    </span>
+                    <span class="px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-slate-300">
+                        Churn Penalty: <strong class="text-slate-100" x-text="'₹' + (evalData.config?.churn_penalty_inr || 2500)"></strong>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Oracle Ceiling & Regret KPI Banner -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                <div class="p-3.5 rounded-lg bg-slate-900 border border-slate-800">
+                    <span class="text-slate-400 font-medium">Oracle Incremental Net</span>
+                    <div class="mt-1 text-lg font-bold font-mono text-purple-400 tabular-nums" x-text="'₹' + formatInr(evalData.oracle_comparison?.oracle_incremental_adjusted_net_inr || 0)"></div>
+                    <span class="text-[10px] text-slate-500 font-mono">Theoretical hindsight ceiling</span>
+                </div>
+
+                <div class="p-3.5 rounded-lg bg-slate-900 border border-blue-900/60">
+                    <span class="text-blue-400 font-medium">RecoveryOS Efficiency</span>
+                    <div class="mt-1 text-lg font-bold font-mono text-blue-300 tabular-nums" x-text="(evalData.oracle_comparison?.efficiency_pct || 0) + '%'"></div>
+                    <span class="text-[10px] text-blue-400/80 font-mono" x-text="'Gap: ₹' + formatInr(evalData.oracle_comparison?.incremental_gap_inr || 0)"></span>
+                </div>
+
+                <div class="p-3.5 rounded-lg bg-slate-900 border border-slate-800">
+                    <span class="text-slate-400 font-medium">Mean Regret Per Case</span>
+                    <div class="mt-1 text-lg font-bold font-mono text-slate-200 tabular-nums" x-text="'₹' + formatInr(evalData.regret_distribution?.mean_regret_inr || 0)"></div>
+                    <span class="text-[10px] text-slate-500 font-mono" x-text="'P95 Regret: ₹' + formatInr(evalData.regret_distribution?.p95_regret_inr || 0)"></span>
+                </div>
+
+                <div class="p-3.5 rounded-lg bg-slate-900 border border-slate-800">
+                    <span class="text-slate-400 font-medium">Zero-Regret Rate</span>
+                    <div class="mt-1 text-lg font-bold font-mono text-emerald-400 tabular-nums" x-text="(evalData.regret_distribution?.zero_regret_rate_pct || 0) + '%'"></div>
+                    <span class="text-[10px] text-slate-500 font-mono" x-text="(evalData.regret_distribution?.zero_regret_count || 0) + ' exact oracle matches'"></span>
+                </div>
+            </div>
+
+            <!-- Multi-Policy Benchmark Comparison Table -->
+            <div class="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden space-y-0">
+                <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+                    <h3 class="text-xs font-semibold text-slate-200 uppercase tracking-wide">Multi-Seed Baseline Policy Comparison</h3>
+                    <span class="text-[10px] font-mono text-slate-400">Dev Seeds: [42, 43, 44] | Holdout Seeds: [45, 46]</span>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-950 text-slate-400 border-b border-slate-800 font-mono text-[11px]">
+                            <tr>
+                                <th class="px-3.5 py-2.5">Policy Benchmark</th>
+                                <th class="px-3.5 py-2.5">Gross Recovery</th>
+                                <th class="px-3.5 py-2.5">Action Cost</th>
+                                <th class="px-3.5 py-2.5">Churned</th>
+                                <th class="px-3.5 py-2.5">Adjusted Net</th>
+                                <th class="px-3.5 py-2.5">Incr Adjusted Net</th>
+                                <th class="px-3.5 py-2.5">Interventions</th>
+                                <th class="px-3.5 py-2.5">Avoided</th>
+                                <th class="px-3.5 py-2.5">Zero Regret</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800/60 text-slate-300">
+                            <template x-for="p in evalData.baseline_table" :key="p.policy_key">
+                                <tr :class="p.is_recoveryos ? 'bg-blue-950/20 font-semibold' : 'hover:bg-slate-800/40'">
+                                    <td class="px-3.5 py-2.5 font-mono" :class="p.is_recoveryos ? 'text-blue-300 font-bold' : 'text-slate-300'" x-text="p.policy_name"></td>
+                                    <td class="px-3.5 py-2.5 font-mono tabular-nums" x-text="'₹' + formatInr(p.gross_recovery_inr)"></td>
+                                    <td class="px-3.5 py-2.5 font-mono tabular-nums text-slate-400" x-text="'₹' + p.action_cost_inr.toFixed(2)"></td>
+                                    <td class="px-3.5 py-2.5 font-mono tabular-nums text-rose-400" x-text="p.churn_count"></td>
+                                    <td class="px-3.5 py-2.5 font-mono tabular-nums" x-text="'₹' + formatInr(p.adjusted_net_inr)"></td>
+                                    <td class="px-3.5 py-2.5 font-mono tabular-nums font-bold" :class="p.is_recoveryos ? 'text-blue-400' : 'text-slate-100'" x-text="'₹' + formatInr(p.incremental_adjusted_net_inr)"></td>
+                                    <td class="px-3.5 py-2.5 font-mono text-slate-400" x-text="p.interventions"></td>
+                                    <td class="px-3.5 py-2.5 font-mono text-emerald-400" x-text="p.actions_avoided"></td>
+                                    <td class="px-3.5 py-2.5 font-mono text-slate-300" x-text="p.zero_regret_rate_pct + '%'"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Sensitivity Analysis Matrix Grid -->
+            <div class="bg-slate-900 border border-slate-800 rounded-lg p-4 space-y-3">
+                <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+                    <h3 class="text-xs font-semibold text-slate-200 uppercase tracking-wide">Multi-Parameter Economic Sensitivity Grid</h3>
+                    <span class="text-xs font-mono font-bold text-emerald-400" x-text="'Win Rate: ' + (evalData.sensitivity_analysis?.win_rate_pct || 100) + '% (9/9 Cells Won)'"></span>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs font-mono">
+                        <thead class="bg-slate-950 text-slate-400 border-b border-slate-800 text-[11px]">
+                            <tr>
+                                <th class="px-3 py-2">Churn Penalty</th>
+                                <th class="px-3 py-2">Cost Multiplier</th>
+                                <th class="px-3 py-2">RecoveryOS Incr Net</th>
+                                <th class="px-3 py-2">Best Baseline Incr Net</th>
+                                <th class="px-3 py-2">Advantage Margin</th>
+                                <th class="px-3 py-2">Dominant Policy</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800/60 text-slate-300">
+                            <template x-for="cell in evalData.sensitivity_analysis?.grid_cells" :key="cell.churn_penalty_paise + '_' + cell.cost_multiplier">
+                                <tr>
+                                    <td class="px-3 py-2" x-text="'₹' + (cell.churn_penalty_paise / 100).toLocaleString()"></td>
+                                    <td class="px-3 py-2" x-text="cell.cost_multiplier + 'x'"></td>
+                                    <td class="px-3 py-2 text-blue-300 font-bold" x-text="'₹' + (cell.recoveryos_incremental_adjusted_net_paise / 100).toLocaleString()"></td>
+                                    <td class="px-3 py-2 text-slate-400" x-text="'₹' + (cell.best_baseline_incremental_adjusted_net_paise / 100).toLocaleString()"></td>
+                                    <td class="px-3 py-2 text-emerald-400 font-bold" x-text="'+₹' + (cell.advantage_paise / 100).toLocaleString()"></td>
+                                    <td class="px-3 py-2">
+                                        <span class="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-[10px] font-bold">RECOVERYOS</span>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- TAB 5: EXCEPTIONS & AUDIT                 -->
+        <!-- ========================================== -->
+        <div x-show="activeTab === 'exceptions'" x-cloak class="space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-slate-800/80 gap-2">
+                <div>
+                    <h1 class="text-lg font-semibold text-slate-100">Operational Exceptions & Audit Log</h1>
+                    <p class="text-xs text-slate-400">Surveillance of stale scheduled actions, consent revocations, governor blocks, and human escalation queues.</p>
+                </div>
+                <div class="flex items-center space-x-2 text-xs font-mono">
+                    <span class="px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-slate-300">
+                        Total Exceptions: <strong class="text-amber-400" x-text="exceptions.length"></strong>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Exceptions Table -->
+            <div class="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-950 text-slate-400 border-b border-slate-800 font-mono text-[11px]">
+                            <tr>
+                                <th class="px-3.5 py-2.5">Severity</th>
+                                <th class="px-3.5 py-2.5">Timestamp</th>
+                                <th class="px-3.5 py-2.5">Payment ID</th>
+                                <th class="px-3.5 py-2.5">Amount</th>
+                                <th class="px-3.5 py-2.5">Exception Category</th>
+                                <th class="px-3.5 py-2.5">Governor Verdict</th>
+                                <th class="px-3.5 py-2.5">Reason Codes</th>
+                                <th class="px-3.5 py-2.5">Resolution</th>
+                                <th class="px-3.5 py-2.5 text-right">Inspect</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800/60 text-slate-300">
+                            <template x-for="exc in exceptions" :key="exc.exception_id">
+                                <tr class="hover:bg-slate-800/40 transition-colors">
+                                    <td class="px-3.5 py-2.5 font-mono">
+                                        <span :class="{
+                                            'bg-rose-950 text-rose-300 border-rose-800': exc.severity === 'HIGH',
+                                            'bg-amber-950 text-amber-300 border-amber-800': exc.severity === 'MEDIUM',
+                                            'bg-blue-950 text-blue-300 border-blue-800': exc.severity === 'LOW'
+                                        }" class="px-1.5 py-0.5 rounded text-[10px] border font-bold" x-text="exc.severity"></span>
+                                    </td>
+                                    <td class="px-3.5 py-2.5 font-mono text-slate-400" x-text="exc.time_str"></td>
+                                    <td class="px-3.5 py-2.5 font-mono font-medium text-slate-200" x-text="exc.payment_id"></td>
+                                    <td class="px-3.5 py-2.5 font-mono font-bold tabular-nums text-slate-100" x-text="'₹' + exc.amount_inr.toFixed(2)"></td>
+                                    <td class="px-3.5 py-2.5 font-mono font-semibold" x-text="exc.exception_type"></td>
+                                    <td class="px-3.5 py-2.5">
+                                        <span :class="{
+                                            'bg-emerald-950 text-emerald-300 border-emerald-800': exc.governor_verdict === 'ALLOW',
+                                            'bg-rose-950 text-rose-300 border-rose-800': exc.governor_verdict === 'DENY',
+                                            'bg-amber-950 text-amber-300 border-amber-800': exc.governor_verdict === 'ESCALATE' || exc.governor_verdict === 'DEFER',
+                                            'bg-slate-800 text-slate-300 border-slate-700': exc.governor_verdict === 'ABSTAIN'
+                                        }" class="px-1.5 py-0.5 rounded text-[10px] font-mono border font-semibold" x-text="exc.governor_verdict"></span>
+                                    </td>
+                                    <td class="px-3.5 py-2.5">
+                                        <span class="text-[11px] font-mono text-slate-400" x-text="Array.isArray(exc.reason_codes) ? exc.reason_codes.join(', ') : exc.reason_codes"></span>
+                                    </td>
+                                    <td class="px-3.5 py-2.5">
+                                        <span :class="exc.resolution_state === 'RESOLVED' ? 'text-emerald-400 font-mono text-[10px]' : 'text-amber-400 font-mono text-[10px]'" x-text="exc.resolution_state"></span>
+                                    </td>
+                                    <td class="px-3.5 py-2.5 text-right">
+                                        <button @click="inspectCase(exc.case_id)" class="text-blue-400 hover:text-blue-300 text-xs font-mono underline">
+                                            Replay &rarr;
+                                        </button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800/80 py-3 text-center text-xs text-slate-500 font-mono">
+        Razorpay AI Buildathon 2026 — Track 03: Autonomous AI Revenue Recovery | RecoveryOS Operations Console
+    </footer>
+
+    <!-- Alpine.js Application Logic -->
+    <script>
+        function dashboardApp() {
+            return {
+                activeTab: 'control_room',
+                loading: false,
+                searchQuery: '',
+                selectedCaseId: '',
+                controlRoom: {},
+                queue: [],
+                currentReplay: null,
+                evalData: {},
+                policies: {},
+                exceptions: [],
+
+                async initApp() {
+                    await this.refreshAll();
+                },
+
+                setTab(tab) {
+                    this.activeTab = tab;
+                    if (tab === 'replay' && !this.currentReplay && this.queue.length > 0) {
+                        this.selectedCaseId = this.queue[0].case_id;
+                        this.fetchCaseReplay(this.selectedCaseId);
+                    }
+                },
+
+                async refreshAll() {
+                    this.loading = true;
+                    try {
+                        await Promise.all([
+                            this.fetchControlRoom(),
+                            this.fetchQueue(),
+                            this.fetchEvaluation(),
+                            this.fetchPolicies(),
+                            this.fetchExceptions(),
+                        ]);
+                        if (this.queue.length > 0 && !this.selectedCaseId) {
+                            this.selectedCaseId = this.queue[0].case_id;
+                            await this.fetchCaseReplay(this.selectedCaseId);
+                        }
+                    } catch (err) {
+                        console.error('Error refreshing dashboard:', err);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async fetchControlRoom() {
+                    const res = await fetch('/dashboard/api/control-room');
+                    if (res.ok) this.controlRoom = await res.json();
+                },
+
+                async fetchQueue() {
+                    const res = await fetch('/dashboard/api/recovery-queue');
+                    if (res.ok) this.queue = await res.json();
+                },
+
+                async fetchCaseReplay(caseId) {
+                    if (!caseId) return;
+                    this.selectedCaseId = caseId;
+                    const res = await fetch(`/dashboard/api/cases/${caseId}/replay`);
+                    if (res.ok) {
+                        this.currentReplay = await res.json();
+                    }
+                },
+
+                async inspectCase(caseId) {
+                    await this.fetchCaseReplay(caseId);
+                    this.setTab('replay');
+                },
+
+                async fetchEvaluation() {
+                    const res = await fetch('/dashboard/api/evaluation');
+                    if (res.ok) this.evalData = await res.json();
+                },
+
+                async fetchPolicies() {
+                    const res = await fetch('/dashboard/api/policies');
+                    if (res.ok) this.policies = await res.json();
+                },
+
+                async fetchExceptions() {
+                    const res = await fetch('/dashboard/api/exceptions');
+                    if (res.ok) this.exceptions = await res.json();
+                },
+
+                get filteredQueue() {
+                    if (!this.searchQuery) return this.queue;
+                    const q = this.searchQuery.toLowerCase();
+                    return this.queue.filter(item =>
+                        (item.payment_id && item.payment_id.toLowerCase().includes(q)) ||
+                        (item.diagnosis_label && item.diagnosis_label.toLowerCase().includes(q)) ||
+                        (item.recommended_action && item.recommended_action.toLowerCase().includes(q)) ||
+                        (item.governance_status && item.governance_status.toLowerCase().includes(q))
+                    );
+                },
+
+                formatInr(val) {
+                    if (val === undefined || val === null || isNaN(val)) return '0.00';
+                    return Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                }
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,5 +1,4 @@
-"""Transparent expected-value proxy scoring engine for recovery action candidates with negative uplift semantics."""
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from intelligence.context import ObservableRecoveryContext
@@ -19,6 +18,8 @@ class ScoredAction(BaseModel):
     expected_incremental_value_paise: int = Field(..., description="Expected incremental revenue in paise (can be negative)")
     action_cost_paise: int = Field(..., ge=0, description="Direct execution cost in paise")
     expected_net_value_paise: int = Field(..., description="Expected net recovery value (Incremental - Cost)")
+    timing_window: Optional[str] = Field(default=None, description="Timing window bucket")
+    delay_seconds: int = Field(default=0, ge=0, description="Delay in seconds")
     reason_codes: List[str] = Field(default_factory=list, description="Scoring audit tags")
 
 

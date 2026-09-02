@@ -1,11 +1,13 @@
-"""Observable recovery context and projector ensuring strict separation from hidden simulator truth."""
-from typing import Optional
+from __future__ import annotations
+from typing import TYPE_CHECKING, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from domain.aggregates import PaymentAggregate
 from domain.events import PaymentEvent
-from governor.firewall import CustomerConsentContext
 from simulator.generator import SimulatedScenario
+
+if TYPE_CHECKING:
+    from governor.firewall import CustomerConsentContext
 
 
 class ObservableRecoveryContext(BaseModel):

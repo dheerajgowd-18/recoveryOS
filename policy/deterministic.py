@@ -126,15 +126,25 @@ class DeterministicRecoveryPolicy(BasePolicy):
             )
 
         # 7. Optimal Active Intervention Selection
+        timing_window = "IMMEDIATE"
+        delay_seconds = 0
+        if best_candidate.action_type == SimulatedActionType.RETRY_LATER:
+            timing_window = "PLUS_6H"
+            delay_seconds = 21600
+        elif best_candidate.action_type == SimulatedActionType.REMINDER:
+            timing_window = "PLUS_6H"
+            delay_seconds = 21600
+
         reason_codes = [
             "OPTIMAL_EXPECTED_NET_VALUE",
             f"DIAGNOSIS_{diag.diagnosis_label.name}",
             f"SOURCE_{diag.diagnosis_source.upper()}",
+            f"TIMING_{timing_window}",
         ] + best_candidate.reason_codes
 
         rationale = (
             f"Diagnosed {diag.diagnosis_label.value} (conf={diag.confidence:.2f}, src={diag.diagnosis_source}). "
-            f"Selected {best_candidate.action_type.value} yielding expected net value ₹{best_candidate.expected_net_value_paise / 100:.2f} "
+            f"Selected {best_candidate.action_type.value} ({timing_window}) yielding expected net value ₹{best_candidate.expected_net_value_paise / 100:.2f} "
             f"(uplift {best_candidate.expected_uplift * 100:.1f}% over natural baseline)."
         )
 
@@ -146,5 +156,7 @@ class DeterministicRecoveryPolicy(BasePolicy):
             reason_codes=reason_codes,
             expected_net_value_paise=best_candidate.expected_net_value_paise,
             expected_incremental_value_paise=best_candidate.expected_incremental_value_paise,
+            timing_window=timing_window,
+            delay_seconds=delay_seconds,
             diagnosis=diag,
         )

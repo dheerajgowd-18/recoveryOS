@@ -22,6 +22,8 @@ class GovernorDecision(BaseModel):
     decision_result: GovernorDecisionResult = Field(..., description="Governance outcome: ALLOW, DENY, DEFER, ESCALATE, ABSTAIN")
     selected_action: Optional[SimulatedActionType] = Field(default=None, description="Action permitted for execution if ALLOW")
     timing_hint: Optional[str] = Field(default=None, description="Execution timing directive (e.g. 'immediate', 'delay_24h')")
+    timing_window: Optional[str] = Field(default=None, description="Timing window bucket (e.g. IMMEDIATE, PLUS_2H, PLUS_6H)")
+    delay_seconds: int = Field(default=0, ge=0, description="Execution delay in seconds if scheduled")
     reason_codes: List[str] = Field(default_factory=list, description="Machine-readable governance check reason codes")
     policy_version: str = Field(default="v1.0.0", description="Merchant governance policy version applied")
     diagnosis_confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Intelligence diagnosis confidence score")

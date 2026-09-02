@@ -1,6 +1,15 @@
 """Evaluation harness and baseline policies for RecoveryOS."""
+from evaluation.benchmark_runner import (
+    AggregatedPolicyMetrics,
+    BenchmarkConfig,
+    BenchmarkDatasetSplit,
+    BenchmarkRunner,
+    MetricDistribution,
+    MultiSeedBenchmarkResult,
+)
 from evaluation.harness import EvaluationHarness, EvaluationResult
 from evaluation.metrics import EvaluationMetrics, MetricCalculator, ScenarioEvaluationRecord
+from evaluation.oracle import OracleComparisonResult, OraclePolicy, evaluate_oracle
 from evaluation.policies import (
     AlwaysRetryPolicy,
     BasePolicy,
@@ -8,6 +17,13 @@ from evaluation.policies import (
     PolicyDecision,
     ProbabilityOnlyPolicy,
     StaticRulePolicy,
+)
+from evaluation.regret import RegretCalculator, RegretSummary
+from evaluation.reports import BenchmarkReportGenerator
+from evaluation.sensitivity import (
+    SensitivityAnalysisResult,
+    SensitivityAnalyzer,
+    SensitivityCellResult,
 )
 
 __all__ = [
@@ -18,8 +34,23 @@ __all__ = [
     "StaticRulePolicy",
     "ProbabilityOnlyPolicy",
     "EvaluationMetrics",
-    "ScenarioEvaluationRecord",
     "MetricCalculator",
+    "ScenarioEvaluationRecord",
     "EvaluationHarness",
     "EvaluationResult",
+    "OraclePolicy",
+    "OracleComparisonResult",
+    "evaluate_oracle",
+    "RegretSummary",
+    "RegretCalculator",
+    "SensitivityCellResult",
+    "SensitivityAnalysisResult",
+    "SensitivityAnalyzer",
+    "BenchmarkConfig",
+    "MetricDistribution",
+    "AggregatedPolicyMetrics",
+    "BenchmarkDatasetSplit",
+    "MultiSeedBenchmarkResult",
+    "BenchmarkRunner",
+    "BenchmarkReportGenerator",
 ]

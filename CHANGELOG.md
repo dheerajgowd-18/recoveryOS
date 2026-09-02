@@ -5,6 +5,134 @@ All notable changes to the RecoveryOS platform will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-09-02
+
+### Added
+- **Final Submission Freeze & Configuration Lock (`config/freeze.json`)**:
+  - Locked benchmark evaluation seeds: Development seeds `[42, 43, 44]`, Holdout seeds `[45, 46]`.
+  - Locked policy specification version: `v2.0.0`.
+  - Locked diagnosis model version: `deterministic-v1`.
+  - Locked scenario generator schema version: `2.0.0`.
+- **Exhaustive Adversarial Edge-Case Suite (`tests/adversarial/test_final_edge_cases.py`)**:
+  - Added 7 end-to-end automated adversarial tests covering:
+    1. Late authorization invalidating scheduled retries before dispatch.
+    2. Customer communication opt-outs blocked independently at both Recovery Governor and Tool Firewall.
+    3. Policy engine and LLM provider outages failing closed safely to conservative `NO_ACTION`.
+    4. Duplicate webhook delivery deduplication with strict HMAC and idempotency preservation.
+    5. Out-of-order event reconciliation rejecting invalid state transitions.
+    6. High-value transactions exceeding merchant risk limits escalating to human review.
+    7. Negative expected uplift triggering deliberate economic abstention to eliminate destructive fees.
+  - Test suite expanded to **183 passing automated unit, integration, benchmark, and adversarial tests** with 0 warnings.
+- **5-Minute Pitch & Demo Choreography (`DEMO.md`, `PITCH.md`)**:
+  - Timed 5-minute panel presentation breakdown covering problem hook, signature cases, Evaluation Lab multi-seed proof, and architectural governance.
+  - Sub-5-second execution guarantee for `make demo` and `make test`.
+
+## [1.6.0] - 2026-09-02
+
+### Added
+- **Razorpay Webhook Signature Verification (`ingestion/razorpay_webhook.py`)**:
+  - Strict HMAC-SHA256 signature verification using the `X-Razorpay-Signature` header and raw request body.
+  - Constant-time `hmac.compare_digest` verification preventing timing side-channel attacks.
+  - Normalization of incoming raw JSON payloads into canonical `WebhookPayload` domain models.
+- **Razorpay Test-Mode Execution Adapter (`execution/razorpay_adapter.py`)**:
+  - Implemented `RazorpayAdapter` inheriting from `RecoveryExecutor` contract to execute test-mode interventions against `https://api.razorpay.com/v1/`.
+  - Added methods `fetch_payment_status(payment_id)` and `create_payment_link(payment_id, amount, customer_details)`.
+  - **Fail-Closed Security**: Gracefully checks `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`. Fails closed safely if credentials are missing or placeholders, preventing unhandled runtime exceptions and protecting API keys from exposure.
+- **Live Webhook Endpoint Verification (`backend/app.py`, `backend/api/webhooks.py`)**:
+  - Verified `POST /webhooks/razorpay` endpoint accepting HMAC-verified webhooks and returning HTTP 200 with structured ingestion receipt or HTTP 401 on tampered signatures.
+- **Configuration & Environment (`.env.example`)**:
+  - Added `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` configuration template.
+- **Integration Test Suite (`tests/integration/test_razorpay_integration.py`)**:
+  - Added 7 comprehensive integration tests covering valid webhook signature verification, invalid signature rejection (HTTP 401), adapter fail-closed behavior on missing/placeholder credentials, and mocked Razorpay test API executions (176 total passing tests).
+
+## [1.5.0] - 2026-09-02
+
+### Added
+- **RecoveryOS Operations Console & Dashboard (`dashboard/`, `GET /dashboard`)**:
+  - FastAPI-served single-page browser console built with Jinja2 templates, Tailwind CSS, and Alpine.js (zero Node.js/npm/Vite build steps).
+  - Modern fintech operational dark theme with tabular figures (`font-mono tabular-nums`), dense informational tables, and semantic badge indicators.
+  - 5 core operational views:
+    1. **Merchant Control Room**: Top KPI strip (Revenue at Risk, Gross Recovered, Incremental Recovered, Net Adjusted Recovery, Active Opportunities, Actions Executed/Avoided, Human Reviews, Policy Blocks) and live event activity feed.
+    2. **Recovery Queue**: Ledger of active failure cohorts prioritized by ticket value, risk tier, root cause diagnosis, and expected incremental uplift.
+    3. **Case Decision Replay**: Chronological decision provenance reconstructing exact 7-step reasoning pipeline with "Why We Acted" vs "Why We Did Not Act" analytical summaries.
+    4. **Evaluation Lab**: Batch statistical proof displaying multi-seed baseline policy comparisons, Oracle hindsight ceiling, regret distribution, and economic sensitivity matrix.
+    5. **Exceptions & Audit**: Real-time surveillance of stale scheduled actions, customer consent opt-outs, and human review escalations.
+- **Aggregated Operations Service (`dashboard/service.py`)**:
+  - `DashboardService` singleton aggregating across in-memory decision logs, scheduled action registries, merchant policies, and on-disk benchmark reports.
+  - Automatically bootstraps 5 signature fintech cases for immediate zero-config exploration.
+- **Operations Console JSON APIs (`dashboard/routes.py`)**:
+  - `GET /dashboard/api/control-room`
+  - `GET /dashboard/api/recovery-queue`
+  - `GET /dashboard/api/cases/{case_id}/replay`
+  - `GET /dashboard/api/evaluation`
+  - `GET /dashboard/api/policies`
+  - `GET /dashboard/api/exceptions`
+- **Strict Privacy & Observable Context Boundary Enforcement**:
+  - Validated that no unobservable counterfactual simulation ground truth ($Y(a)$ potential outcomes, customer archetypes) is ever exposed through dashboard APIs.
+- **Unit Test Suite Expansion (`tests/unit/test_dashboard.py`)**:
+  - Added 8 new unit tests validating HTML route rendering, all JSON telemetry APIs, 404 handling, and privacy boundary isolation (166 total passing tests).
+
+## [1.4.1] - 2026-09-02
+
+### Fixed
+- **Dependency Hygiene (`requirements.txt`, `pyproject.toml`)**:
+  - Explicitly declared `numpy>=1.24.0` in both `requirements.txt` and `pyproject.toml` dependencies.
+- **Oracle & Regret Metric Semantic Alignment (`evaluation/oracle.py`, `evaluation/regret.py`, `evaluation/benchmark_runner.py`)**:
+  - Re-anchored Oracle maximization and regret metrics strictly to **Incremental Adjusted Net Recovery** relative to the organic baseline $Y(\text{NO\_ACTION})$.
+  - Guaranteed non-negative Oracle incremental potential ($\ge 0$).
+  - Proved and enforced the exact population reconciliation identity: $\text{Incremental Gap} = \text{Total Regret} = \sum_{i=1}^N \text{Regret}_i$.
+  - Fixed multi-seed per-scenario regret pooling to preserve distinct seed namespaces.
+- **Canonical Metric Naming & Reporting (`evaluation/reports.py`, `scripts/benchmark.py`, `EVALUATION.md`)**:
+  - Standardized terminology across markdown reports and CLI summaries: `Oracle Incremental Adjusted Net`, `RecoveryOS Incremental Adjusted Net`, `Incremental Gap`, `Total Regret`, `Mean Regret`, `Median Regret`, `P95 Regret`, `Zero-Regret Rate`.
+- **Git Hygiene (`.gitignore`)**:
+  - Excluded `reports/` and `reports/*` directory in `.gitignore` so generated benchmark artifacts remain local.
+- **Unit Test Suite Expansion (`tests/unit/test_benchmark_expansion.py`)**:
+  - Added packaging manifest dependency checks, gitignore exclusion tests, and exact mathematical reconciliation assertions (158 total passing tests).
+
+## [1.4.0] - 2026-09-02
+
+### Added
+- **Expanded Evaluation Lab & Multi-Seed Benchmark Runner (`evaluation/benchmark_runner.py`, `scripts/benchmark.py`)**:
+  - `BenchmarkConfig` model supporting configurable scenario counts, seed lists, holdout seeds, churn penalty grids, and output directories.
+  - Multi-seed statistical aggregation computing mean, sample standard deviation, median, min, max, and 95% Confidence Intervals across seed cohorts.
+  - Dataset split segregation separating development seeds (`42, 43, 44` - 3,000 scenarios) from strictly untuned holdout seeds (`45, 46` - 2,000 scenarios) and combined cohorts.
+- **Theoretical Counterfactual Oracle Benchmark (`evaluation/oracle.py`)**:
+  - `OraclePolicy` implementing perfect hindsight of counterfactual outcomes $Y(a)$ to establish the diagnostic ceiling.
+  - `OracleComparisonResult` computing theoretical maximum incremental adjusted net recovery and RecoveryOS efficiency percentage (56.3% of Oracle potential on 5,000-scenario cohort).
+- **Evaluator-Side Decision Regret Framework (`evaluation/regret.py`)**:
+  - `RegretCalculator` computing non-negative scenario-level regret ($\text{Regret} = \text{OracleIncrNet} - \text{ChosenIncrNet} \ge 0$).
+  - `RegretSummary` tracking total regret, mean regret, median regret, 95th percentile tail risk, maximum single-scenario regret, and zero-regret rate.
+- **Economic Sensitivity Analysis Engine (`evaluation/sensitivity.py`)**:
+  - `SensitivityAnalyzer` executing full grid sweeps across churn penalties (₹1,000, ₹2,500, ₹5,000) and action cost multipliers ($0.5\times, 1.0\times, 2.0\times$).
+  - 100% Win Rate (9/9 parameter cells) proving economic robustness of RecoveryOS over baseline heuristics.
+- **Standardized Benchmark Report Generator (`evaluation/reports.py`)**:
+  - Automatically exports `reports/benchmark_summary.md`, `reports/benchmark_detail.json`, `reports/sensitivity_matrix.md`, and `reports/failures.json`.
+- **CLI Benchmark Tool (`scripts/benchmark.py`)**:
+  - Configurable CLI utility supporting custom scenario counts and seed lists while preserving fast interactive `scripts/demo.py`.
+
+## [1.3.0] - 2026-09-01
+
+### Added
+- **Action × Timing Decision Model (`planner/timing.py`, `planner/`)**:
+  - `TimingWindow` enum formalizing 5 discrete timing buckets (`IMMEDIATE`, `PLUS_2H`, `PLUS_6H`, `PLUS_12H`, `PLUS_24H`) with exact `delay_seconds`.
+  - `ActionMechanism` enum formalizing distinct recovery mechanisms (`NO_ACTION`, `RETRY`, `PAYMENT_LINK`, `REMINDER`, `HUMAN_REVIEW`).
+  - `ActionTimingCandidate` model evaluating mechanism-window combinations.
+  - `TimingCandidateGenerator` filtering admissible Action × Timing pairs based on physical failure diagnostics, attempt caps, and policy flags.
+  - `DeterministicTimingValueEstimator` estimating expected probability, uplift, and net value for candidates deterministically without simulator oracle leakage.
+- **Lightweight Scheduled-Action Lifecycle Package (`scheduler/`)**:
+  - `ScheduledAction` model with status transitions (`PENDING`, `DUE`, `EXECUTED`, `CANCELLED`, `INVALIDATED`, `EXPIRED`), `expected_state_version`, `expires_at_epoch`, and execution idempotency keys.
+  - `InMemoryScheduledStore` providing thread-safe indexed lookups and idempotency deduplication.
+  - `ScheduledLifecycleService` managing scheduling, pre-execution revalidation, stale action invalidation, and expiration.
+- **Runtime & Governor Timing Integration (`agent/runtime.py`, `governor/`)**:
+  - Bound `ScheduledLifecycleService` into `AgentRuntime`.
+  - When Governor allows a delayed action, `AgentRuntime` schedules the action and stops the loop with `stop_reason = "ACTION_SCHEDULED"`.
+  - Implemented `execute_due_scheduled_action` verifying aggregate state version, checking stale state, gating through `ToolFirewall`, executing via adapter, and updating store status.
+  - Extended `RecoveryGovernor` to enforce recovery window boundaries (`TIMING_OUTSIDE_RECOVERY_WINDOW`), merchant delayed permissions, and cooldown deferrals.
+- **Comprehensive Timing & Scheduler Test Suite (`tests/unit/test_timing_scheduler.py`)**:
+  - Added 15 comprehensive unit tests covering candidate generation, deterministic value estimation, negative uplift, Governor timing validation, scheduler state versioning, pre-execution invalidation, window expiry, and idempotency deduplication (145 total passing tests).
+- **Evaluation & Audit Counters**:
+  - Added `actions_scheduled_count`, `actions_executed_immediately_count`, `scheduled_actions_invalidated_count`, and `scheduled_actions_expired_count` to evaluation metrics and demo tables.
+
 ## [1.2.0] - 2026-09-01
 
 ### Added

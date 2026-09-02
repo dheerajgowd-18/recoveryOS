@@ -47,6 +47,9 @@ class DecisionRecord(BaseModel):
     risk_level: str = Field(..., description="Risk detector classification (NONE, LOW, HIGH)")
     candidate_scores: List[CandidateScore] = Field(default_factory=list, description="All evaluated candidate actions")
     selected_action: SimulatedActionType = Field(..., description="Action chosen by the policy")
+    timing_window: Optional[str] = Field(default=None, description="Timing window bucket")
+    delay_seconds: int = Field(default=0, ge=0, description="Scheduled delay in seconds")
+    scheduled_action_id: Optional[str] = Field(default=None, description="Associated scheduled action identifier if delayed")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Decision confidence score")
     rationale: str = Field(..., description="Audit rationale for decision")
     reason_codes: List[str] = Field(default_factory=list, description="Machine-readable audit reason codes")
@@ -82,3 +85,7 @@ class DecisionLogStore:
     def list_records(self) -> List[DecisionRecord]:
         """Return all persisted decision records chronologically."""
         return list(self._records)
+
+    def get_all_records(self) -> List[DecisionRecord]:
+        """Alias returning all persisted decision records."""
+        return self.list_records()

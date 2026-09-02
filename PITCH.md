@@ -4,27 +4,37 @@
 
 ## 1. Five-Minute Pitch Script
 
-### [0:00–0:15] The Hook
-> *"Judges, in subscription fintech, most failed-payment dunning systems suffer from a fatal flaw: they treat revenue recovery as a messaging volume problem rather than a constrained sequential decision problem. They spam payment links, hammer gateways on expired cards, and take credit for payments customers would have made anyway. Today, we present **RecoveryOS**—an autonomous, safety-governed AI revenue recovery agent designed to maximize incremental net recovery while protecting customer lifetime value."*
+### [0:00–0:45] The Hook & Problem (Operations Console)
+> *"Judges, in subscription fintech, most failed-payment dunning systems suffer from a fatal flaw: they treat revenue recovery as a messaging volume problem rather than a sequential causal decision problem. They spam payment links, hammer gateways on expired cards, and take credit for payments customers would have made organically anyway.*
+>
+> *Today, we present **RecoveryOS**—an autonomous, safety-governed AI revenue recovery agent. Our North Star metric is **Incremental Adjusted Net Recovery** ($\Delta Y_{\text{adj}} = Y(a) - Y(\text{no\_action}) - \text{Action Costs} - \text{Churn Penalty}$). On our Operations Console, you immediately see not just gross recoveries, but incremental alpha, customer friction avoided, and policy compliance."*
 
-### [0:15–0:55] The Real Problem
-> *"Failed payments are not uniform. If a card expires, retrying it ten times has a 0% success probability and costs the merchant gateway surcharge penalties. If a customer has temporary insufficient funds on a Tuesday before payday, spamming an urgent WhatsApp link creates friction and drives customer churn. Most critically, between 20% and 30% of failed payments resolve organically without any intervention. Naive dunning engines take credit for this natural recovery while burning margin on unnecessary communication and damaging customer trust."*
+### [0:45–2:00] Cases 1 & 2: Action × Timing Optimization & Intelligent Abstention
+> *"Failed payments are not uniform. In **Case 1**, on micro-transactions with expired instruments, naive bots spam payment links costing ₹1.00 in fees to chase ₹1.00 of revenue. RecoveryOS evaluates the negative expected uplift and **deliberately abstains**, protecting merchant margins and preventing brand degradation.*
+>
+> *In **Case 2**, for a ₹5,000 transient gateway timeout, RecoveryOS dynamically ranks candidate actions and timing windows. An immediate retry risks hitting the same lingering gateway fault; an expensive payment link causes customer friction. RecoveryOS selects an optimal timed backoff retry at **+6 hours**, generating ₹2,762 in expected net value (+55% uplift over natural baseline)."*
 
-### [0:55–1:50] The Product: RecoveryOS
-> *"RecoveryOS transforms recovery into an economic decision engine. First, it ingests Razorpay webhooks securely with HMAC-SHA256 verification and strictly idempotent event deduplication. Second, it projects the situation into a sanitized **Public Policy Boundary**—ensuring the decision engine never has access to private counterfactuals or unobservable data. Third, it evaluates all physically admissible actions, calculates their **Expected Net Value Uplift** over the natural baseline, and chooses the optimal intervention. Most importantly: **RecoveryOS knows when not to act**."*
+### [2:00–3:00] Cases 3 & 4: Stale-Action Invalidation & Safety Enforcement
+> *"Real-world fintech is asynchronous and messy. In **Case 3**, when a payment retry is scheduled for +6h, but the customer logs in and pays organically at +30m, legacy schedulers execute the retry and double-charge the user. RecoveryOS features **Stale-Action Protection**: immediately prior to dispatch, the agent re-inspects the reconciled aggregate state. Detecting the `CAPTURED` state, the in-flight retry is instantly **invalidated** with zero fees and zero double-charge risk.*
+>
+> *In **Case 4**, when a policy attempts to dunning a user who has globally opted out, our **Recovery Governor** and **Tool Firewall** intercept the proposal, issue an authoritative `DENY`, and halt execution safely."*
 
-### [1:50–2:40] Difficult Edge Cases
-> *"Real-world fintech is messy. What happens when a payment fails, an agent schedules a retry for 24 hours later, but the customer logs in and pays out-of-band four hours later? Legacy schedulers blindly execute the scheduled retry, double-charging the customer. RecoveryOS features **Stale Action Protection**: immediately prior to execution, the agent re-inspects the reconciled aggregate state; if the payment transitioned to `CAPTURED`, the in-flight action is instantly cancelled. Furthermore, our **Tool Firewall** enforces customer consent—if a customer has opted out of notifications, rogue reminders are blocked and the system fails closed."*
+### [3:00–4:15] The Evaluation Lab (Multi-Seed Proof, Oracle Regret & Sensitivity)
+> *"We evaluate RecoveryOS using a multi-seed deterministic synthetic simulator with hidden potential outcomes $Y(a)$ across development and holdout splits.*
+>
+> *Across 100 scenarios with a ₹2,500 customer churn penalty proxy:*
+> - *RecoveryOS achieves ₹80,859 in Incremental Adjusted Net Recovery—outperforming static dunning heuristics by over ₹6,700 and naive retries by over ₹63,000.*
+> - *It delivers a 27% reduction in customer churn and a 52% cut in action costs.*
+> - *Our Evaluation Lab computes an Oracle Hindsight Regret bound and a 9-cell sensitivity matrix, proving positive incremental alpha across all friction tiers.*
 
-### [2:40–3:40] Architectural Governance
-> *"We adhere to a strict security philosophy: **AI should never have direct, unconstrained access to financial execution**. 
-> All actions proposed by any policy pass through our deterministic `ToolFirewall` which validates schemas, checks opt-out registries, and verifies idempotency keys. If the policy service experiences an outage or throws an error, the agent runtime fails closed into a safe `NO_ACTION` state. Every single decision, candidate score ranking, and state transition is captured in an append-only `DecisionLogStore` and can be reconstructed bit-for-bit using our `ReplayEngine`."*
-
-### [3:40–4:30] Evaluation & Results
-> *"We evaluate RecoveryOS using a controlled, deterministic synthetic simulator with hidden potential outcomes $Y(a)$ across 100 scenarios. Under a realistic ₹2,500 customer churn penalty proxy, **RecoveryOS achieves ₹80,859 in Incremental Adjusted Net Recovery**—outperforming industry standard static dunning rules by over ₹6,700 and naive retry policies by over ₹63,000. It reduces customer churn by 27%, cuts action costs by 52%, and actively avoids 4 value-destructive interventions on micro-transactions."*
-
-### [4:30–5:00] Close
-> *"We built RecoveryOS with absolute engineering honesty: our simulator proves algorithm behavior and safety boundaries under explicit assumptions, not unverified production causal claims. RecoveryOS gives merchants an intelligent, transparent, and provably safe revenue recovery engine. Thank you, and we look forward to your questions."*
+### [4:15–5:00] Architectural Governance & Close
+> *"Our architecture rests on a non-negotiable security philosophy: **AI should never have direct, unconstrained access to payment execution**.*
+>
+> 1. *Intelligence Plane: Observable context boundary with structured AI diagnosis.*
+> 2. *Governance Plane: Deterministic Recovery Governor with human review escalation and Tool Firewall.*
+> 3. *Execution Plane: Scheduled lifecycle manager, fail-closed Razorpay adapter, and immutable append-only replay log.*
+>
+> ***The model proposes. The Governor authorizes. The executor acts.*** *RecoveryOS gives merchants an intelligent, transparent, and provably safe revenue recovery engine. Thank you, and we look forward to your questions."*
 
 ---
 

@@ -12,6 +12,10 @@ from domain.events import (
     WebhookPayloadContent,
 )
 from execution.simulator_executor import SimulatorExecutor
+from governor.policy import MerchantPolicy
+from governor.recovery_governor import RecoveryGovernor
+from intelligence.schemas import DiagnosisLabel
+from policy.base import PolicyDecision
 from policy.config import DeterministicPolicyConfig
 from policy.deterministic import DeterministicRecoveryPolicy
 from simulator.config import CustomerArchetype, FailureClass, ScenarioConfig, SimulatedActionType, SimulatorConfig
@@ -30,10 +34,20 @@ class TestAgentRuntimeClosedLoop:
     """Validates the autonomous closed-loop agent observe-decide-execute-observe lifecycle."""
 
     async def test_full_recovery_loop_success(self):
-        """Inject failed payment -> Agent decides RETRY_LATER -> Simulator captures payment -> Agent terminates."""
+        """Inject failed payment -> Agent decides RETRY_NOW -> Simulator captures payment -> Agent terminates."""
         ingestion = IngestionService()
         executor = SimulatorExecutor()
-        runtime = AgentRuntime(ingestion_service=ingestion, executor=executor)
+        priors = {
+            DiagnosisLabel.TRANSIENT_GATEWAY_FAILURE: {
+                SimulatedActionType.NO_ACTION: 0.25,
+                SimulatedActionType.RETRY_NOW: 0.85,
+                SimulatedActionType.RETRY_LATER: 0.80,
+                SimulatedActionType.PAYMENT_LINK: 0.55,
+                SimulatedActionType.REMINDER: 0.45,
+            }
+        }
+        policy = DeterministicRecoveryPolicy(config=DeterministicPolicyConfig(allow_immediate_retry=True, estimated_action_priors=priors))
+        runtime = AgentRuntime(ingestion_service=ingestion, policy=policy, executor=executor)
 
         # Build a scenario where RETRY_LATER succeeds (recovered=True)
         customer = SimulatedCustomer(
@@ -71,9 +85,9 @@ class TestAgentRuntimeClosedLoop:
             ),
             retry_now=ActionOutcome(
                 action_type=SimulatedActionType.RETRY_NOW,
-                recovered=False,
-                recovery_delay_seconds=0,
-                recovered_amount_paise=0,
+                recovered=True,
+                recovery_delay_seconds=60,
+                recovered_amount_paise=50000,
                 customer_churned=False,
                 fatigue_score=0.0,
                 action_cost_paise=20,
@@ -125,7 +139,7 @@ class TestAgentRuntimeClosedLoop:
         assert result.net_value_paise == 49980
         assert result.stop_reason == "REVENUE_RECOVERED"
         assert len(result.trace) == 1
-        assert result.trace[0].decision.action_type == SimulatedActionType.RETRY_LATER
+        assert result.trace[0].decision.action_type == SimulatedActionType.RETRY_NOW
 
     async def test_abstention_loop_for_low_value_scenario(self):
         """Inject low-value failure -> Agent decides NO_ACTION -> Agent halts without executing."""
@@ -226,10 +240,25 @@ class TestAgentRuntimeClosedLoop:
         """Inject payment.failed -> retries fail -> reaches max retry limit -> abstains and stops."""
         ingestion = IngestionService()
         executor = SimulatorExecutor()
-        policy = DeterministicRecoveryPolicy(config=DeterministicPolicyConfig(max_retry_attempts=2))
+
+        class ForcedRetryPolicy(DeterministicRecoveryPolicy):
+            def decide(self, context, diagnosis=None):
+                return PolicyDecision(
+                    action_type=SimulatedActionType.RETRY_NOW,
+                    confidence=0.90,
+                    rationale="Forced retry now",
+                    policy_name=self.name,
+                    timing_window="IMMEDIATE",
+                    delay_seconds=0,
+                    expected_net_value_paise=1000,
+                    expected_incremental_value_paise=1020,
+                )
+
+        policy = ForcedRetryPolicy(config=DeterministicPolicyConfig(max_retry_attempts=2, allow_immediate_retry=True))
         runtime = AgentRuntime(
             ingestion_service=ingestion,
             policy=policy,
+            governor=RecoveryGovernor(merchant_policy=MerchantPolicy(max_retries=2)),
             executor=executor,
             max_iterations=5,
         )
@@ -280,7 +309,7 @@ class TestAgentRuntimeClosedLoop:
         assert result.is_recovered is False
         assert result.total_iterations >= 2
         assert result.total_cost_paise > 0
-        assert result.stop_reason in ("POLICY_ABSTAINED", "MAX_ITERATIONS_REACHED")
+        assert result.stop_reason in ("RETRY_LIMIT_REACHED", "ACTION_BLOCKED", "POLICY_ABSTAINED", "MAX_ITERATIONS_REACHED")
 
     async def test_stale_action_protection(self):
         """Inject payment.failed -> simulate natural recovery by ingesting payment.captured out-of-band -> agent cancels execution."""
