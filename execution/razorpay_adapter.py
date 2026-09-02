@@ -19,6 +19,11 @@ logger = logging.getLogger("recoveryos.execution.razorpay_adapter")
 RAZORPAY_API_BASE = "https://api.razorpay.com/v1"
 
 
+class RazorpayConfigurationError(RuntimeError):
+    """Raised when Razorpay adapter operations are attempted without valid API credentials."""
+    pass
+
+
 class RazorpayAdapter(RecoveryExecutor):
     """Real Razorpay test-mode API adapter and recovery action executor."""
 
@@ -28,11 +33,13 @@ class RazorpayAdapter(RecoveryExecutor):
         key_secret: Optional[str] = None,
         base_url: str = RAZORPAY_API_BASE,
         timeout_seconds: float = 10.0,
+        strict: bool = False,
     ) -> None:
         self._key_id = key_id if key_id is not None else os.getenv("RAZORPAY_KEY_ID")
         self._key_secret = key_secret if key_secret is not None else os.getenv("RAZORPAY_KEY_SECRET")
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
+        self.strict = strict
 
     @property
     def has_valid_credentials(self) -> bool:
@@ -53,10 +60,10 @@ class RazorpayAdapter(RecoveryExecutor):
             return False
         return True
 
-    def _get_auth(self) -> Optional[httpx.BasicAuth]:
+    def _get_auth(self) -> httpx.BasicAuth:
         """Constructs HTTP Basic Auth without exposing secrets in logs."""
         if not self.has_valid_credentials:
-            return None
+            raise RazorpayConfigurationError("Cannot construct auth header: missing or invalid Razorpay credentials.")
         return httpx.BasicAuth(self._key_id.strip(), self._key_secret.strip())
 
     async def fetch_payment_status(self, payment_id: str) -> Optional[PaymentEntity]:
@@ -66,10 +73,15 @@ class RazorpayAdapter(RecoveryExecutor):
             payment_id: Razorpay payment identifier (e.g. 'pay_123456').
 
         Returns:
-            PaymentEntity domain model if found and authorized, None otherwise.
+            PaymentEntity domain model if found, None if not found (404).
+
+        Raises:
+            RazorpayConfigurationError: When credentials are unconfigured or authentication fails.
         """
         if not self.has_valid_credentials:
             logger.warning("fetch_payment_status called without valid Razorpay credentials. Failing closed.")
+            if self.strict:
+                raise RazorpayConfigurationError("Razorpay credentials (RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET) missing or invalid.")
             return None
 
         url = f"{self.base_url}/payments/{payment_id}"
@@ -81,14 +93,18 @@ class RazorpayAdapter(RecoveryExecutor):
                 if response.status_code == 200:
                     data = response.json()
                     return PaymentEntity.model_validate(data)
+                elif response.status_code == 401:
+                    raise RazorpayConfigurationError(f"Razorpay API authentication failed (HTTP 401): {response.text}")
                 elif response.status_code == 404:
                     logger.warning("Payment %s not found on Razorpay API (404).", payment_id)
                     return None
+                elif response.status_code == 429:
+                    raise RuntimeError(f"Razorpay rate limit reached (HTTP 429): {response.text}")
                 else:
                     logger.warning("Razorpay API error fetching payment %s: HTTP %s", payment_id, response.status_code)
                     return None
-        except Exception as err:
-            logger.error("Network or parsing error fetching Razorpay payment %s: %s", payment_id, err)
+        except httpx.RequestError as err:
+            logger.error("Network error connecting to Razorpay API for payment %s: %s", payment_id, err)
             return None
 
     async def create_payment_link(
@@ -108,9 +124,14 @@ class RazorpayAdapter(RecoveryExecutor):
 
         Returns:
             Dict containing API response payload or failure indicator.
+
+        Raises:
+            RazorpayConfigurationError: When credentials are unconfigured in strict mode or authentication fails.
         """
         if not self.has_valid_credentials:
             logger.warning("create_payment_link called without valid Razorpay credentials. Failing closed.")
+            if self.strict:
+                raise RazorpayConfigurationError("Razorpay credentials (RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET) missing or invalid.")
             return {"success": False, "error": "MISSING_CREDENTIALS"}
 
         url = f"{self.base_url}/payment_links"
@@ -141,11 +162,18 @@ class RazorpayAdapter(RecoveryExecutor):
                 if response.status_code in (200, 201):
                     data = response.json()
                     return {"success": True, "data": data, "payment_link_id": data.get("id")}
+                elif response.status_code == 401:
+                    raise RazorpayConfigurationError(f"Razorpay API authentication failed (HTTP 401): {response.text}")
                 else:
-                    logger.warning("Razorpay API error creating payment link for %s: HTTP %s", payment_id, response.status_code)
-                    return {"success": False, "status_code": response.status_code, "error": "API_ERROR"}
-        except Exception as err:
-            logger.error("Exception creating Razorpay payment link for %s: %s", payment_id, err)
+                    err_desc = ""
+                    try:
+                        err_desc = response.json().get("error", {}).get("description", "")
+                    except Exception:
+                        err_desc = response.text
+                    logger.warning("Razorpay API error creating payment link for %s: HTTP %s (%s)", payment_id, response.status_code, err_desc)
+                    return {"success": False, "status_code": response.status_code, "error": err_desc or "API_ERROR"}
+        except httpx.RequestError as err:
+            logger.error("Exception connecting to Razorpay for payment link %s: %s", payment_id, err)
             return {"success": False, "error": str(err)}
 
     async def execute(
@@ -162,7 +190,31 @@ class RazorpayAdapter(RecoveryExecutor):
         Returns:
             ExecutionResult outcome without throwing unhandled exceptions.
         """
-        action_type = action if isinstance(action, SimulatedActionType) else SimulatedActionType(action.action_type)
+        if isinstance(action, SimulatedActionType):
+            action_type = action
+        elif hasattr(action, "action_type"):
+            try:
+                action_type = SimulatedActionType(action.action_type)
+            except (ValueError, KeyError):
+                return ExecutionResult(
+                    success=False,
+                    action_type=SimulatedActionType.NO_ACTION,
+                    recovered=False,
+                    recovered_amount_paise=0,
+                    action_cost_paise=0,
+                    execution_timestamp_epoch=context.current_epoch,
+                    message=f"Unsupported action type '{getattr(action, 'action_type', action)}' for RazorpayAdapter.",
+                )
+        else:
+            return ExecutionResult(
+                success=False,
+                action_type=SimulatedActionType.NO_ACTION,
+                recovered=False,
+                recovered_amount_paise=0,
+                action_cost_paise=0,
+                execution_timestamp_epoch=context.current_epoch,
+                message=f"Unsupported action object '{action}' for RazorpayAdapter.",
+            )
 
         # Handle No Action immediately
         if action_type == SimulatedActionType.NO_ACTION:
@@ -176,8 +228,10 @@ class RazorpayAdapter(RecoveryExecutor):
                 message="Deliberate abstention executed successfully (0 cost).",
             )
 
-        # If credentials missing or unconfigured, fail closed gracefully
+        # If credentials missing or unconfigured, enforce strict or fail closed gracefully
         if not self.has_valid_credentials:
+            if self.strict:
+                raise RazorpayConfigurationError("RazorpayAdapter execution failed: Missing valid API credentials in strict mode.")
             logger.warning("RazorpayAdapter invoked without valid credentials. Failing closed safely.")
             return ExecutionResult(
                 success=False,
@@ -261,5 +315,5 @@ class RazorpayAdapter(RecoveryExecutor):
             recovered_amount_paise=0,
             action_cost_paise=0,
             execution_timestamp_epoch=context.current_epoch,
-            message=f"Unhandled action type {action_type}.",
+            message=f"Unsupported action type '{action_type}' for RazorpayAdapter.",
         )
