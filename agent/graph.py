@@ -69,6 +69,7 @@ class RecoveryWorkflowState(BaseModel):
     memory_bundle: Optional[Dict[str, Any]] = Field(default=None, description="Retrieved bounded memory bundle")
     risk_assessment: Optional[RiskAssessment] = Field(default=None, description="Risk detector verdict")
     diagnosis: Optional[StructuredDiagnosis] = Field(default=None, description="Root cause diagnosis")
+    strategy_proposal: Optional[Any] = Field(default=None, description="Structured strategy reasoning proposal")
     strategy_candidates: List[CandidateStrategyOption] = Field(default_factory=list, description="Candidate actions proposed")
     timing_candidates: List[ActionTimingCandidate] = Field(default_factory=list, description="Evaluated action x timing options")
     selected_candidate: Optional[ActionTimingCandidate] = Field(default=None, description="Economically optimal candidate")
@@ -237,9 +238,14 @@ class RecoveryStateGraph:
         )
 
         # -------------------------------------------------------------
-        # NODE 5: Strategy Candidates Generation (Agent 3)
+        # NODE 5: Strategy Candidates & LLM Reasoning (Agent 3)
         # -------------------------------------------------------------
         t0 = time.perf_counter()
+        state.strategy_proposal = await self.strategy_agent.propose_strategy_async(
+            context=state.observable_context,
+            diagnosis=state.diagnosis,
+            memory_bundle=mem_bundle,
+        )
         state.strategy_candidates = self.strategy_agent.generate_strategy_candidates(
             context=state.observable_context,
             diagnosis=state.diagnosis,
@@ -247,11 +253,11 @@ class RecoveryStateGraph:
         )
         state.step_traces.append(
             WorkflowStepTrace(
-                step_name="NODE_5_STRATEGY_CANDIDATES",
+                step_name="NODE_5_STRATEGY_REASONING",
                 status="SUCCESS",
                 elapsed_ms=round((time.perf_counter() - t0) * 1000.0, 2),
-                summary=f"Generated {len(state.strategy_candidates)} candidate strategy options including baseline abstention",
-                payload={"candidate_actions": [c.action_type.value for c in state.strategy_candidates]},
+                summary=f"Strategy Agent ({state.strategy_proposal.strategy_source}): Proposed '{state.strategy_proposal.primary_recommendation.value}' with {len(state.strategy_candidates)} admissible candidate options",
+                payload=state.strategy_proposal.model_dump(),
             )
         )
 

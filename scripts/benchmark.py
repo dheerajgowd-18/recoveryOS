@@ -64,6 +64,11 @@ def parse_args() -> argparse.Namespace:
         help="Include RECOVERYOS_LLM_DRIVEN policy in the evaluation comparison cohort",
     )
     parser.add_argument(
+        "--run-ablation",
+        action="store_true",
+        help="Execute the 3-variant ablation study (Rules vs LLM-Diag vs LLM-Diag+LLM-Strat)",
+    )
+    parser.add_argument(
         "--output-dir",
         type=str,
         default="reports",
@@ -172,6 +177,19 @@ def main() -> None:
     print("=" * 80)
     for k, path in report_paths.items():
         print(f"  [SAVED] {k:<15} -> {path}")
+
+    if args.run_ablation:
+        from evaluation.ablation import AblationRunner
+        print("\n" + "=" * 80)
+        print("  EXECUTING ABLATION STUDY (Rules vs LLM-Diag vs Full Agentic)")
+        print("=" * 80)
+        ablation_runner = AblationRunner(output_dir=args.output_dir)
+        ab_res = ablation_runner.run_ablation(seeds=dev_seeds, scenarios_per_seed=args.scenarios)
+        print(f"  [SAVED] ablation_summary -> {os.path.join(args.output_dir, 'ablation_summary.md')}")
+        print(f"  LLM Diagnosis Uplift Contribution : INR {ab_res.diagnosis_contribution_uplift_paise / 100:,.2f}")
+        print(f"  LLM Strategy Uplift Contribution  : INR {ab_res.strategy_contribution_uplift_paise / 100:,.2f}")
+        print(f"  Total Combined AI Value Uplift    : INR {ab_res.total_ai_uplift_paise / 100:,.2f}")
+
     print("=" * 80)
 
 

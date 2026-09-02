@@ -10,6 +10,8 @@ DEFAULT_GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
 DEFAULT_TIMEOUT_SECONDS: float = 3.0
 DEFAULT_MAX_RETRIES: int = 1
 PROMPT_VERSION: str = "2.0.0"
+DIAGNOSIS_PROMPT_VERSION: str = "2.0.0"
+STRATEGY_PROMPT_VERSION: str = "1.0.0"
 
 
 class LLMConfig(BaseModel):
