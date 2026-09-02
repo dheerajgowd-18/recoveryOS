@@ -106,13 +106,48 @@ class LLMDiagnosisProvider(BaseDiagnosisProvider):
         """Fraction of total invocations that fell back to deterministic rules."""
         return (self.fallback_count / self.total_invocations) if self.total_invocations > 0 else 0.0
 
-    def build_user_prompt(self, context: ObservableRecoveryContext) -> str:
-        """Constructs sanitized prompt containing ONLY observable context features."""
+    def build_user_prompt(
+        self,
+        context: ObservableRecoveryContext,
+        memory_bundle: Optional[Any] = None,
+    ) -> str:
+        """Constructs sanitized prompt containing observable context features and bounded recovery memory with provenance."""
         obs_payload = context.model_dump(exclude_none=True)
-        return (
-            "Analyze the following observable transaction failure context and return the structured diagnosis JSON:\n"
-            f"{json.dumps(obs_payload, indent=2)}"
-        )
+        
+        prompt_parts = [
+            "Analyze the following observable transaction failure context and retrieved bounded recovery memory.",
+            "Return the structured root cause diagnosis JSON according to the required schema.",
+            "",
+            "=== OBSERVABLE TRANSACTION CONTEXT ===",
+            json.dumps(obs_payload, indent=2),
+        ]
+
+        if memory_bundle is not None:
+            prompt_parts.extend([
+                "",
+                "=== BOUNDED RECOVERY MEMORY (RETRIEVED WITH PROVENANCE) ===",
+            ])
+            if hasattr(memory_bundle, "retrieved_items"):
+                for idx, item in enumerate(memory_bundle.retrieved_items, start=1):
+                    item_dict = {
+                        "item_id": getattr(item, "item_id", f"mem_{idx}"),
+                        "category": getattr(getattr(item, "category", None), "value", str(getattr(item, "category", "general"))),
+                        "title": getattr(item, "title", ""),
+                        "content": getattr(item, "content", {}),
+                        "provenance": getattr(item, "provenance", {}).model_dump() if hasattr(getattr(item, "provenance", None), "model_dump") else getattr(item, "provenance", {}),
+                    }
+                    prompt_parts.append(f"--- Memory Item {idx}: {item_dict['title']} ---")
+                    prompt_parts.append(json.dumps(item_dict, indent=2))
+            elif isinstance(memory_bundle, dict):
+                prompt_parts.append(json.dumps(memory_bundle, indent=2))
+
+        prompt_parts.extend([
+            "",
+            "CRITICAL INSTRUCTIONS: Ground your diagnosis strictly in the observable evidence and retrieved memory above.",
+            "Do not invent unobserved facts. If evidence is ambiguous, set confidence lower and list uncertainties.",
+        ])
+
+        return "\n".join(prompt_parts)
 
     def parse_and_validate_response(self, raw_json_or_dict: object) -> StructuredDiagnosis:
         """Strictly validate and parse LLM-generated output into StructuredDiagnosis."""
@@ -239,7 +274,11 @@ class LLMDiagnosisProvider(BaseDiagnosisProvider):
             model_version=f"rules-fallback-{fallback_diag.model_version or 'v1.0'}",
         )
 
-    def diagnose_sync(self, context: ObservableRecoveryContext) -> StructuredDiagnosis:
+    def diagnose_sync(
+        self,
+        context: ObservableRecoveryContext,
+        memory_bundle: Optional[Any] = None,
+    ) -> StructuredDiagnosis:
         """Produce structured diagnosis synchronously with robust error handling and fallback."""
         self.total_invocations += 1
         start_time = time.perf_counter()
@@ -247,11 +286,11 @@ class LLMDiagnosisProvider(BaseDiagnosisProvider):
         # Check API key configuration
         if not self.api_key and self._client is None:
             self.fallback_count += 1
-            fallback_diag = self.fallback_provider.diagnose_sync(context)
+            fallback_diag = self.fallback_provider.diagnose_sync(context, memory_bundle)
             return self._wrap_fallback(fallback_diag, "FALLBACK_NO_API_KEY")
 
         self.llm_calls += 1
-        user_prompt = self.build_user_prompt(context)
+        user_prompt = self.build_user_prompt(context, memory_bundle)
 
         # Execute with retries for transient errors
         last_exception: Optional[Exception] = None
@@ -310,21 +349,25 @@ class LLMDiagnosisProvider(BaseDiagnosisProvider):
         logger.warning(
             f"LLM diagnosis failed ({type(last_exception).__name__}: {last_exception}); fallback code: {reason_code}"
         )
-        fallback_diag = self.fallback_provider.diagnose_sync(context)
+        fallback_diag = self.fallback_provider.diagnose_sync(context, memory_bundle)
         return self._wrap_fallback(fallback_diag, reason_code)
 
-    async def diagnose(self, context: ObservableRecoveryContext) -> StructuredDiagnosis:
+    async def diagnose(
+        self,
+        context: ObservableRecoveryContext,
+        memory_bundle: Optional[Any] = None,
+    ) -> StructuredDiagnosis:
         """Produce structured diagnosis asynchronously with robust error handling and fallback."""
         self.total_invocations += 1
         start_time = time.perf_counter()
 
         if not self.api_key and self._client is None:
             self.fallback_count += 1
-            fallback_diag = self.fallback_provider.diagnose_sync(context)
+            fallback_diag = self.fallback_provider.diagnose_sync(context, memory_bundle)
             return self._wrap_fallback(fallback_diag, "FALLBACK_NO_API_KEY")
 
         self.llm_calls += 1
-        user_prompt = self.build_user_prompt(context)
+        user_prompt = self.build_user_prompt(context, memory_bundle)
 
         last_exception: Optional[Exception] = None
         for attempt in range(self.max_retries + 1):

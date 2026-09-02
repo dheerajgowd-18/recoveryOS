@@ -71,15 +71,19 @@ class DiagnosisAgent:
     """Agent 2: Root-Cause Diagnosis Reasoner with explicit uncertainty detection and real LLM reasoning."""
 
     def __init__(self, provider: Optional[BaseDiagnosisProvider] = None) -> None:
-        self.provider = provider or DeterministicDiagnosisProvider()
+        if provider is None:
+            from intelligence.providers.llm_provider import LLMDiagnosisProvider
+            self.provider = LLMDiagnosisProvider(fallback_provider=DeterministicDiagnosisProvider())
+        else:
+            self.provider = provider
 
     async def diagnose_async(
         self,
         context: ObservableRecoveryContext,
         memory_bundle: Optional[BoundedContextBundle] = None,
     ) -> StructuredDiagnosis:
-        """Produces structured, explainable diagnosis asynchronously."""
-        return await self.provider.diagnose(context)
+        """Produces structured, explainable diagnosis asynchronously using LLM + bounded memory."""
+        return await self.provider.diagnose(context, memory_bundle)
 
     def diagnose_sync(
         self,
@@ -87,7 +91,7 @@ class DiagnosisAgent:
         memory_bundle: Optional[BoundedContextBundle] = None,
     ) -> StructuredDiagnosis:
         """Produces structured, explainable diagnosis synchronously."""
-        return self.provider.diagnose_sync(context)
+        return self.provider.diagnose_sync(context, memory_bundle)
 
 
 class RecoveryStrategyAgent:
@@ -102,7 +106,7 @@ class RecoveryStrategyAgent:
         diagnosis: StructuredDiagnosis,
         memory_bundle: Optional[BoundedContextBundle] = None,
     ) -> List[CandidateStrategyOption]:
-        """Generates admissible candidate intervention options based on failure mechanics and customer memory."""
+        """Generates admissible candidate intervention options synthesizing LLM diagnosis, RAG memory, and policy rules."""
         candidates: List[CandidateStrategyOption] = []
 
         # 1. First-Class Abstention Candidate (Always considered)
@@ -116,8 +120,24 @@ class RecoveryStrategyAgent:
             )
         )
 
-        # 2. Candidate generation based on diagnosis label and constraints
+        # 2. Candidate generation based on failure taxonomy, LLM proposals, and constraints
         admissible_actions = CandidateGenerator.generate_candidates(context, diagnosis, self.config)
+
+        # Merge LLM recommended actions if admissible under merchant constraints
+        llm_recommended = getattr(diagnosis, "recommended_candidate_actions", [])
+        for act in llm_recommended:
+            if isinstance(act, SimulatedActionType) and act not in admissible_actions:
+                # Validate against physical impossibility constraints
+                if act in (SimulatedActionType.RETRY_NOW, SimulatedActionType.RETRY_LATER) and diagnosis.diagnosis_label == DiagnosisLabel.EXPIRED_PAYMENT_METHOD:
+                    continue
+                if act in (SimulatedActionType.RETRY_NOW, SimulatedActionType.RETRY_LATER) and context.attempt_count >= self.config.max_retry_attempts:
+                    continue
+                admissible_actions.append(act)
+
+        # Check customer preference / historical response from memory bundle
+        preferred_channel = None
+        if memory_bundle and memory_bundle.customer_summary:
+            preferred_channel = memory_bundle.customer_summary.get("preferred_channel")
 
         for act in admissible_actions:
             if act == SimulatedActionType.NO_ACTION:
@@ -127,13 +147,24 @@ class RecoveryStrategyAgent:
                 ActionMechanism.PAYMENT_LINK if act == SimulatedActionType.PAYMENT_LINK else ActionMechanism.REMINDER
             )
 
-            # Build explainable rationale
+            # Build explainable rationale incorporating evidence and RAG context
+            evidence_str = ", ".join(diagnosis.evidence_codes[:2]) if diagnosis.evidence_codes else "observed error patterns"
             if act in (SimulatedActionType.RETRY_NOW, SimulatedActionType.RETRY_LATER):
-                strat_rationale = f"Automated bank retry proposed for {diagnosis.diagnosis_label.value} failure."
+                strat_rationale = (
+                    f"Automated bank retry proposed for {diagnosis.diagnosis_label.value} failure "
+                    f"based on evidence [{evidence_str}]."
+                )
             elif act == SimulatedActionType.PAYMENT_LINK:
-                strat_rationale = f"Direct customer payment link proposed to collect updated payment instrument."
+                strat_rationale = (
+                    f"Direct customer payment link proposed to collect updated payment instrument "
+                    f"for {diagnosis.diagnosis_label.value}."
+                )
             else:
-                strat_rationale = f"Gentle customer notification reminder proposed via customer preferred channel."
+                channel_note = f" via {preferred_channel}" if preferred_channel else ""
+                strat_rationale = (
+                    f"Customer notification reminder proposed{channel_note} "
+                    f"addressing {diagnosis.diagnosis_label.value}."
+                )
 
             candidates.append(
                 CandidateStrategyOption(

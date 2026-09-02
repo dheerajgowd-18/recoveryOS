@@ -105,14 +105,48 @@ class GroqLLMDiagnosisProvider(BaseDiagnosisProvider):
             logger.warning(f"Failed to initialize Groq client: {e}")
             return None
 
-    def build_user_prompt(self, context: ObservableRecoveryContext) -> str:
-        """Constructs sanitized prompt containing ONLY observable context features."""
-        # Convert context to clean dictionary, strictly excluding any hidden/private attributes
+    def build_user_prompt(
+        self,
+        context: ObservableRecoveryContext,
+        memory_bundle: Optional[Any] = None,
+    ) -> str:
+        """Constructs sanitized prompt containing ONLY observable context features and bounded memory."""
         obs_payload = context.model_dump(exclude_none=True)
-        return (
-            "Analyze the following observable transaction failure context and return the structured diagnosis JSON:\n"
-            f"{json.dumps(obs_payload, indent=2)}"
-        )
+        
+        prompt_parts = [
+            "Analyze the following observable transaction failure context and retrieved bounded recovery memory.",
+            "Return the structured root cause diagnosis JSON according to the required schema.",
+            "",
+            "=== OBSERVABLE TRANSACTION CONTEXT ===",
+            json.dumps(obs_payload, indent=2),
+        ]
+
+        if memory_bundle is not None:
+            prompt_parts.extend([
+                "",
+                "=== BOUNDED RECOVERY MEMORY (RETRIEVED WITH PROVENANCE) ===",
+            ])
+            if hasattr(memory_bundle, "retrieved_items"):
+                for idx, item in enumerate(memory_bundle.retrieved_items, start=1):
+                    item_dict = {
+                        "item_id": getattr(item, "item_id", f"mem_{idx}"),
+                        "category": getattr(getattr(item, "category", None), "value", str(getattr(item, "category", "general"))),
+                        "title": getattr(item, "title", ""),
+                        "content": getattr(item, "content", {}),
+                        "provenance": getattr(item, "provenance", {}).model_dump() if hasattr(getattr(item, "provenance", None), "model_dump") else getattr(item, "provenance", {}),
+                    }
+                    prompt_parts.append(f"--- Memory Item {idx}: {item_dict['title']} ---")
+                    prompt_parts.append(json.dumps(item_dict, indent=2))
+            elif isinstance(memory_bundle, dict):
+                prompt_parts.append(json.dumps(memory_bundle, indent=2))
+
+        prompt_parts.extend([
+            "",
+            "CRITICAL INSTRUCTIONS: Ground your diagnosis strictly in the observable evidence and retrieved memory above.",
+            "Do not invent unobserved facts. If evidence is ambiguous, set confidence lower and list uncertainties.",
+        ])
+
+        return "\n".join(prompt_parts)
 
     def parse_and_validate(self, raw_content: str) -> StructuredDiagnosis:
         """Parses raw LLM string into validated StructuredDiagnosis model."""
@@ -155,11 +189,19 @@ class GroqLLMDiagnosisProvider(BaseDiagnosisProvider):
             model_version=f"groq-{self.model_id}",
         )
 
-    async def diagnose(self, context: ObservableRecoveryContext) -> StructuredDiagnosis:
+    async def diagnose(
+        self,
+        context: ObservableRecoveryContext,
+        memory_bundle: Optional[Any] = None,
+    ) -> StructuredDiagnosis:
         """Asynchronously diagnose root cause with Groq LLM and deterministic fallback."""
-        return self.diagnose_sync(context)
+        return self.diagnose_sync(context, memory_bundle)
 
-    def diagnose_sync(self, context: ObservableRecoveryContext) -> StructuredDiagnosis:
+    def diagnose_sync(
+        self,
+        context: ObservableRecoveryContext,
+        memory_bundle: Optional[Any] = None,
+    ) -> StructuredDiagnosis:
         """Synchronously diagnose root cause using Groq API with fail-closed fallback."""
         self.llm_calls += 1
         start_time = time.perf_counter()
@@ -168,11 +210,11 @@ class GroqLLMDiagnosisProvider(BaseDiagnosisProvider):
         if client is None:
             # Fallback when API key or SDK is unconfigured
             self.llm_fallbacks += 1
-            fallback_diag = self.fallback_provider.diagnose_sync(context)
+            fallback_diag = self.fallback_provider.diagnose_sync(context, memory_bundle)
             return self._wrap_fallback(fallback_diag, "FALLBACK_NO_API_KEY")
 
         try:
-            user_content = self.build_user_prompt(context)
+            user_content = self.build_user_prompt(context, memory_bundle)
             chat_completion = client.chat.completions.create(
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},

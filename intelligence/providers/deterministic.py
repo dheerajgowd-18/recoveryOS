@@ -1,7 +1,9 @@
 """Deterministic offline diagnosis provider inferring root causes via transparent rule engines."""
+from typing import Optional
 from intelligence.context import ObservableRecoveryContext
 from intelligence.providers.base import BaseDiagnosisProvider
 from intelligence.schemas import DiagnosisLabel, StructuredDiagnosis
+from rag.schemas import BoundedContextBundle
 from simulator.config import SimulatedActionType
 
 
@@ -11,10 +13,18 @@ class DeterministicDiagnosisProvider(BaseDiagnosisProvider):
     Operates purely offline with 0 external API dependencies and guaranteed bit-level reproducibility.
     """
 
-    async def diagnose(self, context: ObservableRecoveryContext) -> StructuredDiagnosis:
-        return self.diagnose_sync(context)
+    async def diagnose(
+        self,
+        context: ObservableRecoveryContext,
+        memory_bundle: Optional[BoundedContextBundle] = None,
+    ) -> StructuredDiagnosis:
+        return self.diagnose_sync(context, memory_bundle)
 
-    def diagnose_sync(self, context: ObservableRecoveryContext) -> StructuredDiagnosis:
+    def diagnose_sync(
+        self,
+        context: ObservableRecoveryContext,
+        memory_bundle: Optional[BoundedContextBundle] = None,
+    ) -> StructuredDiagnosis:
         error_code = (context.error_code or "").upper()
         error_code_lower = (context.error_code or "").lower()
         error_desc = (context.error_description or "").lower()

@@ -17,6 +17,7 @@ __all__ = [
     "ProbabilityOnlyPolicy",
     "DeterministicRecoveryPolicy",
     "LLMDrivenRecoveryPolicy",
+    "AgenticGraphRecoveryPolicy",
 ]
 
 
@@ -193,3 +194,80 @@ class ProbabilityOnlyPolicy(BasePolicy):
             reason_codes=["BASELINE_3_GREEDY_MAX_PROB"],
             diagnosis=diagnosis,
         )
+
+
+class AgenticGraphRecoveryPolicy(BasePolicy):
+    """Full RecoveryOS Agentic Graph Policy running specialized multi-agent reasoning with RAG memory."""
+
+    def __init__(
+        self,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+    ) -> None:
+        from agent.agents import (
+            ContextRetrievalAgent,
+            DiagnosisAgent,
+            RecoveryStrategyAgent,
+            TimingReasonerAgent,
+        )
+        self.context_agent = ContextRetrievalAgent()
+        self.diagnosis_agent = DiagnosisAgent()
+        self.strategy_agent = RecoveryStrategyAgent()
+        self.timing_agent = TimingReasonerAgent()
+        super().__init__(
+            name=name or "RECOVERYOS_FULL_AGENT_GRAPH",
+            description=description or "Full RecoveryOS Multi-Agent Graph executing Context Retrieval, LLM Diagnosis, Strategy Generation, and Economic Timing Optimization.",
+        )
+
+    def decide(
+        self,
+        context: ObservableRecoveryContext,
+        diagnosis: Optional[StructuredDiagnosis] = None,
+    ) -> PolicyDecision:
+        # 1. Retrieve bounded context memory bundle
+        mem_bundle = self.context_agent.retriever.retrieve_bounded_context(context)
+
+        # 2. LLM / Offline Root-Cause Diagnosis
+        diag = diagnosis or self.diagnosis_agent.diagnose_sync(context, mem_bundle)
+
+        # 3. Strategy Candidate Generation
+        strategy_candidates = self.strategy_agent.generate_strategy_candidates(
+            context=context,
+            diagnosis=diag,
+            memory_bundle=mem_bundle,
+        )
+
+        # 4. Action x Timing Economic Evaluation
+        timing_candidates = self.timing_agent.evaluate_timing_options(
+            context=context,
+            diagnosis=diag,
+            strategy_candidates=strategy_candidates,
+        )
+
+        best_timing = timing_candidates[0] if timing_candidates else None
+
+        if best_timing and best_timing.action_type != SimulatedActionType.NO_ACTION and best_timing.expected_uplift >= 0.0 and best_timing.expected_net_value_paise >= 0:
+            return PolicyDecision(
+                action_type=best_timing.action_type,
+                confidence=best_timing.estimated_probability,
+                rationale=f"Full Agent Graph selected {best_timing.mechanism.value} ({best_timing.timing_window.value}) with expected net return ₹{best_timing.expected_net_value_paise / 100:.2f}.",
+                policy_name=self.name,
+                reason_codes=best_timing.reason_codes,
+                expected_net_value_paise=best_timing.expected_net_value_paise,
+                expected_incremental_value_paise=best_timing.expected_incremental_value_paise,
+                timing_window=best_timing.timing_window.value,
+                delay_seconds=best_timing.delay_seconds,
+                diagnosis=diag,
+            )
+        else:
+            return PolicyDecision(
+                action_type=SimulatedActionType.NO_ACTION,
+                confidence=1.0,
+                rationale="Full Agent Graph abstained: Negative or negligible expected net incremental value.",
+                policy_name=self.name,
+                reason_codes=["ABSTAIN_NEGATIVE_UPLIFT" if (best_timing and best_timing.expected_uplift < 0) else "ABSTAIN_LOW_EXPECTED_VALUE"],
+                expected_net_value_paise=0,
+                expected_incremental_value_paise=0,
+                diagnosis=diag,
+            )
+

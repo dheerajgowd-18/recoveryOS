@@ -78,14 +78,18 @@ class AgentRuntime:
         executor: Optional[RecoveryExecutor] = None,
         max_iterations: int = 5,
     ) -> None:
+        from intelligence.providers.llm_provider import LLMDiagnosisProvider
+        from rag.retrieval import RecoveryMemoryRetriever
+
         self.ingestion_service = ingestion_service or IngestionService()
         self.risk_detector = risk_detector or RiskDetector()
-        self.diagnosis_provider = diagnosis_provider or DeterministicDiagnosisProvider()
+        self.diagnosis_provider = diagnosis_provider or LLMDiagnosisProvider(fallback_provider=DeterministicDiagnosisProvider())
         self.policy = policy or DeterministicRecoveryPolicy(diagnosis_provider=self.diagnosis_provider)
         self.governor = governor or RecoveryGovernor()
         self.scheduler = scheduler or ScheduledLifecycleService()
         self.firewall = firewall or ToolFirewall()
         self.executor = executor or SimulatorExecutor()
+        self.retriever = RecoveryMemoryRetriever()
         self.max_iterations = max_iterations
 
     async def run_recovery_loop(
@@ -129,7 +133,7 @@ class AgentRuntime:
                 stop_reason = "NO_RISK_DETECTED"
                 break
 
-            # D. Observable Context Construction (Strictly without hidden simulator truth)
+            # D. Observable Context Construction & Bounded RAG Memory Retrieval
             obs_context = ObservableContextBuilder.build_from_payment_event(
                 event=current_event,
                 aggregate=aggregate,
@@ -137,13 +141,14 @@ class AgentRuntime:
                 attempt_count=iteration,
                 scenario_id=initial_scenario.scenario_id,
             )
+            memory_bundle = self.retriever.retrieve_bounded_context(obs_context)
 
             # E. Intelligence Diagnosis & Policy Proposal
             try:
                 if not policy_healthy:
                     raise PolicyOutageError("Policy decision engine is flagged unhealthy. Failing closed.")
 
-                diagnosis = await self.diagnosis_provider.diagnose(obs_context)
+                diagnosis = await self.diagnosis_provider.diagnose(obs_context, memory_bundle)
                 proposal = self.policy.decide(obs_context, diagnosis=diagnosis)
             except PolicyOutageError as e:
                 # Policy Outage Fail-Closed: Pass through Governor to record governance decision

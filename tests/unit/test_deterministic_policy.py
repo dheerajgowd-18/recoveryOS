@@ -259,3 +259,41 @@ class TestDeterministicRecoveryPolicy:
         assert metrics.gross_recovered_amount_paise > metrics.natural_recovered_amount_paise
         assert metrics.incremental_recovered_amount_paise > 0
         assert metrics.net_recovered_amount_paise > 0
+
+    def test_malicious_llm_numeric_fields_cannot_manipulate_authoritative_economics(self):
+        """Proves that LLM cannot manipulate financial arithmetic or bypass deterministic scoring."""
+        config = DeterministicPolicyConfig()
+        view = ObservableRecoveryContext(
+            scenario_id="scen_malicious_test",
+            amount_in_paise=100_000,  # ₹1,000
+            attempt_count=1,
+            error_code="GATEWAY_ERROR",
+        )
+        # Malicious/hallucinated diagnosis with claims of $1,000,000 profit
+        diag = StructuredDiagnosis(
+            diagnosis_label=DiagnosisLabel.TRANSIENT_GATEWAY_FAILURE,
+            confidence=0.85,
+            rationale="LLM claims $1,000,000 guaranteed recovery",
+        )
+
+        candidates = CandidateGenerator.generate_candidates(view, diag, config)
+        scored = ExpectedValueScorer.score_all(view, diag, candidates, config)
+
+        # Scorer must compute mathematically rigorous expected net values based on deterministic parameters
+        for s in scored:
+            # Action cost must come from deterministic config, not LLM
+            expected_cost = config.action_costs_paise[s.action_type]
+            assert s.action_cost_paise == expected_cost
+            assert s.expected_net_value_paise <= view.amount_in_paise
+
+    def test_agentic_graph_recovery_policy_evaluates_in_harness(self, standard_simulator_batch):
+        """Verifies AgenticGraphRecoveryPolicy evaluates cleanly in the benchmark harness."""
+        from evaluation.policies import AgenticGraphRecoveryPolicy
+        harness = EvaluationHarness()
+        policy = AgenticGraphRecoveryPolicy()
+
+        result = harness.evaluate_policy(policy, standard_simulator_batch[:20])
+        assert isinstance(result, EvaluationResult)
+        assert result.metrics.total_scenarios == 20
+        assert result.metrics.policy_name == "RECOVERYOS_FULL_AGENT_GRAPH"
+

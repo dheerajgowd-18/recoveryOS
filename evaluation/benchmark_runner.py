@@ -131,12 +131,14 @@ class BenchmarkRunner:
 
     def get_default_policies(self) -> List[BasePolicy]:
         """Returns the canonical benchmark policy cohort."""
+        from evaluation.policies import AgenticGraphRecoveryPolicy
         policies: List[BasePolicy] = [
             NoActionPolicy(),
             AlwaysRetryPolicy(),
             StaticRulePolicy(),
             ProbabilityOnlyPolicy(),
             DeterministicRecoveryPolicy(),
+            AgenticGraphRecoveryPolicy(),
         ]
         if self.config.compare_llm:
             from policy.deterministic import LLMDrivenRecoveryPolicy

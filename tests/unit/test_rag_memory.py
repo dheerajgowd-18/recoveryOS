@@ -72,3 +72,36 @@ class TestRecoveryMemoryRAG:
         unknown = store.get_profile("cust_unseen_999")
         assert unknown.account_age_days == 60
         assert unknown.lifetime_successful_payments == 1
+
+    def test_rag_memory_injected_into_llm_prompt(self, sample_context):
+        from intelligence.providers.llm_provider import LLMDiagnosisProvider
+        retriever = RecoveryMemoryRetriever()
+        bundle = retriever.retrieve_bounded_context(sample_context)
+
+        provider = LLMDiagnosisProvider()
+        prompt = provider.build_user_prompt(sample_context, bundle)
+
+        # Check prompt contains bounded memory headers and provenance info
+        assert "=== BOUNDED RECOVERY MEMORY" in prompt
+        assert "recoveryos_event_store" in prompt
+        assert "cust_high_responsive" in prompt
+
+    def test_no_hidden_simulator_fields_leak_into_llm_prompt(self, sample_context):
+        from intelligence.providers.llm_provider import LLMDiagnosisProvider
+        retriever = RecoveryMemoryRetriever()
+        bundle = retriever.retrieve_bounded_context(sample_context)
+
+        provider = LLMDiagnosisProvider()
+        prompt = provider.build_user_prompt(sample_context, bundle)
+
+        forbidden_leak_strings = [
+            "hidden_outcomes",
+            "potential_outcomes",
+            "ground_truth",
+            "counterfactual",
+            "LATENT_ARCHETYPE",
+            "simulated_recovery_delay",
+        ]
+        for s in forbidden_leak_strings:
+            assert s not in prompt, f"Forbidden simulator private variable '{s}' leaked into LLM prompt!"
+
