@@ -327,6 +327,7 @@ class DashboardService:
 
         for r in sorted(records, key=lambda x: x.amount_in_paise, reverse=True):
             exp_incr_paise = int(r.amount_in_paise * 0.75 - (r.action_cost_paise or 0)) if r.selected_action != "NO_ACTION" else 0
+            action_name = r.selected_action.value if hasattr(r.selected_action, "value") else str(r.selected_action)
 
             # Priority classification
             if r.amount_in_paise >= 1000000:  # >= INR 10,000
@@ -338,23 +339,37 @@ class DashboardService:
             else:
                 priority = "LOW"
 
+            conf_val = round(float(r.diagnosis_confidence), 2) if r.diagnosis_confidence is not None else 0.0
+
             queue.append({
                 "case_id": r.decision_id,
                 "payment_id": r.payment_id,
                 "scenario_id": r.scenario_id,
                 "amount_paise": r.amount_in_paise,
                 "amount_inr": round(r.amount_in_paise / 100.0, 2),
+                "aggregate_state": r.aggregate_state,
                 "current_state": r.aggregate_state,
+                "diagnosis": {
+                    "label": r.diagnosis_label,
+                    "confidence": conf_val,
+                    "source": r.diagnosis_source,
+                },
                 "diagnosis_label": r.diagnosis_label,
-                "diagnosis_confidence": round(r.diagnosis_confidence * 100, 1),
+                "diagnosis_confidence": conf_val,
                 "diagnosis_source": r.diagnosis_source,
-                "recommended_action": r.selected_action.value if hasattr(r.selected_action, "value") else str(r.selected_action),
+                "selected_action": action_name,
+                "recommended_action": action_name,
                 "timing_window": r.timing_window or "IMMEDIATE",
                 "delay_seconds": r.delay_seconds,
+                "governor": {
+                    "decision": r.governor_decision or "ALLOW",
+                    "reason_codes": r.governor_reason_codes or r.reason_codes or [],
+                },
+                "governor_decision": r.governor_decision or "ALLOW",
+                "governance_status": r.governor_decision or "ALLOW",
+                "priority": priority,
                 "expected_incremental_value_paise": exp_incr_paise,
                 "expected_incremental_value_inr": round(exp_incr_paise / 100.0, 2),
-                "priority": priority,
-                "governance_status": r.governor_decision or "ALLOW",
                 "reason_codes": r.reason_codes,
                 "timestamp_epoch": r.timestamp_epoch,
                 "time_str": datetime.fromtimestamp(r.timestamp_epoch, tz=timezone.utc).strftime("%b %d, %H:%M:%S UTC"),
