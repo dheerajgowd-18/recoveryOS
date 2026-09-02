@@ -186,9 +186,9 @@ def main() -> None:
         ablation_runner = AblationRunner(output_dir=args.output_dir)
         ab_res = ablation_runner.run_ablation(seeds=dev_seeds, scenarios_per_seed=args.scenarios)
         print(f"  [SAVED] ablation_summary -> {os.path.join(args.output_dir, 'ablation_summary.md')}")
-        print(f"  LLM Diagnosis Uplift Contribution : INR {ab_res.diagnosis_contribution_uplift_paise / 100:,.2f}")
-        print(f"  LLM Strategy Uplift Contribution  : INR {ab_res.strategy_contribution_uplift_paise / 100:,.2f}")
-        print(f"  Total Combined AI Value Uplift    : INR {ab_res.total_ai_uplift_paise / 100:,.2f}")
+        print(f"  LLM Diagnosis Incremental Uplift (B - A)            : INR {ab_res.diagnosis_contribution_uplift_paise / 100:,.2f}")
+        print(f"  Incremental Value of Full Agentic Strategy Layer (C - B): INR {ab_res.strategy_layer_incremental_value_paise / 100:,.2f}")
+        print(f"  Total Combined AI Layer Value (C - A)               : INR {ab_res.total_ai_layer_uplift_paise / 100:,.2f}")
 
     print("=" * 80)
 

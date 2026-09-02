@@ -1,6 +1,6 @@
 """Timing abstraction, candidate action-timing generator, and deterministic timing value estimator."""
 from enum import Enum
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 from pydantic import BaseModel, ConfigDict, Field
 
 from intelligence.context import ObservableRecoveryContext
@@ -94,8 +94,9 @@ class TimingCandidateGenerator:
         context: ObservableRecoveryContext,
         diagnosis: StructuredDiagnosis,
         config: DeterministicPolicyConfig,
+        strategy_candidates: Optional[List[Any]] = None,
     ) -> List[Tuple[ActionMechanism, TimingWindow]]:
-        """Produce eligible (mechanism, timing) pairs based solely on observable context and diagnosis."""
+        """Produce eligible (mechanism, timing) pairs constrained by observable context, failure physics, and strategy candidates."""
         candidates: Set[Tuple[ActionMechanism, TimingWindow]] = {
             (ActionMechanism.NO_ACTION, TimingWindow.IMMEDIATE)
         }
@@ -108,9 +109,7 @@ class TimingCandidateGenerator:
             if is_high_value and not diagnosis.abstain_recommended:
                 candidates.add((ActionMechanism.PAYMENT_LINK, TimingWindow.IMMEDIATE))
                 candidates.add((ActionMechanism.PAYMENT_LINK, TimingWindow.PLUS_2H))
-            return sorted(list(candidates), key=lambda c: (c[0].value, c[1].delay_seconds))
-
-        if label == DiagnosisLabel.EXPIRED_PAYMENT_METHOD:
+        elif label == DiagnosisLabel.EXPIRED_PAYMENT_METHOD:
             # Physical constraint: Instrument expired; retries are forbidden
             candidates.add((ActionMechanism.PAYMENT_LINK, TimingWindow.IMMEDIATE))
             candidates.add((ActionMechanism.PAYMENT_LINK, TimingWindow.PLUS_2H))
@@ -163,6 +162,13 @@ class TimingCandidateGenerator:
             if is_high_value and not diagnosis.abstain_recommended:
                 candidates.add((ActionMechanism.PAYMENT_LINK, TimingWindow.IMMEDIATE))
                 candidates.add((ActionMechanism.PAYMENT_LINK, TimingWindow.PLUS_2H))
+
+        if strategy_candidates is not None:
+            allowed_mechs = {
+                getattr(c, "mechanism", None) or ActionMechanism.NO_ACTION
+                for c in strategy_candidates
+            } | {ActionMechanism.NO_ACTION}
+            candidates = {c for c in candidates if c[0] in allowed_mechs}
 
         return sorted(list(candidates), key=lambda c: (c[0].value, c[1].delay_seconds))
 

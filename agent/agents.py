@@ -161,18 +161,23 @@ class RecoveryStrategyAgent:
             constraints=self.config.model_dump(),
         )
 
-    def generate_strategy_candidates(
+    def generate_strategy_candidates_from_proposal(
         self,
+        proposal: StrategyProposal,
         context: ObservableRecoveryContext,
         diagnosis: StructuredDiagnosis,
         memory_bundle: Optional[BoundedContextBundle] = None,
     ) -> List[CandidateStrategyOption]:
-        """Maps structured StrategyProposal into CandidateStrategyOption list for deterministic economic valuation."""
-        proposal = self.propose_strategy(context, diagnosis, memory_bundle)
+        """Maps an already-produced StrategyProposal into deterministic CandidateStrategyOption list without re-invoking the LLM."""
         candidates: List[CandidateStrategyOption] = []
+        admissible = CandidateGenerator.generate_candidates(context, diagnosis, self.config)
+        admissible_set = set(admissible)
 
         for p in proposal.proposals:
-            # Deterministic Admissibility Check: Filter out physically impossible candidates
+            # Deterministic Admissibility Check: Hard constraint & physical impossibility filter
+            if p.action_type not in admissible_set and p.action_type != SimulatedActionType.NO_ACTION:
+                continue
+
             if p.action_type in (SimulatedActionType.RETRY_NOW, SimulatedActionType.RETRY_LATER):
                 if diagnosis.diagnosis_label == DiagnosisLabel.EXPIRED_PAYMENT_METHOD:
                     continue
@@ -190,7 +195,7 @@ class RecoveryStrategyAgent:
                 CandidateStrategyOption(
                     action_type=p.action_type,
                     mechanism=mech,
-                    confidence=p.confidence,  # Truthful model strategy confidence
+                    confidence=p.confidence,  # Model-reported strategy confidence
                     rationale=p.rationale,
                     is_abstention=p.is_abstention,
                     supporting_evidence=p.supporting_evidence,
@@ -215,6 +220,16 @@ class RecoveryStrategyAgent:
 
         return candidates
 
+    def generate_strategy_candidates(
+        self,
+        context: ObservableRecoveryContext,
+        diagnosis: StructuredDiagnosis,
+        memory_bundle: Optional[BoundedContextBundle] = None,
+    ) -> List[CandidateStrategyOption]:
+        """Produces StrategyProposal and maps it into CandidateStrategyOption list."""
+        proposal = self.propose_strategy(context, diagnosis, memory_bundle)
+        return self.generate_strategy_candidates_from_proposal(proposal, context, diagnosis, memory_bundle)
+
 
 class TimingAndEconomicOptimizationAgent:
     """Agent 4: Timing & Deterministic Economic Optimization Agent.
@@ -238,7 +253,12 @@ class TimingAndEconomicOptimizationAgent:
         strategy_candidates: List[CandidateStrategyOption],
     ) -> List[ActionTimingCandidate]:
         """Computes deterministic expected net recovery values across (Mechanism × Timing Window) matrix."""
-        timing_candidates = TimingCandidateGenerator.generate_candidates(context, diagnosis, self.config)
+        timing_candidates = TimingCandidateGenerator.generate_candidates(
+            context=context,
+            diagnosis=diagnosis,
+            config=self.config,
+            strategy_candidates=strategy_candidates,
+        )
         scored_timings = DeterministicTimingValueEstimator.estimate_all(
             context=context,
             diagnosis=diagnosis,

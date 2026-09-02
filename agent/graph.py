@@ -30,7 +30,12 @@ from governor.firewall import CustomerConsentContext, ToolFirewall
 from governor.policy import MerchantPolicy
 from governor.recovery_governor import RecoveryGovernor
 from intelligence.context import ObservableRecoveryContext
-from intelligence.schemas import StructuredDiagnosis
+from intelligence.schemas import (
+    DiagnosisLabel,
+    StrategyCandidateProposal,
+    StrategyProposal,
+    StructuredDiagnosis,
+)
 from planner.timing import ActionTimingCandidate, TimingWindow
 from policy.base import PolicyDecision
 from policy.config import DeterministicPolicyConfig
@@ -69,7 +74,7 @@ class RecoveryWorkflowState(BaseModel):
     memory_bundle: Optional[Dict[str, Any]] = Field(default=None, description="Retrieved bounded memory bundle")
     risk_assessment: Optional[RiskAssessment] = Field(default=None, description="Risk detector verdict")
     diagnosis: Optional[StructuredDiagnosis] = Field(default=None, description="Root cause diagnosis")
-    strategy_proposal: Optional[Any] = Field(default=None, description="Structured strategy reasoning proposal")
+    strategy_proposal: Optional[StrategyProposal] = Field(default=None, description="Structured strategy reasoning proposal")
     strategy_candidates: List[CandidateStrategyOption] = Field(default_factory=list, description="Candidate actions proposed")
     timing_candidates: List[ActionTimingCandidate] = Field(default_factory=list, description="Evaluated action x timing options")
     selected_candidate: Optional[ActionTimingCandidate] = Field(default=None, description="Economically optimal candidate")
@@ -246,7 +251,8 @@ class RecoveryStateGraph:
             diagnosis=state.diagnosis,
             memory_bundle=mem_bundle,
         )
-        state.strategy_candidates = self.strategy_agent.generate_strategy_candidates(
+        state.strategy_candidates = self.strategy_agent.generate_strategy_candidates_from_proposal(
+            proposal=state.strategy_proposal,
             context=state.observable_context,
             diagnosis=state.diagnosis,
             memory_bundle=mem_bundle,
