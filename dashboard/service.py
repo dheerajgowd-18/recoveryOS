@@ -384,14 +384,22 @@ class DashboardService:
         if not target:
             return None
 
+        action_name = target.selected_action.value if hasattr(target.selected_action, "value") else str(target.selected_action)
+        conf_val = round(float(target.diagnosis_confidence), 2) if target.diagnosis_confidence is not None else 0.0
+        gov_verdict_str = target.governor_decision or "ALLOW"
+        gov_reasons = target.governor_reason_codes or target.reason_codes or []
+
         # Build chronological audit steps
         steps = [
             {
+                "step": 1,
                 "step_index": 1,
+                "name": "Event Ingestion & Reconciliation",
                 "title": "Event Ingestion & Reconciliation",
                 "badge": "PAYMENT_FAILED",
                 "status": "SUCCESS",
-                "timestamp_epoch": target.timestamp_epoch,
+                "detail": f"Received payment failure event for payment {target.payment_id}. Initial state: {target.aggregate_state_before}.",
+                "explanation": f"Received payment failure event for payment {target.payment_id}. Reconciled initial state as {target.aggregate_state_before}.",
                 "details": {
                     "payment_id": target.payment_id,
                     "amount_inr": round(target.amount_in_paise / 100.0, 2),
@@ -399,84 +407,97 @@ class DashboardService:
                     "error_code": target.failure_code or "BAD_REQUEST_ERROR",
                     "evidence_codes": target.evidence_codes,
                 },
-                "explanation": f"Received payment failure event for payment {target.payment_id}. Reconciled initial state as {target.aggregate_state_before}.",
             },
             {
+                "step": 2,
                 "step_index": 2,
+                "name": "Risk Assessment & Fraud Boundary",
                 "title": "Risk Assessment & Fraud Boundary",
                 "badge": target.risk_level,
                 "status": "PASSED" if target.risk_level == "LOW" else "FLAGGED",
-                "timestamp_epoch": target.timestamp_epoch + 1,
+                "detail": f"Risk detector classified payment as {target.risk_level} risk. Evaluator permitted autonomous exploration.",
+                "explanation": f"Risk detector classified payment as {target.risk_level} risk. Evaluator permitted autonomous recovery exploration.",
                 "details": {
                     "risk_level": target.risk_level,
                     "is_blacklisted": False,
                     "dispute_risk": "NEGLIGIBLE",
                 },
-                "explanation": f"Risk detector classified payment as {target.risk_level} risk. Evaluator permitted autonomous recovery exploration.",
             },
             {
+                "step": 3,
                 "step_index": 3,
+                "name": "Observable Recovery Context Sanitization",
                 "title": "Observable Recovery Context Sanitization",
                 "badge": "CONTEXT_VERIFIED",
                 "status": "SUCCESS",
-                "timestamp_epoch": target.timestamp_epoch + 2,
+                "detail": "Constructed sanitized observable recovery context strictly excluding unobservable simulator truth.",
+                "explanation": "Constructed sanitized observable recovery context strictly excluding unobservable simulator truth (Y(a) ground truth).",
                 "details": target.observable_context or {
                     "payment_id": target.payment_id,
                     "amount_in_paise": target.amount_in_paise,
                     "failed_attempts_count": 1,
                     "has_valid_consent": True,
                 },
-                "explanation": "Constructed sanitized observable recovery context strictly excluding unobservable simulator truth (Y(a) ground truth).",
             },
             {
+                "step": 4,
                 "step_index": 4,
+                "name": "Root-Cause Diagnosis Inference",
                 "title": "Root-Cause Diagnosis Inference",
-                "badge": f"{target.diagnosis_label.upper()} ({int(target.diagnosis_confidence*100)}%)",
+                "badge": f"{target.diagnosis_label.upper()} ({int(conf_val*100)}%)",
                 "status": "DIAGNOSED",
-                "timestamp_epoch": target.timestamp_epoch + 3,
+                "detail": f"Inferred root cause as \"{target.diagnosis_label}\" with {int(conf_val*100)}% confidence (source: {target.diagnosis_source}).",
+                "explanation": f"Intelligence layer inferred root cause as \"{target.diagnosis_label}\" with {int(conf_val*100)}% confidence based on observable failure telemetry.",
                 "details": {
                     "inferred_diagnosis": target.diagnosis_label,
-                    "confidence_pct": round(target.diagnosis_confidence * 100, 1),
+                    "confidence": conf_val,
+                    "confidence_pct": round(conf_val * 100, 1),
                     "provider_source": target.diagnosis_source,
                     "evidence_codes": target.evidence_codes,
                 },
-                "explanation": f"Intelligence layer inferred root cause as \"{target.diagnosis_label}\" with {int(target.diagnosis_confidence*100)}% confidence based on observable failure telemetry.",
             },
             {
+                "step": 5,
                 "step_index": 5,
+                "name": "Action × Timing Candidate Evaluation",
                 "title": "Action x Timing Candidate Evaluation",
-                "badge": target.selected_action.value if hasattr(target.selected_action, "value") else str(target.selected_action),
+                "badge": action_name,
                 "status": "EVALUATED",
-                "timestamp_epoch": target.timestamp_epoch + 4,
+                "detail": f"Selected optimal action {action_name} ({target.timing_window or 'IMMEDIATE'}) after evaluating candidate matrix.",
+                "explanation": f"Generated admissible candidate matrix across action mechanisms and timing windows. Selected optimal action {action_name} ({target.timing_window or 'IMMEDIATE'}).",
                 "details": {
-                    "selected_action": target.selected_action.value if hasattr(target.selected_action, "value") else str(target.selected_action),
+                    "selected_action": action_name,
                     "timing_window": target.timing_window or "IMMEDIATE",
                     "delay_seconds": target.delay_seconds,
                     "expected_action_cost_paise": target.action_cost_paise or 0,
                     "reason_codes": target.reason_codes,
                 },
-                "explanation": f"Generated admissible candidate matrix across 5 action mechanisms and timing windows. Selected optimal action {target.selected_action} ({target.timing_window or 'IMMEDIATE'}).",
             },
             {
+                "step": 6,
                 "step_index": 6,
+                "name": "Recovery Governor Policy Gate",
                 "title": "Recovery Governor v1 Policy Verification",
-                "badge": target.governor_decision or "ALLOW",
-                "status": target.governor_decision or "ALLOW",
-                "timestamp_epoch": target.timestamp_epoch + 5,
+                "badge": gov_verdict_str,
+                "status": gov_verdict_str,
+                "detail": f"Governor verdict: {gov_verdict_str}. Evaluated merchant policies, contact frequency caps, and amount limits.",
+                "explanation": f"Recovery Governor evaluated merchant policies, contact frequency caps, and amount limits. Verdict: {gov_verdict_str}.",
                 "details": {
-                    "governor_verdict": target.governor_decision or "ALLOW",
+                    "governor_verdict": gov_verdict_str,
                     "policy_version": target.governor_policy_version or "v1.0.0",
-                    "reason_codes": target.governor_reason_codes,
+                    "reason_codes": gov_reasons,
                     "human_review_reason": target.human_review_reason,
                 },
-                "explanation": f"Recovery Governor evaluated merchant policies, contact frequency caps, and amount limits. Verdict: {target.governor_decision or 'ALLOW'}.",
             },
             {
+                "step": 7,
                 "step_index": 7,
+                "name": "Execution & Scheduling State Transition",
                 "title": "Execution & Scheduling State Transition",
                 "badge": target.aggregate_state_after,
                 "status": "FINALIZED",
-                "timestamp_epoch": target.timestamp_epoch + 6,
+                "detail": f"Final payment status: {target.aggregate_state_after} (Stop reason: {target.stop_reason or 'CYCLE_COMPLETED'}).",
+                "explanation": f"Runtime executed state transition. Final payment status: {target.aggregate_state_after} (Stop reason: {target.stop_reason}).",
                 "details": {
                     "final_state": target.aggregate_state_after,
                     "stop_reason": target.stop_reason or "CYCLE_COMPLETED",
@@ -484,11 +505,23 @@ class DashboardService:
                     "recovered": target.recovered,
                     "recovered_amount_inr": round((target.recovered_amount_paise or 0) / 100.0, 2),
                 },
-                "explanation": f"Runtime executed state transition. Final payment status: {target.aggregate_state_after} (Stop reason: {target.stop_reason}).",
             },
         ]
 
-        action_name = target.selected_action.value if hasattr(target.selected_action, "value") else str(target.selected_action)
+        candidate_ranking = [
+            {
+                "action": action_name,
+                "timing": target.timing_window or "IMMEDIATE",
+                "is_selected": True,
+                "net_value_inr": round((target.amount_in_paise * 0.75 - (target.action_cost_paise or 0)) / 100.0, 2) if action_name != "NO_ACTION" else 0.0,
+            },
+            {
+                "action": "no_action",
+                "timing": "IMMEDIATE",
+                "is_selected": (action_name == "NO_ACTION"),
+                "net_value_inr": 0.0,
+            },
+        ]
 
         # Natural language analytical explanations
         if target.governor_decision == "ABSTAIN" or target.selected_action == "NO_ACTION":
@@ -501,27 +534,59 @@ class DashboardService:
             why_acted = "Case routed to human operations team for specialized high-touch handling."
             why_did_not_act = f"Autonomous execution withheld because transaction exceeded safe autonomous thresholds. Reason: {target.human_review_reason or target.rationale}"
         else:
-            why_acted = f"Dispatched {action_name} at timing {target.timing_window or 'IMMEDIATE'} because expected net recovery uplift is strongly positive (confidence {int(target.diagnosis_confidence*100)}%)."
+            why_acted = f"Dispatched {action_name} at timing {target.timing_window or 'IMMEDIATE'} because expected net recovery uplift is strongly positive (confidence {int(conf_val*100)}%)."
             why_did_not_act = "Alternative candidates (e.g. immediate retry on gateway spike or generic payment links) were rejected due to lower success probability or higher customer churn risk."
 
         return {
             "case_id": target.decision_id,
             "payment_id": target.payment_id,
             "scenario_id": target.scenario_id,
+            "amount_paise": target.amount_in_paise,
             "amount_inr": round(target.amount_in_paise / 100.0, 2),
+            "aggregate_state": target.aggregate_state_after,
             "current_state": target.aggregate_state_after,
+            "diagnosis": {
+                "label": target.diagnosis_label,
+                "confidence": conf_val,
+                "source": target.diagnosis_source,
+            },
             "diagnosis_label": target.diagnosis_label,
-            "diagnosis_confidence": round(target.diagnosis_confidence * 100, 1),
+            "diagnosis_confidence": conf_val,
             "diagnosis_source": target.diagnosis_source,
+            "strategy": {
+                "selected_action": action_name,
+                "timing_window": target.timing_window or "IMMEDIATE",
+                "candidate_ranking": candidate_ranking,
+            },
+            "candidate_ranking": candidate_ranking,
             "selected_action": action_name,
             "timing_window": target.timing_window or "IMMEDIATE",
-            "governor_decision": target.governor_decision or "ALLOW",
-            "governor_reasons": target.governor_reason_codes,
+            "delay_seconds": target.delay_seconds,
+            "governor": {
+                "decision": gov_verdict_str,
+                "result": gov_verdict_str,
+                "reason_codes": gov_reasons,
+            },
+            "governor_decision": {
+                "result": gov_verdict_str,
+                "decision": gov_verdict_str,
+                "reason_codes": gov_reasons,
+            },
+            "governor_verdict": gov_verdict_str,
+            "governor_reasons": gov_reasons,
+            "reason_codes": target.reason_codes or [],
+            "execution": {
+                "result": target.stop_reason or "CYCLE_COMPLETED",
+                "recovered": target.recovered,
+                "recovered_amount_inr": round((target.recovered_amount_paise or 0) / 100.0, 2),
+            },
             "stop_reason": target.stop_reason,
-            "timestamp_str": datetime.fromtimestamp(target.timestamp_epoch, tz=timezone.utc).strftime("%b %d, %Y - %H:%M:%S UTC"),
             "why_acted": why_acted,
             "why_did_not_act": why_did_not_act,
+            "timeline": steps,
+            "timeline_steps": steps,
             "steps": steps,
+            "timestamp_str": datetime.fromtimestamp(target.timestamp_epoch, tz=timezone.utc).strftime("%b %d, %Y - %H:%M:%S UTC"),
         }
 
     def get_evaluation_data(self) -> Dict[str, Any]:
