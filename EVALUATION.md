@@ -143,6 +143,8 @@ To prevent overfitting heuristic priors or policy parameters, the benchmark runn
 | **Holdout Set** | Seeds `45, 46` (2,000 scenarios) | Generalization verification on unseen scenarios | **Strictly Prohibited (Frozen)** |
 | **Combined Cohort** | Seeds `42–46` (5,000 scenarios) | Full population statistical benchmark & reports | Summary reporting |
 
+> **Holdout Integrity Protocol**: Development seeds are used for experimentation. The holdout split is evaluated without parameter tuning against holdout outcomes. No policy thresholds, pricing multipliers, or confidence bounds are fitted or adjusted on holdout seeds.
+
 ---
 
 ## 8. Theoretical Counterfactual Oracle Benchmark

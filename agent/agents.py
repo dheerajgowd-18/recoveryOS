@@ -116,10 +116,12 @@ class RecoveryStrategyAgent:
     def __init__(
         self,
         provider: Optional[Any] = None,
+        strategy_provider: Optional[Any] = None,
         config: Optional[DeterministicPolicyConfig] = None,
     ) -> None:
         self.config = config or DeterministicPolicyConfig()
-        if provider is None:
+        active_provider = provider or strategy_provider
+        if active_provider is None:
             from intelligence.providers.strategy_provider import (
                 DeterministicStrategyProvider,
                 LLMStrategyProvider,
@@ -127,7 +129,7 @@ class RecoveryStrategyAgent:
             fallback = DeterministicStrategyProvider(config=self.config)
             self.provider = LLMStrategyProvider(fallback_provider=fallback)
         else:
-            self.provider = provider
+            self.provider = active_provider
 
     async def propose_strategy_async(
         self,

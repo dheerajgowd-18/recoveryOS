@@ -96,8 +96,20 @@ class AblationRunner:
         strat_layer_uplift = metrics_c.incremental_adjusted_net_recovery_paise - metrics_b.incremental_adjusted_net_recovery_paise
         total_ai_uplift = metrics_c.incremental_adjusted_net_recovery_paise - metrics_a.incremental_adjusted_net_recovery_paise
 
-        summary_dict = {
-            p_name: {
+        summary_dict = {}
+        for p_name, r in results.items():
+            diag_counts = dict(r.metrics.diagnosis_source_counts)
+            if p_name.startswith("A_"):
+                diag_src = "deterministic_offline"
+                strat_src = "deterministic_fallback"
+            elif p_name.startswith("B_"):
+                diag_src = "llm_structured" if r.metrics.deterministic_fallback_count == 0 else "deterministic_fallback"
+                strat_src = "deterministic_fallback"
+            else:
+                diag_src = "llm_structured" if r.metrics.deterministic_fallback_count == 0 else "deterministic_fallback"
+                strat_src = "llm_structured"
+
+            summary_dict[p_name] = {
                 "gross_recovered_paise": r.metrics.gross_recovered_amount_paise,
                 "action_cost_paise": r.metrics.total_action_cost_paise,
                 "churn_count": r.metrics.total_churned_customers,
@@ -106,9 +118,11 @@ class AblationRunner:
                 "interventions": r.metrics.total_interventions,
                 "abstentions": r.metrics.actions_avoided_count,
                 "abstention_rate": round(r.metrics.abstention_count / max(1, r.metrics.total_scenarios), 3),
+                "diagnosis_source": diag_src,
+                "strategy_source": strat_src,
+                "diagnosis_source_counts": diag_counts,
+                "fallback_count": r.metrics.deterministic_fallback_count,
             }
-            for p_name, r in results.items()
-        }
 
         ablation_summary = AblationResult(
             total_scenarios=len(all_scenarios),
@@ -131,7 +145,7 @@ class AblationRunner:
             "",
             f"- **Cohort Size**: {summary.total_scenarios} scenarios (Seeds: {summary.seeds})",
             f"- **AI Model**: `openai/gpt-oss-120b` via Groq",
-            f"- **Evaluation Date**: Controlled Simulation Replay",
+            f"- **Evaluation Mode**: Deterministic Replay / Controlled Simulation",
             "",
             "## Cohort Performance Comparison",
             "",
@@ -146,6 +160,19 @@ class AblationRunner:
             incr_inr = data["incremental_adjusted_net_paise"] / 100.0
             lines.append(
                 f"| `{name}` | Variant | ₹{gross_inr:,.2f} | ₹{cost_inr:,.2f} | {data['churn_count']} | ₹{adj_net_inr:,.2f} | ₹{incr_inr:,.2f} | {data['interventions']} | {data['abstentions']} ({data['abstention_rate']:.1%}) |"
+            )
+
+        lines.extend([
+            "",
+            "## Variant Provenance & Provider Tracking",
+            "",
+            "| Variant | Diagnosis Source | Strategy Source | Fallbacks |",
+            "|---|---|---|---|",
+        ])
+
+        for name, data in summary.cohort_results.items():
+            lines.append(
+                f"| `{name}` | `{data['diagnosis_source']}` | `{data['strategy_source']}` | {data['fallback_count']} |"
             )
 
         lines.extend([
