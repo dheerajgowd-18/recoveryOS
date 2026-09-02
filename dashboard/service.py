@@ -256,36 +256,55 @@ class DashboardService:
         """Aggregates executive KPIs and live operational metrics for the Control Room view."""
         records = self.decision_log.get_all_records()
 
-        # Load benchmark report data if present for aggregate historical proof
-        bench_data = self._load_benchmark_data()
-
-        total_risk_paise = sum(r.amount_in_paise for r in records)
-        gross_rec_paise = sum(r.recovered_amount_paise or 0 for r in records)
+        # Compute exact financial metrics from decision records
+        open_risk_paise = sum(
+            r.amount_in_paise for r in records if r.aggregate_state in ("FAILED", "SCHEDULED", "ESCALATED")
+        )
+        gross_rec_paise = sum(r.recovered_amount_paise or 0 for r in records if r.recovered)
         action_costs_paise = sum(r.action_cost_paise or 0 for r in records)
 
-        # Baseline organic vs incremental
-        actions_executed = sum(1 for r in records if r.selected_action != "NO_ACTION" and r.governor_decision == "ALLOW")
-        actions_avoided = sum(1 for r in records if r.selected_action == "NO_ACTION" or r.governor_decision == "ABSTAIN")
+        # Natural recovery amount (recoveries without active paid intervention or organic captures)
+        natural_rec_paise = sum(
+            r.recovered_amount_paise or 0
+            for r in records
+            if r.recovered and (
+                r.selected_action in ("NO_ACTION", SimulatedActionType.NO_ACTION)
+                or r.governor_decision == "ABSTAIN"
+                or (r.stop_reason and "ORGANIC" in str(r.stop_reason))
+            )
+        )
+
+        # Incremental recovery = gross recovered - natural recovery baseline - action costs
+        incr_rec_paise = gross_rec_paise - natural_rec_paise - action_costs_paise
+
+        # Churn penalty (INR 2,500 per churned customer)
+        churn_count = sum(1 for r in records if getattr(r, "customer_churned", False))
+        churn_penalty_paise = churn_count * 250000
+
+        # Net adjusted recovery = incremental recovery - customer churn penalty
+        net_adj_paise = incr_rec_paise - churn_penalty_paise
+
+        # Operational counters
+        actions_executed = sum(
+            1 for r in records
+            if r.selected_action not in ("NO_ACTION", SimulatedActionType.NO_ACTION) and r.governor_decision == "ALLOW"
+        )
+        actions_avoided = sum(
+            1 for r in records
+            if r.selected_action in ("NO_ACTION", SimulatedActionType.NO_ACTION) or r.governor_decision == "ABSTAIN"
+        )
         human_reviews = sum(1 for r in records if r.governor_decision == "ESCALATE")
         policy_blocks = sum(1 for r in records if r.governor_decision in ("DENY", "DEFER"))
+        invalidations = sum(
+            1 for r in records
+            if r.stop_reason and ("STALE" in str(r.stop_reason) or "INVALIDAT" in str(r.stop_reason).upper())
+        )
         open_cases = sum(1 for r in records if r.aggregate_state in ("FAILED", "SCHEDULED", "ESCALATED"))
+        total_exceptions = policy_blocks + human_reviews + invalidations
 
-        # If benchmark detail exists, use full population benchmark stats for macroscopic context
-        if bench_data and "combined_split" in bench_data:
-            comb = bench_data["combined_split"]
-            rec_res = comb.get("policy_results", {}).get("RECOVERYOS_DETERMINISTIC_V0", {})
-            d = rec_res.get("metric_distributions", {})
-            total_risk_inr = round(d.get("gross_recovered_amount_paise", {}).get("mean", total_risk_paise) / 100.0, 2)
-            gross_rec_inr = round(d.get("gross_recovered_amount_paise", {}).get("mean", gross_rec_paise) / 100.0, 2)
-            incr_rec_inr = round(d.get("incremental_adjusted_net_recovery_paise", {}).get("mean", gross_rec_paise) / 100.0, 2)
-            net_adj_inr = round(d.get("adjusted_net_recovery_paise", {}).get("mean", gross_rec_paise - action_costs_paise) / 100.0, 2)
-            bench_present = True
-        else:
-            total_risk_inr = round(total_risk_paise / 100.0, 2)
-            gross_rec_inr = round(gross_rec_paise / 100.0, 2)
-            incr_rec_inr = round(max(0, gross_rec_paise - action_costs_paise) / 100.0, 2)
-            net_adj_inr = round((gross_rec_paise - action_costs_paise) / 100.0, 2)
-            bench_present = False
+        # Check if offline benchmark artifacts exist for research badge
+        bench_data = self._load_benchmark_data()
+        bench_present = bench_data is not None and "combined_split" in bench_data
 
         # Format recent activity feed
         recent_activity = []
@@ -304,19 +323,20 @@ class DashboardService:
             })
 
         return {
-            "revenue_at_risk_inr": total_risk_inr,
-            "gross_recovered_inr": gross_rec_inr,
-            "incremental_recovered_inr": incr_rec_inr,
-            "net_adjusted_recovery_inr": net_adj_inr,
+            "revenue_at_risk_inr": round(open_risk_paise / 100.0, 2),
+            "gross_recovered_inr": round(gross_rec_paise / 100.0, 2),
+            "incremental_recovered_inr": round(incr_rec_paise / 100.0, 2),
+            "net_adjusted_recovery_inr": round(net_adj_paise / 100.0, 2),
             "open_recovery_opportunities": open_cases,
             "actions_executed": actions_executed,
             "actions_avoided": actions_avoided,
             "human_reviews": human_reviews,
             "policy_blocks": policy_blocks,
-            "exceptions_count": policy_blocks + human_reviews,
+            "invalidations_count": invalidations,
+            "exceptions_count": total_exceptions,
             "recent_activity": recent_activity,
             "benchmark_active": bench_present,
-            "system_status": "OPERATIONAL",
+            "system_status": "OPERATIONAL" if total_exceptions < max(1, len(records)) else "DEGRADED",
             "agent_mode": self.merchant_policy.automation_mode.value if hasattr(self.merchant_policy.automation_mode, "value") else str(self.merchant_policy.automation_mode),
         }
 
