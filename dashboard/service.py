@@ -706,7 +706,7 @@ class DashboardService:
         p = self.merchant_policy
         return {
             "policy_version": p.policy_version,
-            "merchant_id": "mer_rzp_live_2026",
+            "merchant_id": "mer_rzp_sandbox_2026",
             "automation_mode": p.automation_mode.value if hasattr(p.automation_mode, "value") else str(p.automation_mode),
             "max_retries": p.max_retries,
             "max_retry_attempts_total": p.max_retries,

@@ -65,7 +65,7 @@
                 </div>
                 <div class="hidden md:flex items-center space-x-2 pl-3 border-l border-slate-200 text-xs text-slate-500">
                     <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span class="font-mono text-slate-700 font-medium">LIVE RECOVERY ENGINE</span>
+                    <span class="font-mono text-slate-700 font-medium">SIMULATION & AUDIT RUNTIME</span>
                     <span class="text-slate-300">|</span>
                     <span>Model: <strong class="text-slate-700 font-mono">Groq (openai/gpt-oss-120b)</strong></span>
                 </div>
@@ -82,7 +82,7 @@
                     :class="activeTab === 'scenario_lab' ? 'bg-slate-100 text-blue-700 font-semibold border-b-2 border-blue-600' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
                     class="px-3 py-1.5 rounded-t-md text-xs sm:text-sm font-medium transition-colors flex items-center space-x-1.5">
                     <span>Scenario Lab</span>
-                    <span class="px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-700 text-xs font-mono">5 Live</span>
+                    <span class="px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-700 text-xs font-mono">5 Scenarios</span>
                 </button>
                 <button @click="setTab('queue')"
                     :class="activeTab === 'queue' ? 'bg-slate-100 text-blue-700 font-semibold border-b-2 border-blue-600' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
@@ -236,7 +236,7 @@
                 <!-- Real-Time Activity Stream -->
                 <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col">
                     <div class="flex items-center justify-between pb-3 border-b border-slate-100">
-                        <h3 class="text-sm font-semibold text-slate-900 uppercase tracking-wider">Live Recovery Audit Stream</h3>
+                        <h3 class="text-sm font-semibold text-slate-900 uppercase tracking-wider">Operational Recovery Audit Stream</h3>
                         <span class="text-xs text-slate-500 font-mono" x-text="(controlRoom.recent_decisions || []).length + ' events logged'"></span>
                     </div>
                     <div class="divide-y divide-slate-100 flex-1 overflow-y-auto max-h-[360px] text-xs">
@@ -264,7 +264,7 @@
         </section>
 
         <!-- ========================================================================= -->
-        <!-- TAB 2: SCENARIO LAB (Interactive Live Evaluation Engine) -->
+        <!-- TAB 2: SCENARIO LAB (Interactive Scenario Simulation & Replay Engine) -->
         <!-- ========================================================================= -->
         <section x-show="activeTab === 'scenario_lab'" x-cloak class="space-y-6">
             <!-- Scenario Launcher Toolbar -->
@@ -526,7 +526,7 @@
                 <div class="p-4 border-b border-slate-200 flex items-center justify-between">
                     <div>
                         <h2 class="text-sm font-semibold text-slate-900 uppercase tracking-wider">Recovery Opportunities Queue</h2>
-                        <p class="text-xs text-slate-500">Live prioritized recovery opportunities with diagnostic root causes and scheduled windows.</p>
+                        <p class="text-xs text-slate-500">Prioritized recovery opportunities with diagnostic root causes and scheduled windows.</p>
                     </div>
                     <div class="text-xs font-mono text-slate-500" x-text="queue.length + ' cases queued'"></div>
                 </div>

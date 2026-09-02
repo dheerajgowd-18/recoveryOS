@@ -114,9 +114,10 @@ def test_variant_c_mocked_llm_provenance(sample_context: ObservableRecoveryConte
     assert res.metrics.strategy_fallback_count == 0
 
 
-def test_strict_no_fallback_raises_error_when_offline(sample_context: ObservableRecoveryContext):
+def test_strict_no_fallback_raises_error_when_offline(sample_context: ObservableRecoveryContext, monkeypatch):
     """In STRICT_NO_FALLBACK mode, missing API key must raise RuntimeError rather than silently falling back."""
-    strict_diag = LLMDiagnosisProvider(api_key=None, client=None, strict_no_fallback=True)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    strict_diag = LLMDiagnosisProvider(api_key="", client=None, strict_no_fallback=True)
     with pytest.raises(RuntimeError, match="Strict LLM execution failed in LLMDiagnosisProvider"):
         strict_diag.diagnose_sync(sample_context)
 
@@ -127,7 +128,7 @@ def test_strict_no_fallback_raises_error_when_offline(sample_context: Observable
         diagnosis_source="llm_structured",
         model_version="test",
     )
-    strict_strat = LLMStrategyProvider(api_key=None, client=None, strict_no_fallback=True)
+    strict_strat = LLMStrategyProvider(api_key="", client=None, strict_no_fallback=True)
     with pytest.raises(RuntimeError, match="Strict LLM execution failed in LLMStrategyProvider"):
         strict_strat.propose_sync(sample_context, fake_diag)
 
