@@ -5,7 +5,7 @@ import os
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
-from evaluation.harness import EvaluationHarness, EvaluationResult
+from evaluation.harness import EvaluationExecutionMode, EvaluationHarness, EvaluationResult
 from evaluation.policies import (
     AgenticGraphRecoveryPolicy,
     BasePolicy,
@@ -66,10 +66,20 @@ class AblationResult(BaseModel):
 class AblationRunner:
     """Executes controlled ablation studies across synthetic scenarios."""
 
-    def __init__(self, output_dir: str = "reports", strict_no_fallback: bool = False) -> None:
+    def __init__(
+        self,
+        output_dir: str = "reports",
+        mode: EvaluationExecutionMode = EvaluationExecutionMode.OFFLINE_REPLAY,
+        strict_no_fallback: bool = False,
+    ) -> None:
         self.output_dir = output_dir
-        self.strict_no_fallback = strict_no_fallback
-        self.harness = EvaluationHarness()
+        if strict_no_fallback or mode == EvaluationExecutionMode.STRICT_NO_FALLBACK:
+            self.mode = EvaluationExecutionMode.STRICT_NO_FALLBACK
+            self.strict_no_fallback = True
+        else:
+            self.mode = mode
+            self.strict_no_fallback = False
+        self.harness = EvaluationHarness(mode=self.mode)
 
     def run_ablation(
         self,

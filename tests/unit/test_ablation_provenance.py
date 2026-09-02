@@ -70,7 +70,7 @@ def test_variant_b_mocked_llm_provenance(sample_context: ObservableRecoveryConte
     assert decision.diagnosis.diagnosis_source == "llm_structured"
     assert decision.strategy_source == "deterministic_offline"
 
-    harness = EvaluationHarness()
+    harness = EvaluationHarness(mode=EvaluationExecutionMode.LIVE_LLM)
     sim = Simulator()
     scenarios = sim.generate_batch(SimulatorConfig(seed=42, num_scenarios=3))
     res = harness.evaluate_policy(policy_b, scenarios)
@@ -103,7 +103,7 @@ def test_variant_c_mocked_llm_provenance(sample_context: ObservableRecoveryConte
     assert decision.diagnosis.diagnosis_source == "llm_structured"
     assert decision.strategy_source == "llm_structured"
 
-    harness = EvaluationHarness()
+    harness = EvaluationHarness(mode=EvaluationExecutionMode.LIVE_LLM)
     sim = Simulator()
     scenarios = sim.generate_batch(SimulatorConfig(seed=42, num_scenarios=2))
     res = harness.evaluate_policy(policy_c, scenarios)

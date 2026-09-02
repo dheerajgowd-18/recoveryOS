@@ -88,6 +88,7 @@ class LLMDiagnosisProvider(BaseDiagnosisProvider):
         replay_cache: Optional[LLMReplayCache] = None,
         system_prompt: Optional[str] = None,
         strict_no_fallback: bool = False,
+        offline_replay_only: bool = False,
     ) -> None:
         cfg = config or default_llm_config
         self.provider = cfg.provider or DEFAULT_LLM_PROVIDER
@@ -105,6 +106,7 @@ class LLMDiagnosisProvider(BaseDiagnosisProvider):
         self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
         self.prompt_version = cfg.prompt_version or PROMPT_VERSION
         self.strict_no_fallback = strict_no_fallback
+        self.offline_replay_only = offline_replay_only
 
         # Operational telemetry counters
         self.total_invocations: int = 0
@@ -322,6 +324,14 @@ class LLMDiagnosisProvider(BaseDiagnosisProvider):
             self.last_latency_ms = 0.5
             return cached_diag
 
+        # If offline replay only, do not attempt live network calls
+        if self.offline_replay_only:
+            if self.strict_no_fallback:
+                raise RuntimeError("Strict LLM execution failed in LLMDiagnosisProvider: Replay cache miss in OFFLINE_REPLAY mode.")
+            self.fallback_count += 1
+            fallback_diag = self.fallback_provider.diagnose_sync(context, memory_bundle)
+            return self._wrap_fallback(fallback_diag, "FALLBACK_OFFLINE_REPLAY")
+
         # 2. Check API key / client configuration
         if not self.api_key and self._client is None:
             if self.strict_no_fallback:
@@ -422,6 +432,14 @@ class LLMDiagnosisProvider(BaseDiagnosisProvider):
             self.cached_hits += 1
             self.last_latency_ms = 0.5
             return cached_diag
+
+        # If offline replay only, do not attempt live network calls
+        if self.offline_replay_only:
+            if self.strict_no_fallback:
+                raise RuntimeError("Strict LLM execution failed in LLMDiagnosisProvider: Replay cache miss in OFFLINE_REPLAY mode.")
+            self.fallback_count += 1
+            fallback_diag = self.fallback_provider.diagnose_sync(context, memory_bundle)
+            return self._wrap_fallback(fallback_diag, "FALLBACK_OFFLINE_REPLAY")
 
         # 2. Check API key
         if not self.api_key and self._client is None:

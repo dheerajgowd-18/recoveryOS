@@ -1,6 +1,6 @@
 """Evaluation harness orchestrator executing policies and governance checks against synthetic scenarios."""
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from evaluation.metrics import (
@@ -58,6 +58,28 @@ class EvaluationHarness:
         self.merchant_policy = merchant_policy or MerchantPolicy()
         self.governor = RecoveryGovernor(merchant_policy=self.merchant_policy)
         self.mode = mode
+        self._apply_execution_mode_to_provider(self.diagnosis_provider)
+
+    def _apply_execution_mode_to_provider(self, provider: Any) -> None:
+        if provider is None:
+            return
+        is_strict = self.mode == EvaluationExecutionMode.STRICT_NO_FALLBACK
+        is_offline = self.mode == EvaluationExecutionMode.OFFLINE_REPLAY
+        if hasattr(provider, "strict_no_fallback"):
+            provider.strict_no_fallback = is_strict
+        if hasattr(provider, "offline_replay_only"):
+            provider.offline_replay_only = is_offline
+
+    def _apply_execution_mode_to_policy(self, policy: BasePolicy) -> None:
+        """Applies harness execution mode (OFFLINE_REPLAY, LIVE_LLM, STRICT_NO_FALLBACK) to policy providers."""
+        if hasattr(policy, "diagnosis_provider"):
+            self._apply_execution_mode_to_provider(getattr(policy, "diagnosis_provider"))
+
+        if hasattr(policy, "diagnosis_agent") and hasattr(policy.diagnosis_agent, "provider"):
+            self._apply_execution_mode_to_provider(policy.diagnosis_agent.provider)
+
+        if hasattr(policy, "strategy_agent") and hasattr(policy.strategy_agent, "provider"):
+            self._apply_execution_mode_to_provider(policy.strategy_agent.provider)
 
     def evaluate_policy(
         self,
@@ -66,6 +88,7 @@ class EvaluationHarness:
         churn_penalty_paise_per_customer: Optional[int] = None,
     ) -> EvaluationResult:
         """Run a policy on a batch of scenarios and evaluate through Governor against hidden counterfactuals."""
+        self._apply_execution_mode_to_policy(policy)
         penalty = churn_penalty_paise_per_customer if churn_penalty_paise_per_customer is not None else self.churn_penalty_paise_per_customer
         records: List[ScenarioEvaluationRecord] = []
 

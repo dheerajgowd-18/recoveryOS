@@ -64,6 +64,13 @@ def parse_args() -> argparse.Namespace:
         help="Include RECOVERYOS_LLM_DRIVEN policy in the evaluation comparison cohort",
     )
     parser.add_argument(
+        "--mode",
+        type=str,
+        default="OFFLINE_REPLAY",
+        choices=["OFFLINE_REPLAY", "LIVE_LLM", "STRICT_NO_FALLBACK"],
+        help="Evaluation execution mode: OFFLINE_REPLAY, LIVE_LLM, STRICT_NO_FALLBACK",
+    )
+    parser.add_argument(
         "--run-ablation",
         action="store_true",
         help="Execute the 3-variant ablation study (Rules vs LLM-Diag vs LLM-Diag+LLM-Strat)",
@@ -85,6 +92,12 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
+    from evaluation.harness import EvaluationExecutionMode
+    if args.strict_no_fallback:
+        exec_mode = EvaluationExecutionMode.STRICT_NO_FALLBACK
+    else:
+        exec_mode = EvaluationExecutionMode(args.mode)
+
     if args.seed is not None:
         dev_seeds = [args.seed]
         holdout_seeds = []
@@ -101,6 +114,7 @@ def main() -> None:
         include_holdout=include_holdout,
         churn_penalty_paise=args.churn_penalty,
         compare_llm=args.compare_llm,
+        execution_mode=exec_mode,
         report_output_dir=args.output_dir,
     )
 
@@ -188,7 +202,11 @@ def main() -> None:
         print("\n" + "=" * 80)
         print("  EXECUTING ABLATION STUDY (Rules vs LLM-Diag vs Full Agentic)")
         print("=" * 80)
-        ablation_runner = AblationRunner(output_dir=args.output_dir, strict_no_fallback=args.strict_no_fallback)
+        ablation_runner = AblationRunner(
+            output_dir=args.output_dir,
+            mode=exec_mode,
+            strict_no_fallback=args.strict_no_fallback,
+        )
         ab_res = ablation_runner.run_ablation(seeds=dev_seeds, scenarios_per_seed=args.scenarios)
         print(f"  [SAVED] ablation_summary -> {os.path.join(args.output_dir, 'ablation_summary.md')}")
         print("\n  Ablation Variant Telemetry & Provenance:")

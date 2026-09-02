@@ -267,6 +267,7 @@ class LLMStrategyProvider(BaseStrategyProvider):
         replay_cache: Optional[LLMReplayCache] = None,
         system_prompt: Optional[str] = None,
         strict_no_fallback: bool = False,
+        offline_replay_only: bool = False,
     ) -> None:
         cfg = config or default_llm_config
         self.provider = cfg.provider or DEFAULT_LLM_PROVIDER
@@ -284,6 +285,7 @@ class LLMStrategyProvider(BaseStrategyProvider):
         self.system_prompt = system_prompt or DEFAULT_STRATEGY_SYSTEM_PROMPT
         self.prompt_version = STRATEGY_PROMPT_VERSION
         self.strict_no_fallback = strict_no_fallback
+        self.offline_replay_only = offline_replay_only
 
         # Telemetry counters
         self.total_invocations: int = 0
@@ -541,6 +543,13 @@ class LLMStrategyProvider(BaseStrategyProvider):
             self.last_latency_ms = 0.5
             return cached_strat
 
+        # If offline replay only, do not attempt live network calls
+        if self.offline_replay_only:
+            if self.strict_no_fallback:
+                raise RuntimeError("Strict LLM execution failed in LLMStrategyProvider: Replay cache miss in OFFLINE_REPLAY mode.")
+            self.fallback_count += 1
+            return self.fallback_provider.propose_sync(context, diagnosis, memory_bundle, admissible_actions, constraints)
+
         # 2. Check API key / client
         if not self.api_key and self._client is None:
             if self.strict_no_fallback:
@@ -630,6 +639,13 @@ class LLMStrategyProvider(BaseStrategyProvider):
             self.cached_hits += 1
             self.last_latency_ms = 0.5
             return cached_strat
+
+        # If offline replay only, do not attempt live network calls
+        if self.offline_replay_only:
+            if self.strict_no_fallback:
+                raise RuntimeError("Strict LLM execution failed in LLMStrategyProvider: Replay cache miss in OFFLINE_REPLAY mode.")
+            self.fallback_count += 1
+            return self.fallback_provider.propose_sync(context, diagnosis, memory_bundle, admissible_actions, constraints)
 
         if not self.api_key and self._client is None:
             if self.strict_no_fallback:

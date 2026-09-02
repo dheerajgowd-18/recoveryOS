@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
-from evaluation.harness import EvaluationHarness, EvaluationResult
+from evaluation.harness import EvaluationExecutionMode, EvaluationHarness, EvaluationResult
 from evaluation.metrics import DEFAULT_CHURN_PENALTY_PAISE_PER_CUSTOMER, EvaluationMetrics
 from evaluation.oracle import OracleComparisonResult, evaluate_oracle
 from evaluation.policies import (
@@ -51,6 +51,10 @@ class BenchmarkConfig(BaseModel):
     )
     compare_llm: bool = Field(
         default=False, description="Whether to include RECOVERYOS_LLM_DRIVEN in benchmark evaluation cohort"
+    )
+    execution_mode: EvaluationExecutionMode = Field(
+        default=EvaluationExecutionMode.OFFLINE_REPLAY,
+        description="Evaluation execution mode (OFFLINE_REPLAY, LIVE_LLM, STRICT_NO_FALLBACK)",
     )
     report_output_dir: str = Field(default="reports", description="Destination directory for benchmark reports")
 
@@ -123,7 +127,10 @@ class BenchmarkRunner:
     def __init__(self, config: Optional[BenchmarkConfig] = None) -> None:
         self.config = config or BenchmarkConfig()
         self.simulator = Simulator()
-        self.harness = EvaluationHarness(churn_penalty_paise_per_customer=self.config.churn_penalty_paise)
+        self.harness = EvaluationHarness(
+            churn_penalty_paise_per_customer=self.config.churn_penalty_paise,
+            mode=self.config.execution_mode,
+        )
         self.sensitivity_analyzer = SensitivityAnalyzer(
             churn_penalties_paise=self.config.churn_penalties_paise,
             action_cost_multipliers=self.config.action_cost_multipliers,
