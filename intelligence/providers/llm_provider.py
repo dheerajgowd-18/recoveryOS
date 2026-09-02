@@ -164,7 +164,7 @@ class LLMDiagnosisProvider(BaseDiagnosisProvider):
             "",
             "=== SECTION 3: REASONING TASK ===",
             "Analyze the failure context and memory evidence above.",
-            "Infer the root cause diagnosis, calibrated confidence [0.0, 1.0], evidence codes, and candidate actions.",
+            "Infer the root cause diagnosis, model-reported confidence [0.0, 1.0], evidence codes, and candidate actions.",
             "Output strictly a single valid JSON object matching the required schema.",
         ])
 

@@ -28,7 +28,7 @@ class StructuredDiagnosis(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     diagnosis_label: DiagnosisLabel = Field(..., description="Root cause diagnosis category")
-    confidence: float = Field(..., ge=0.0, le=1.0, description="Calibrated confidence score [0.0, 1.0]")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Model-reported confidence score [0.0, 1.0]")
     evidence_codes: List[str] = Field(default_factory=list, description="Observable evidence codes justifying diagnosis")
     uncertainties: List[str] = Field(default_factory=list, description="Identified risk factors or ambiguities")
     recommended_candidate_actions: List[SimulatedActionType] = Field(

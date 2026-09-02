@@ -195,7 +195,36 @@ For each cell in the grid, the analyzer recalculates net economics and verifies 
 
 ---
 
-## 11. CLI Execution Guide
+---
+
+## 12. Execution Modes & Provenance Tracking
+
+The evaluation harness operates under three explicit execution modes:
+
+1. **`OFFLINE_REPLAY`**: Runs without network calls. Uses either deterministic offline heuristics or cached responses stored in the deterministic SHA-256 fingerprint cache (`LLMReplayCache`).
+2. **`LIVE_LLM`**: Requires live API credentials (e.g. `GROQ_API_KEY`) and makes genuine live API calls to `openai/gpt-oss-120b`.
+3. **`STRICT_NO_FALLBACK`**: Enforces strict execution where any failure of an intended LLM path raises an immediate error rather than silently degrading to rule fallbacks.
+
+### First-Class Provider Provenance
+- `llm_structured`: Live model completion executed and validated against Pydantic schema contracts.
+- `cached_llm`: Model response retrieved from the deterministic fingerprint cache.
+- `deterministic_fallback`: Safe fail-closed fallback to rule heuristics due to missing credentials, timeout, or schema error.
+- `deterministic_offline`: Intended offline deterministic baseline.
+
+---
+
+## 13. Three-Cohort Ablation Framework
+
+The ablation framework (`evaluation/ablation.py`) decomposes performance across three strictly defined cohorts:
+- **Variant A (`A_DETERMINISTIC_DIAG_AND_STRAT`)**: Pure deterministic offline diagnosis + deterministic strategy heuristics.
+- **Variant B (`B_LLM_DIAG_DETERMINISTIC_STRAT`)**: LLM diagnosis (`openai/gpt-oss-120b`) + deterministic strategy heuristics.
+- **Variant C (`C_LLM_DIAG_AND_LLM_STRAT`)**: Full agentic system with LLM diagnosis + LLM strategy reasoning + deterministic economic optimization + Governor.
+
+> **Methodological Note on Strategy Uplift**: The $C - B$ difference estimates the incremental value of introducing the full agentic strategy layer over the diagnosis-only hybrid baseline. It is not an isolated causal estimate of the strategy model alone because downstream strategy and timing behavior differ between the cohorts.
+
+---
+
+## 14. CLI Execution Guide
 
 ### Fast 100-Scenario Interactive Showcase
 ```bash
@@ -207,7 +236,8 @@ python scripts/demo.py
 python scripts/benchmark.py --scenarios 1000 --seeds 42,43,44 --holdout-seeds 45,46
 ```
 
-### Single Seed Benchmark
+### 3-Variant Ablation Benchmark
 ```bash
-python scripts/benchmark.py --scenarios 100 --seed 42
+python scripts/benchmark.py --scenarios 50 --seeds 42,43 --holdout-seeds 45 --run-ablation
 ```
+
