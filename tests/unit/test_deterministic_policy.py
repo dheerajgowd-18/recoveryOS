@@ -295,5 +295,5 @@ class TestDeterministicRecoveryPolicy:
         result = harness.evaluate_policy(policy, standard_simulator_batch[:20])
         assert isinstance(result, EvaluationResult)
         assert result.metrics.total_scenarios == 20
-        assert result.metrics.policy_name == "RECOVERYOS_FULL_AGENT_GRAPH"
+        assert result.metrics.policy_name == "RECOVERYOS_AGENTIC_V1"
 

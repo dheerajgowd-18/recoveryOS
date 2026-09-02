@@ -1163,7 +1163,7 @@ class DashboardService:
             abstain_recommended=False,
             rationale="Observable error signature is ambiguous. Confidence (0.35) is below 50% threshold. Human operator review required.",
             diagnosis_source="groq_llm_low_confidence",
-            model_version="groq-llama-3.3-70b-versatile",
+            model_version="groq-openai/gpt-oss-120b",
         )
 
         proposal = PolicyDecision(
@@ -1200,7 +1200,7 @@ class DashboardService:
                 "confidence": 0.35,
                 "diagnosis_label": "unknown_failure",
                 "diagnosis_source": "llm_structured",
-                "model_version": "groq-llama-3.3-70b-versatile",
+                "model_version": "groq-openai/gpt-oss-120b",
                 "rationale": diagnosis.rationale,
                 "expected_net_value_inr": 14999.00,
             },

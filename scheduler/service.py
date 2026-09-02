@@ -20,6 +20,10 @@ class ScheduledLifecycleService:
     def __init__(self, store: Optional[InMemoryScheduledStore] = None) -> None:
         self.store = store or InMemoryScheduledStore()
 
+    def get_pending_actions(self) -> List[ScheduledAction]:
+        """Returns all currently pending or due scheduled actions."""
+        return self.store.list_pending()
+
     def schedule_action(
         self,
         decision: PolicyDecision,

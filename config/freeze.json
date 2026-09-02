@@ -3,9 +3,11 @@
   "track": "Track 03: AI Revenue Recovery",
   "buildathon": "Razorpay AI Buildathon 2026",
   "submission_version": "2.0.0",
-  "freeze_timestamp_utc": "2026-09-02T15:00:00Z",
+  "freeze_timestamp_utc": "2026-09-02T15:30:00Z",
   "architecture": {
-    "primary_llm_provider": "groq-llama-3.3-70b-versatile",
+    "provider": "groq",
+    "primary_llm_model": "openai/gpt-oss-120b",
+    "base_url": "https://api.groq.com/openai/v1",
     "offline_fallback_provider": "deterministic-offline-v1",
     "rag_recovery_memory_enabled": true,
     "stateful_agent_graph_enabled": true,
@@ -13,7 +15,7 @@
       "ContextRetrievalAgent",
       "DiagnosisAgent",
       "RecoveryStrategyAgent",
-      "TimingReasonerAgent",
+      "TimingAndEconomicOptimizationAgent",
       "OutcomeVerificationAgent"
     ]
   },
@@ -25,7 +27,7 @@
   },
   "governance": {
     "policy_version": "v2.0.0",
-    "diagnosis_provider": "llm-structured-with-offline-fallback",
+    "diagnosis_provider": "groq-openai/gpt-oss-120b-with-offline-fallback",
     "economic_parameters": {
       "churn_penalty_paise": 250000,
       "link_action_cost_paise": 100,
@@ -48,4 +50,3 @@
     "unit": "paise"
   }
 }
-

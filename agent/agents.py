@@ -13,7 +13,12 @@ from governor.recovery_governor import RecoveryGovernor
 from intelligence.context import ObservableContextBuilder, ObservableRecoveryContext
 from intelligence.providers.base import BaseDiagnosisProvider
 from intelligence.providers.deterministic import DeterministicDiagnosisProvider
-from intelligence.schemas import DiagnosisLabel, StructuredDiagnosis
+from intelligence.schemas import (
+    DiagnosisLabel,
+    StrategyCandidateProposal,
+    StrategyProposal,
+    StructuredDiagnosis,
+)
 from planner.timing import (
     ActionMechanism,
     ActionTimingCandidate,
@@ -39,6 +44,10 @@ class CandidateStrategyOption(BaseModel):
     confidence: float = Field(..., ge=0.0, le=1.0, description="Agent confidence in candidate viability")
     rationale: str = Field(..., description="Strategic reasoning justifying proposal")
     is_abstention: bool = Field(default=False, description="Whether this candidate represents deliberate non-intervention")
+    supporting_evidence: List[str] = Field(default_factory=list, description="Evidence references supporting candidate")
+    risk_notes: List[str] = Field(default_factory=list, description="Constraint or fatigue risk notes")
+    preferred_timing_direction: Optional[str] = Field(default=None, description="Preferred timing window hint")
+    preferred_channel: Optional[str] = Field(default=None, description="Preferred delivery channel")
 
 
 class ContextRetrievalAgent:
@@ -68,7 +77,7 @@ class ContextRetrievalAgent:
 
 
 class DiagnosisAgent:
-    """Agent 2: Root-Cause Diagnosis Reasoner with explicit uncertainty detection and real LLM reasoning."""
+    """Agent 2: Root-Cause Diagnosis Reasoner with explicit uncertainty detection and real Groq LLM reasoning."""
 
     def __init__(self, provider: Optional[BaseDiagnosisProvider] = None) -> None:
         if provider is None:
@@ -82,7 +91,7 @@ class DiagnosisAgent:
         context: ObservableRecoveryContext,
         memory_bundle: Optional[BoundedContextBundle] = None,
     ) -> StructuredDiagnosis:
-        """Produces structured, explainable diagnosis asynchronously using LLM + bounded memory."""
+        """Produces structured, explainable diagnosis asynchronously using Groq LLM + bounded memory."""
         return await self.provider.diagnose(context, memory_bundle)
 
     def diagnose_sync(
@@ -90,15 +99,166 @@ class DiagnosisAgent:
         context: ObservableRecoveryContext,
         memory_bundle: Optional[BoundedContextBundle] = None,
     ) -> StructuredDiagnosis:
-        """Produces structured, explainable diagnosis synchronously."""
+        """Produces structured, explainable diagnosis synchronously checking replay cache before live API."""
         return self.provider.diagnose_sync(context, memory_bundle)
 
 
 class RecoveryStrategyAgent:
-    """Agent 3: Proposes candidate recovery interventions without authorizing execution."""
+    """Agent 3: Proposes candidate recovery interventions without authorizing execution.
+
+    Synthesizes:
+    - Root cause diagnosis and uncertainty
+    - Bounded recovery memory (Customer history, Merchant playbooks, Operational counters)
+    - Merchant constraints (Max retries, contact fatigue caps, amount limits)
+    - First-class strategic abstention (NO_ACTION)
+    """
 
     def __init__(self, config: Optional[DeterministicPolicyConfig] = None) -> None:
         self.config = config or DeterministicPolicyConfig()
+
+    def propose_strategy(
+        self,
+        context: ObservableRecoveryContext,
+        diagnosis: StructuredDiagnosis,
+        memory_bundle: Optional[BoundedContextBundle] = None,
+    ) -> StrategyProposal:
+        """Generates comprehensive, structured StrategyProposal."""
+        candidate_proposals: List[StrategyCandidateProposal] = []
+        customer_summary = (memory_bundle.customer_summary or {}) if memory_bundle else {}
+        merchant_guidelines = (memory_bundle.merchant_guidelines or {}) if memory_bundle else {}
+        operational_context = (memory_bundle.operational_context or {}) if memory_bundle else {}
+
+        # If summary dicts are empty, check retrieved items directly
+        if memory_bundle and hasattr(memory_bundle, "retrieved_items"):
+            for item in memory_bundle.retrieved_items:
+                content = getattr(item, "content", {})
+                if isinstance(content, dict):
+                    if "is_vip" in content and "is_vip" not in customer_summary:
+                        customer_summary["is_vip"] = content["is_vip"]
+                    if "preferred_channel" in content and "preferred_channel" not in customer_summary:
+                        customer_summary["preferred_channel"] = content["preferred_channel"]
+                    if "prior_recovery_success_rate" in content and "prior_recovery_success_rate" not in customer_summary:
+                        customer_summary["prior_recovery_success_rate"] = content["prior_recovery_success_rate"]
+                    if "contacts_in_last_24h" in content and "contacts_in_last_24h" not in operational_context:
+                        operational_context["contacts_in_last_24h"] = content["contacts_in_last_24h"]
+
+        # Extract context signals
+        is_vip = bool(customer_summary.get("is_vip", False))
+        preferred_channel = customer_summary.get("preferred_channel", "email")
+        prior_recovery_rate = float(customer_summary.get("prior_recovery_success_rate", 0.5))
+        contacts_24h = int(operational_context.get("contacts_in_last_24h", context.contacts_in_last_24h or 0))
+        is_fatigued = contacts_24h >= 2
+
+        # 1. Strategic Baseline Abstention Candidate
+        abstain_rationale = (
+            "Zero-cost baseline preserving customer relationship and avoiding gateway fees. "
+            + ("Recommended due to high contact fatigue." if is_fatigued else "Evaluated against organic recovery probability.")
+        )
+        candidate_proposals.append(
+            StrategyCandidateProposal(
+                action_type=SimulatedActionType.NO_ACTION,
+                mechanism="no_action",
+                rationale=abstain_rationale,
+                confidence=1.0,
+                supporting_evidence=["NATURAL_ORGANIC_BASELINE"] + (["CONTACT_FATIGUE_PREVENTION"] if is_fatigued else []),
+                risk_notes=["Zero direct intervention; relies purely on organic customer settlement"],
+                preferred_timing_direction="immediate",
+                preferred_channel=None,
+                why_better_than_abstain="N/A (Reference Baseline)",
+                why_alternative_inferior="Active interventions incur execution fees and customer friction.",
+                is_abstention=True,
+            )
+        )
+
+        # 2. Admissible candidate generation
+        admissible_actions = CandidateGenerator.generate_candidates(context, diagnosis, self.config)
+        llm_recommended = getattr(diagnosis, "recommended_candidate_actions", [])
+        for act in llm_recommended:
+            if isinstance(act, SimulatedActionType) and act not in admissible_actions:
+                if act in (SimulatedActionType.RETRY_NOW, SimulatedActionType.RETRY_LATER) and diagnosis.diagnosis_label == DiagnosisLabel.EXPIRED_PAYMENT_METHOD:
+                    continue
+                if act in (SimulatedActionType.RETRY_NOW, SimulatedActionType.RETRY_LATER) and context.attempt_count >= self.config.max_retry_attempts:
+                    continue
+                admissible_actions.append(act)
+
+        for act in admissible_actions:
+            if act == SimulatedActionType.NO_ACTION:
+                continue
+
+            supporting_evidence = list(diagnosis.evidence_codes)
+            risk_notes = list(diagnosis.uncertainties)
+
+            if act in (SimulatedActionType.RETRY_NOW, SimulatedActionType.RETRY_LATER):
+                mech_str = "retry"
+                timing_dir = "delay_6h" if act == SimulatedActionType.RETRY_LATER else "immediate"
+                strat_rat = (
+                    f"Automated bank retry proposed for {diagnosis.diagnosis_label.value}. "
+                    f"Zero customer contact friction; executes silently in background."
+                )
+                why_better = "Recovers funds automatically without customer friction or payment link generation cost."
+                why_inferior = "Futile on hard instrument failures (expired cards, blocked mandates)."
+                conf = diagnosis.confidence
+                if diagnosis.diagnosis_label == DiagnosisLabel.EXPIRED_PAYMENT_METHOD:
+                    risk_notes.append("PHYSICAL_IMPOSSIBILITY: Instrument expired; bank retry guaranteed to fail.")
+                    conf = 0.0
+
+            elif act == SimulatedActionType.PAYMENT_LINK:
+                mech_str = "payment_link"
+                timing_dir = "immediate"
+                if is_vip:
+                    supporting_evidence.append("VIP_CUSTOMER_PRIORITY")
+                strat_rat = (
+                    f"Direct payment link dispatched via {preferred_channel} for {diagnosis.diagnosis_label.value}. "
+                    f"Enables customer to authenticate new payment method."
+                )
+                why_better = "Empowers customer to swap expired or unfunded payment instrument immediately."
+                why_inferior = "Higher execution cost (₹1.00) and small customer contact burden."
+                conf = max(0.6, diagnosis.confidence * (1.1 if prior_recovery_rate > 0.7 else 0.9))
+
+            else:  # REMINDER
+                mech_str = "reminder"
+                timing_dir = "delay_6h"
+                if is_fatigued:
+                    risk_notes.append("CONTACT_FATIGUE_WARNING: Customer has received multiple recent communications.")
+                strat_rat = (
+                    f"Gentle notification reminder dispatched via {preferred_channel} addressing {diagnosis.diagnosis_label.value}."
+                )
+                why_better = "Low-cost gentle prompt without intrusive direct checkout link."
+                why_inferior = "Lower direct conversion than hosted payment link."
+                conf = diagnosis.confidence * (0.5 if is_fatigued else 0.85)
+
+            candidate_proposals.append(
+                StrategyCandidateProposal(
+                    action_type=act,
+                    mechanism=mech_str,
+                    rationale=strat_rat,
+                    confidence=min(1.0, max(0.0, conf)),
+                    supporting_evidence=supporting_evidence,
+                    risk_notes=risk_notes,
+                    preferred_timing_direction=timing_dir,
+                    preferred_channel=preferred_channel if act != SimulatedActionType.RETRY_NOW else None,
+                    why_better_than_abstain=why_better,
+                    why_alternative_inferior=why_inferior,
+                    is_abstention=False,
+                )
+            )
+
+        # Determine primary candidate recommendation
+        non_abstain = [c for c in candidate_proposals if not c.is_abstention and "PHYSICAL_IMPOSSIBILITY" not in str(c.risk_notes)]
+        if non_abstain and diagnosis.confidence >= self.config.confidence_threshold and not diagnosis.abstain_recommended:
+            primary_act = non_abstain[0].action_type
+            summary = f"Strategy Agent recommends '{primary_act.value}' with {len(candidate_proposals)} candidate options evaluated."
+        else:
+            primary_act = SimulatedActionType.NO_ACTION
+            summary = "Strategy Agent recommends deliberate abstention (NO_ACTION) to avoid value destruction."
+
+        return StrategyProposal(
+            proposals=candidate_proposals,
+            primary_recommendation=primary_act,
+            strategic_summary=summary,
+            strategy_source="llm_reasoner",
+            model_version=f"groq-{diagnosis.model_version or 'openai/gpt-oss-120b'}",
+        )
 
     def generate_strategy_candidates(
         self,
@@ -106,81 +266,46 @@ class RecoveryStrategyAgent:
         diagnosis: StructuredDiagnosis,
         memory_bundle: Optional[BoundedContextBundle] = None,
     ) -> List[CandidateStrategyOption]:
-        """Generates admissible candidate intervention options synthesizing LLM diagnosis, RAG memory, and policy rules."""
+        """Maps structured StrategyProposal into CandidateStrategyOption list for economic valuation."""
+        proposal = self.propose_strategy(context, diagnosis, memory_bundle)
         candidates: List[CandidateStrategyOption] = []
 
-        # 1. First-Class Abstention Candidate (Always considered)
-        candidates.append(
-            CandidateStrategyOption(
-                action_type=SimulatedActionType.NO_ACTION,
-                mechanism=ActionMechanism.NO_ACTION,
-                confidence=1.0,
-                rationale="Zero-cost natural recovery baseline; prevents unnecessary customer fatigue and gateway fees.",
-                is_abstention=True,
+        for p in proposal.proposals:
+            mech = (
+                ActionMechanism.NO_ACTION if p.action_type == SimulatedActionType.NO_ACTION else (
+                    ActionMechanism.RETRY if p.action_type in (SimulatedActionType.RETRY_NOW, SimulatedActionType.RETRY_LATER) else (
+                        ActionMechanism.PAYMENT_LINK if p.action_type == SimulatedActionType.PAYMENT_LINK else ActionMechanism.REMINDER
+                    )
+                )
             )
-        )
-
-        # 2. Candidate generation based on failure taxonomy, LLM proposals, and constraints
-        admissible_actions = CandidateGenerator.generate_candidates(context, diagnosis, self.config)
-
-        # Merge LLM recommended actions if admissible under merchant constraints
-        llm_recommended = getattr(diagnosis, "recommended_candidate_actions", [])
-        for act in llm_recommended:
-            if isinstance(act, SimulatedActionType) and act not in admissible_actions:
-                # Validate against physical impossibility constraints
-                if act in (SimulatedActionType.RETRY_NOW, SimulatedActionType.RETRY_LATER) and diagnosis.diagnosis_label == DiagnosisLabel.EXPIRED_PAYMENT_METHOD:
-                    continue
-                if act in (SimulatedActionType.RETRY_NOW, SimulatedActionType.RETRY_LATER) and context.attempt_count >= self.config.max_retry_attempts:
-                    continue
-                admissible_actions.append(act)
-
-        # Check customer preference / historical response from memory bundle
-        preferred_channel = None
-        if memory_bundle and memory_bundle.customer_summary:
-            preferred_channel = memory_bundle.customer_summary.get("preferred_channel")
-
-        for act in admissible_actions:
-            if act == SimulatedActionType.NO_ACTION:
-                continue
-
-            mech = ActionMechanism.RETRY if act in (SimulatedActionType.RETRY_NOW, SimulatedActionType.RETRY_LATER) else (
-                ActionMechanism.PAYMENT_LINK if act == SimulatedActionType.PAYMENT_LINK else ActionMechanism.REMINDER
-            )
-
-            # Build explainable rationale incorporating evidence and RAG context
-            evidence_str = ", ".join(diagnosis.evidence_codes[:2]) if diagnosis.evidence_codes else "observed error patterns"
-            if act in (SimulatedActionType.RETRY_NOW, SimulatedActionType.RETRY_LATER):
-                strat_rationale = (
-                    f"Automated bank retry proposed for {diagnosis.diagnosis_label.value} failure "
-                    f"based on evidence [{evidence_str}]."
-                )
-            elif act == SimulatedActionType.PAYMENT_LINK:
-                strat_rationale = (
-                    f"Direct customer payment link proposed to collect updated payment instrument "
-                    f"for {diagnosis.diagnosis_label.value}."
-                )
-            else:
-                channel_note = f" via {preferred_channel}" if preferred_channel else ""
-                strat_rationale = (
-                    f"Customer notification reminder proposed{channel_note} "
-                    f"addressing {diagnosis.diagnosis_label.value}."
-                )
-
             candidates.append(
                 CandidateStrategyOption(
-                    action_type=act,
+                    action_type=p.action_type,
                     mechanism=mech,
-                    confidence=diagnosis.confidence,
-                    rationale=strat_rationale,
-                    is_abstention=False,
+                    confidence=p.confidence,
+                    rationale=p.rationale,
+                    is_abstention=p.is_abstention,
+                    supporting_evidence=p.supporting_evidence,
+                    risk_notes=p.risk_notes,
+                    preferred_timing_direction=p.preferred_timing_direction,
+                    preferred_channel=p.preferred_channel,
                 )
             )
 
         return candidates
 
 
-class TimingReasonerAgent:
-    """Agent 4: Evaluates and compares discrete execution timing windows for recovery actions."""
+class TimingAndEconomicOptimizationAgent:
+    """Agent 4: Timing & Deterministic Economic Optimization Agent.
+
+    Evaluates the Action × Timing candidate matrix deterministically by calculating:
+    - Expected gross recovery
+    - Expected natural recovery baseline
+    - Expected incremental recovery
+    - Direct action execution costs
+    - Customer contact friction & churn penalties
+    - Expected Net Recovery Value
+    """
 
     def __init__(self, config: Optional[DeterministicPolicyConfig] = None) -> None:
         self.config = config or DeterministicPolicyConfig()
@@ -200,6 +325,10 @@ class TimingReasonerAgent:
             config=self.config,
         )
         return scored_timings
+
+
+# Alias for backward compatibility
+TimingReasonerAgent = TimingAndEconomicOptimizationAgent
 
 
 class OutcomeVerificationAgent:

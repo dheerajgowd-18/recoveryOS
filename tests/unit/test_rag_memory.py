@@ -82,7 +82,7 @@ class TestRecoveryMemoryRAG:
         prompt = provider.build_user_prompt(sample_context, bundle)
 
         # Check prompt contains bounded memory headers and provenance info
-        assert "=== BOUNDED RECOVERY MEMORY" in prompt
+        assert "RETRIEVED RECOVERY MEMORY" in prompt
         assert "recoveryos_event_store" in prompt
         assert "cust_high_responsive" in prompt
 

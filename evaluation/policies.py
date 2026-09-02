@@ -215,8 +215,8 @@ class AgenticGraphRecoveryPolicy(BasePolicy):
         self.strategy_agent = RecoveryStrategyAgent()
         self.timing_agent = TimingReasonerAgent()
         super().__init__(
-            name=name or "RECOVERYOS_FULL_AGENT_GRAPH",
-            description=description or "Full RecoveryOS Multi-Agent Graph executing Context Retrieval, LLM Diagnosis, Strategy Generation, and Economic Timing Optimization.",
+            name=name or "RECOVERYOS_AGENTIC_V1",
+            description=description or "Agentic RecoveryOS executing Context Retrieval, LLM Diagnosis, Strategy Reasoning, and Economic Timing Optimization.",
         )
 
     def decide(

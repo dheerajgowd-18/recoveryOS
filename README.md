@@ -19,10 +19,75 @@
 Traditional subscription dunning systems rely on static retry schedules and aggressive payment link broadcasting. In fintech billing environments, these naive heuristics destroy customer goodwill, trigger gateway surcharge fees on impossible recoveries (e.g. expired cards), and take credit for transactions that would have naturally resolved on their own.
 
 **RecoveryOS** introduces a closed-loop, state-reconciling autonomous recovery agent built on four strict separation-of-concern planes:
-1. **Memory & Context Plane**: Bounded context assembler and Recovery Memory RAG (`rag/`) attaching immutable provenance metadata without exposing simulator ground truth.
-2. **Intelligence Plane**: Specialized Multi-Agent reasoning graph (`agent/agents.py`, `agent/graph.py`) powered by real open-weights LLM (`Groq llama-3.3-70b-versatile`) and deterministic offline diagnostic providers.
-3. **Governance Plane**: Recovery Governor v1 with deterministic mathematical scoring, contact fatigue caps, and an independent fail-closed Tool Firewall.
-4. **Execution Plane**: Scheduled action lifecycle service with stale-action state versioning, a high-density Operations Console (`GET /dashboard`) featuring an interactive 6-case Scenario Lab (`POST /dashboard/api/scenarios/{id}/run`), and a secure Razorpay test-mode adapter and live webhook gateway (`POST /webhooks/razorpay`).
+1. **Memory & Context Plane**: Bounded context assembler and Recovery Memory RAG (`rag/`) attaching immutable provenance metadata without exposing simulator ground truth
+2. **Intelligence Plane**: Specialized Multi-Agent reasoning graph (`agent/agents.py`, `agent/graph.py`) powered by open-weights LLM (`Groq openai/gpt-oss-120b`) and deterministic offline diagnostic providers.
+3. **Bounded Context & Recovery Memory (RAG)**: Provenance-tracked retrieval (`rag/`) querying sanitized customer communication preferences, merchant playbooks, and operational fatigue metrics.
+4. **Decision & Economic Optimization**: Action × Timing planner (`planner/timing.py`) evaluating discrete recovery mechanisms against deterministic net incremental value formulas.
+5. **Recovery Governor & Tool Firewall**: Non-bypassable authorization gate (`governor/`, `governor/firewall.py`) checking idempotency, consent, contact limits, amount thresholds, cooldowns, and fail-closed safety.
+6. **Execution & Event Sourcing**: Append-only event store (`ingestion/store.py`), state reconciler (`ingestion/reconciler.py`), and webhook adapter for Razorpay APIs (`backend/adapters/razorpay_adapter.py`).
+
+---
+
+## 🏛️ System Architecture
+
+```
+                                      [ INCOMING RAZORPAY WEBHOOK / INGESTION ]
+                                                          │
+                                                          ▼
+                                            [ 1. CONTEXT RETRIEVAL (RAG) ]
+                                            - Observable Context Sanitization
+                                            - Bounded Memory & Playbook Matching
+                                                          │
+                                                          ▼
+                                            [ 2. LLM DIAGNOSIS AGENT ]
+                                            - Groq (openai/gpt-oss-120b) + Replay Cache
+                                            - Root Cause & Uncertainty Estimation
+                                            - Deterministic Offline Fallback
+                                                          │
+                                                          ▼
+                                            [ 3. RECOVERY STRATEGY AGENT ]
+                                            - Candidate Strategy Synthesis
+                                            - First-Class Strategic Abstention
+                                                          │
+                                                          ▼
+                                     [ 4. TIMING & ECONOMIC OPTIMIZATION AGENT ]
+                                     - Action × Timing Discrete Matrix (+0, +2h, +6h, +12h, +24h)
+                                     - Deterministic Net Incremental Value Optimization
+                                                          │
+                                                          ▼
+                                            [ 5. RECOVERY GOVERNOR ]
+                                            - Idempotency & Replay Protection
+                                            - Customer Consent & Contact Limits
+                                            - Cooldowns, Amount Caps & Negative Uplift Guards
+                                                          │
+                                                          ▼
+                                            [ 6. TOOL FIREWALL GATE ]
+                                            - Parameter Schema & Allowed Action Whitelist
+                                                          │
+                                          ┌───────────────┴───────────────┐
+                                          ▼                               ▼
+                             [ 7A. IMMEDIATE EXECUTION ]     [ 7B. SCHEDULED LIFECYCLE ]
+                             - Razorpay API / Simulator      - State Version Binding
+                             - Idempotency Lock Release      - Due Revalidation on State Drift
+                                          │                               │
+                                          └───────────────┬───────────────┘
+                                                          ▼
+                                            [ 8. OUTCOME VERIFICATION ]
+                                            - Append-Only Event Store Reconciliation
+                                            - State Snapshot Verification (CAPTURED/FAILED)
+```
+
+| Component | Responsibility | Technical Implementation |
+|---|---|---|
+| **Ingestion Service** | Webhook intake & idempotency | `backend/services/ingestion_service.py`, `ingestion/store.py` |
+| **Context Agent (RAG)** | Bounded context & memory retrieval | `rag/retrieval.py`, `rag/customer_memory.py`, `rag/merchant_memory.py` |
+| **Diagnosis Agent** | Root-cause diagnosis & uncertainty | `agent/agents.py`, `intelligence/providers/groq_provider.py` (`openai/gpt-oss-120b`) |
+| **Strategy Agent** | Admissible candidate generation | `agent/agents.py` (`propose_strategy`, `generate_strategy_candidates`) |
+| **Economic Optimizer** | Action × Timing value ranking | `planner/timing.py`, `policy/scoring.py` (Deterministic Expected Net Value) |
+| **Recovery Governor** | Non-bypassable financial authority | `governor/recovery_governor.py`, `governor/policy.py` |
+| **Tool Firewall** | Execution boundary & parameter gate | `governor/firewall.py` |
+| **Scheduler** | Delayed action lifecycle & stale checks | `scheduler/service.py`, `scheduler/store.py` |
+| **Verifier** | Domain state reconciliation | `agent/agents.py`, `ingestion/reconciler.py` |
 
 ### Benchmark Comparison (100 Deterministic Synthetic Scenarios, Seed=42)
 

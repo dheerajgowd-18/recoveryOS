@@ -66,13 +66,11 @@ class EvaluationHarness:
             # 1. Project sanitized observable context (strictly hides counterfactual outcomes and archetypes)
             context = ObservableContextBuilder.build_from_simulated_scenario(scenario)
 
-            # 2. Produce structured diagnosis from observable context
-            diagnosis = self.diagnosis_provider.diagnose_sync(context)
+            # 2. Query policy proposal using sanitized observable context (allowing agentic policies to run their own RAG/LLM diagnosis)
+            proposal = policy.decide(context)
+            diagnosis = proposal.diagnosis or self.diagnosis_provider.diagnose_sync(context)
 
-            # 3. Query policy proposal using ONLY the observable context and structured diagnosis
-            proposal = policy.decide(context, diagnosis=diagnosis)
-
-            # 4. Authoritative Governor Evaluation
+            # 3. Authoritative Governor Evaluation
             gov_decision = self.governor.evaluate(
                 context=context,
                 diagnosis=diagnosis,

@@ -46,7 +46,7 @@ The evaluation harness benchmarks RecoveryOS against 4 standard industry baselin
    - Policy: Receives/infers structured diagnosis from observable evidence, filters candidate actions under physical failure constraints, estimates net incremental recovery uplift allowing negative uplift ($\Delta P < 0$), and enforces net value thresholds and abstention guards:
      $$a^* = \arg\max_{a \in \mathcal{A}_{\text{admissible}}} \left( \text{Amount} \times (P(a) - P(\text{no\_action})) - \text{Cost}(a) \right)$$
 6. **RecoveryOS Groq LLM-Driven (`LLMDrivenRecoveryPolicy`)**
-   - Policy: Uses `GroqLLMDiagnosisProvider` (`llama-3.3-70b-versatile` with JSON schema enforcement) to infer structured root causes, passing candidate actions to the Action × Timing planner and Recovery Governor. Available in benchmark via `--compare-llm`.
+   - Policy: Uses `GroqLLMDiagnosisProvider` (`openai/gpt-oss-120b` with JSON schema enforcement) to infer structured root causes, passing candidate actions to the Action × Timing planner and Recovery Governor. Available in benchmark via `--compare-llm`.
 
 ---
 
