@@ -34,6 +34,7 @@ class DashboardService:
             decision_log=self.decision_log,
             merchant_policy=self.merchant_policy,
         )
+        self._dynamic_runs_history: List[Dict[str, Any]] = []
         self._ensure_bootstrap_data()
 
     def _ensure_bootstrap_data(self) -> None:
@@ -1326,7 +1327,8 @@ class DashboardService:
             {"step": 7, "title": "Execution & Verification", "detail": f"Final state: {result.final_state} &bull; Recovered: {result.is_recovered} &bull; Net Value: ₹{result.net_value_paise/100.0:,.2f}", "status": "SUCCESS"},
         ]
 
-        return self._build_scenario_payload(
+        run_id = f"dec_dyn_{int(time.time() * 1000) % 1000000:06d}"
+        payload = self._build_scenario_payload(
             scenario_id="scen_custom_live",
             scenario_name=f"Custom Recovery Case (₹{amount_inr:,.2f} &bull; {failure_type_raw.upper()})",
             scenario_type="CUSTOM_LIVE_STUDIO",
@@ -1347,6 +1349,69 @@ class DashboardService:
             mode=mode,
             candidate_rankings=candidates,
         )
+        payload["run_id"] = run_id
+        payload["case_id"] = run_id
+        payload["payment_id"] = f"pay_dyn_{run_id[8:]}"
+        payload["created_at_epoch"] = int(time.time())
+        payload["created_at_str"] = datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
+
+        # Save to dynamic history
+        history_item = {
+            "run_id": run_id,
+            "payment_id": payload["payment_id"],
+            "amount_inr": amount_inr,
+            "failure_type": failure_type_raw,
+            "customer_segment": customer_segment,
+            "execution_mode": mode,
+            "diagnosis_label": ai_proposal["diagnosis_label"],
+            "governor_result": governor_verdict["result"],
+            "selected_action": ai_proposal["action_type"] + (" (" + ai_proposal["timing_window"] + ")" if ai_proposal.get("timing_window") else ""),
+            "final_state": result.final_state,
+            "is_recovered": result.is_recovered,
+            "net_value_inr": round(result.net_value_paise / 100.0, 2),
+            "created_at_str": payload["created_at_str"],
+        }
+        self._dynamic_runs_history.insert(0, history_item)
+
+        # Also store into decision log for case replay
+        try:
+            from storage.decision_log import DecisionRecord
+            dec_record = DecisionRecord(
+                decision_id=run_id,
+                scenario_id="scen_custom_live",
+                payment_id=payload["payment_id"],
+                iteration=1,
+                timestamp_epoch=int(time.time()),
+                policy_name=f"RECOVERYOS_{mode}",
+                policy_version="v1.0.0",
+                diagnosis_label=ai_proposal["diagnosis_label"],
+                diagnosis_confidence=ai_proposal["confidence"],
+                diagnosis_source=ai_proposal["diagnosis_source"],
+                evidence_codes=[f"OBS_{failure_type_raw.upper()}"],
+                governor_decision=governor_verdict["result"],
+                governor_reason_codes=governor_verdict.get("reason_codes", []),
+                amount_in_paise=amount_paise,
+                aggregate_state_before="FAILED",
+                aggregate_state_after=result.final_state,
+                aggregate_state=result.final_state,
+                risk_level="MEDIUM",
+                selected_action=ai_proposal["action_type"],
+                timing_window=ai_proposal["timing_window"],
+                delay_seconds=0,
+                confidence=ai_proposal["confidence"],
+                rationale=ai_proposal["rationale"],
+                reason_codes=governor_verdict.get("reason_codes", []),
+                execution_result_success=result.is_recovered,
+                recovered=result.is_recovered,
+                action_cost_paise=result.total_cost_paise,
+                recovered_amount_paise=result.recovered_amount_paise,
+                stop_reason=result.stop_reason,
+            )
+            self.decision_log.save_record(dec_record)
+        except Exception:
+            pass
+
+        return payload
 
     async def _run_scenario_abstain(self, mode: str = "DETERMINISTIC") -> Dict[str, Any]:
         """Case 1: Micro-transaction with expired card -> AI and Governor both ABSTAIN."""
@@ -2153,6 +2218,10 @@ class DashboardService:
             sovereignty_rule="The AI identified non-technical checkout friction and selected an optimal delayed re-engagement window.",
             mode=mode,
         )
+
+    def get_dynamic_runs_history(self) -> List[Dict[str, Any]]:
+        """Returns the chronological log of custom scenario runs evaluated during the current session."""
+        return list(self._dynamic_runs_history)
 
     def _load_benchmark_data(self) -> Optional[Dict[str, Any]]:
         """Loads benchmark JSON artifact from reports directory if available."""

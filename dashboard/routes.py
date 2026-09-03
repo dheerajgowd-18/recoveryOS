@@ -111,6 +111,12 @@ async def run_live_demo_api(request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Live demo execution failed: {str(e)}") from e
 
 
+@router.get("/dashboard/api/dynamic-runs/history", response_model=List[Dict[str, Any]], summary="Get Session Dynamic Runs History")
+async def get_dynamic_runs_history_api() -> List[Dict[str, Any]]:
+    """Returns chronological log of dynamic scenario runs evaluated during the current session."""
+    return dashboard_service.get_dynamic_runs_history()
+
+
 @router.post("/dashboard/api/scenarios/{scenario_id}/run", response_model=Dict[str, Any], summary="Execute Scenario Lab Simulation")
 @router.get("/dashboard/api/scenarios/{scenario_id}/run", response_model=Dict[str, Any], summary="Execute Scenario Lab Simulation")
 async def run_scenario_api(scenario_id: str, request: Request) -> Dict[str, Any]:

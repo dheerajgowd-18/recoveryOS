@@ -159,6 +159,8 @@
 
                 <!-- Navigation Rail Items -->
                 <nav class="space-y-0.5 text-xs">
+                    
+                    <!-- 1. Control Room -->
                     <button @click="setTab('control_room')"
                             :class="activeTab === 'control_room' ? 'nav-item-active' : 'text-warm-secondary hover:text-warm-text hover:bg-warm-subtle'"
                             class="w-full text-left px-2.5 py-1.5 rounded transition flex items-center justify-between">
@@ -168,6 +170,7 @@
                         </div>
                     </button>
 
+                    <!-- 2. Scenario Lab (Signature Presets) -->
                     <button @click="setTab('scenario_lab')"
                             :class="activeTab === 'scenario_lab' ? 'nav-item-active' : 'text-warm-secondary hover:text-warm-text hover:bg-warm-subtle'"
                             class="w-full text-left px-2.5 py-1.5 rounded transition flex items-center justify-between">
@@ -175,9 +178,32 @@
                             <svg class="w-3.5 h-3.5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
                             <span>Scenario Lab</span>
                         </div>
-                        <span class="text-[10px] font-mono px-1 rounded bg-warm-subtle text-brand-700 font-semibold">Studio</span>
+                        <span class="text-[10px] font-mono px-1 rounded bg-warm-subtle text-warm-secondary font-semibold">7 Cases</span>
                     </button>
 
+                    <!-- 3. Live AI Studio (Dedicated Dynamic Playground) -->
+                    <button @click="setTab('live_studio')"
+                            :class="activeTab === 'live_studio' ? 'nav-item-active' : 'text-warm-secondary hover:text-warm-text hover:bg-warm-subtle'"
+                            class="w-full text-left px-2.5 py-1.5 rounded transition flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <svg class="w-3.5 h-3.5 text-ai-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            <span class="font-medium text-warm-text">Live AI Studio</span>
+                        </div>
+                        <span class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-ai-bg text-ai-text font-bold uppercase border border-ai-border">LIVE</span>
+                    </button>
+
+                    <!-- 4. Run History (Audit Logs of Dynamic Runs) -->
+                    <button @click="setTab('run_history')"
+                            :class="activeTab === 'run_history' ? 'nav-item-active' : 'text-warm-secondary hover:text-warm-text hover:bg-warm-subtle'"
+                            class="w-full text-left px-2.5 py-1.5 rounded transition flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <svg class="w-3.5 h-3.5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <span>Run History</span>
+                        </div>
+                        <span class="text-[10px] font-mono px-1 rounded bg-warm-subtle text-warm-secondary" x-text="dynamicHistory.length"></span>
+                    </button>
+
+                    <!-- 5. Recovery Queue -->
                     <button @click="setTab('queue')"
                             :class="activeTab === 'queue' ? 'nav-item-active' : 'text-warm-secondary hover:text-warm-text hover:bg-warm-subtle'"
                             class="w-full text-left px-2.5 py-1.5 rounded transition flex items-center justify-between">
@@ -188,6 +214,7 @@
                         <span class="text-[10px] font-mono px-1 rounded bg-warm-subtle text-warm-secondary" x-text="queue.length"></span>
                     </button>
 
+                    <!-- 6. Case Replay -->
                     <button @click="setTab('replay')"
                             :class="activeTab === 'replay' ? 'nav-item-active' : 'text-warm-secondary hover:text-warm-text hover:bg-warm-subtle'"
                             class="w-full text-left px-2.5 py-1.5 rounded transition flex items-center justify-between">
@@ -197,6 +224,7 @@
                         </div>
                     </button>
 
+                    <!-- 7. Evaluation Lab -->
                     <button @click="setTab('evaluation')"
                             :class="activeTab === 'evaluation' ? 'nav-item-active' : 'text-warm-secondary hover:text-warm-text hover:bg-warm-subtle'"
                             class="w-full text-left px-2.5 py-1.5 rounded transition flex items-center justify-between">
@@ -206,6 +234,7 @@
                         </div>
                     </button>
 
+                    <!-- 8. Exceptions & Audit -->
                     <button @click="setTab('exceptions')"
                             :class="activeTab === 'exceptions' ? 'nav-item-active' : 'text-warm-secondary hover:text-warm-text hover:bg-warm-subtle'"
                             class="w-full text-left px-2.5 py-1.5 rounded transition flex items-center justify-between">
@@ -355,45 +384,31 @@
             </div>
 
             <!-- ========================================================================= -->
-            <!-- WORKSPACE 2: SCENARIO LAB / LIVE DECISION STUDIO -->
+            <!-- WORKSPACE 2: SCENARIO LAB (7 Track 03 Signature Cases) -->
             <!-- ========================================================================= -->
             <div x-show="activeTab === 'scenario_lab'" x-cloak class="space-y-4 workspace-enter">
                 
-                <!-- Live Studio Banner & Custom Input Grid -->
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
                     
-                    <!-- Left Column: Quick Presets & Showcase Cases (4 Cols) -->
+                    <!-- Left Column: 7 Showcase Presets (4 Cols) -->
                     <div class="lg:col-span-4 bg-warm-surface border border-warm-border rounded-lg p-3.5 shadow-xs space-y-3">
                         <div class="flex items-center justify-between border-b border-warm-border pb-2">
                             <div>
-                                <h3 class="text-xs font-bold text-warm-text uppercase tracking-wider">Showcase Presets</h3>
-                                <p class="text-[11px] text-warm-secondary">Click to populate studio form</p>
+                                <h3 class="text-xs font-bold text-warm-text uppercase tracking-wider">Track 03 Showcase Cases</h3>
+                                <p class="text-[11px] text-warm-secondary">Signature recovery benchmarks</p>
                             </div>
-                            <span class="text-[10px] font-mono text-warm-muted">7 Cases</span>
+                            <span class="text-[10px] font-mono text-warm-muted">7 Presets</span>
                         </div>
 
-                        <!-- Quick Template Chips -->
-                        <div class="flex flex-wrap gap-1.5 text-[11px]">
-                            <button @click="applyTemplate('failed_payment')" class="px-2 py-0.5 rounded bg-warm-subtle hover:bg-warm-border border border-warm-border text-warm-text transition">
-                                + Failed Payment
-                            </button>
-                            <button @click="applyTemplate('subscription')" class="px-2 py-0.5 rounded bg-warm-subtle hover:bg-warm-border border border-warm-border text-warm-text transition">
-                                + Subscription
-                            </button>
-                            <button @click="applyTemplate('checkout_recovery')" class="px-2 py-0.5 rounded bg-warm-subtle hover:bg-warm-border border border-warm-border text-warm-text transition">
-                                + Cart Recovery
-                            </button>
-                        </div>
-
-                        <!-- 7 Showcase Presets -->
+                        <!-- 7 Showcase Presets List -->
                         <div class="space-y-1 text-xs">
                             <template x-for="p in presets" :key="p.key">
-                                <div @click="loadPresetIntoForm(p)"
-                                     :class="activeScenario === p.key ? 'bg-warm-subtle border-brand-600 font-semibold' : 'hover:bg-warm-subtle border-transparent'"
-                                     class="p-2 rounded border-l-2 cursor-pointer transition flex items-center justify-between">
-                                    <div>
-                                        <div class="font-medium text-warm-text" x-text="p.number + ' ' + p.title"></div>
-                                        <div class="text-[11px] font-mono text-warm-secondary mt-0.5" x-text="'₹' + formatINR(p.amount) + ' &bull; ' + p.error_label"></div>
+                                <div @click="runScenario(p.key, 'DETERMINISTIC')"
+                                     :class="activeScenario === p.key ? 'bg-warm-subtle border-brand-600 font-semibold shadow-xs' : 'hover:bg-warm-subtle border-transparent'"
+                                     class="p-2.5 rounded border-l-2 cursor-pointer transition flex items-center justify-between">
+                                    <div class="space-y-0.5">
+                                        <div class="font-semibold text-warm-text" x-text="p.number + ' ' + p.title"></div>
+                                        <div class="text-[11px] font-mono text-warm-secondary" x-text="'₹' + formatINR(p.amount) + ' &bull; ' + p.error_label"></div>
                                     </div>
                                     <span class="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded"
                                           :class="p.badge_class" x-text="p.tag"></span>
@@ -402,124 +417,202 @@
                         </div>
                     </div>
 
-                    <!-- Right Column: Interactive Custom Scenario Studio Form (8 Cols) -->
-                    <div class="lg:col-span-8 bg-warm-surface border border-warm-border rounded-lg p-4 shadow-xs space-y-4">
-                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-warm-border pb-2.5">
-                            <div>
-                                <h2 class="text-sm font-bold text-warm-text">Live Recovery Decision Studio</h2>
-                                <p class="text-xs text-warm-secondary">Configure observable parameters to evaluate against real LLM reasoning and deterministic Governor policies.</p>
-                            </div>
-                            <div class="flex items-center space-x-1.5 text-xs font-mono">
-                                <span class="w-2 h-2 rounded-full" :class="runtimeMode === 'LIVE_LLM' ? 'bg-ai-accent' : 'bg-warm-muted'"></span>
-                                <span class="text-warm-secondary" x-text="'Mode: ' + runtimeMode"></span>
-                            </div>
-                        </div>
-
-                        <!-- Form Input Grid -->
-                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                            
-                            <!-- Amount -->
-                            <div class="space-y-1">
-                                <label class="text-[11px] font-semibold text-warm-secondary block">Amount (INR)</label>
-                                <div class="relative">
-                                    <span class="absolute left-2.5 top-1.5 text-warm-muted font-mono">₹</span>
-                                    <input type="number" x-model.number="customForm.amount" step="100" min="1"
-                                           class="w-full pl-6 pr-2.5 py-1.5 rounded border border-warm-border font-mono font-semibold bg-warm-surface text-warm-text focus:outline-none focus:border-brand-600">
+                    <!-- Right Column: Active Showcase Scenario Execution (8 Cols) -->
+                    <div class="lg:col-span-8 space-y-4">
+                        
+                        <div class="bg-warm-surface border border-warm-border rounded-lg p-4 shadow-xs space-y-3">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-warm-border pb-2.5">
+                                <div>
+                                    <h2 class="text-sm font-bold text-warm-text" x-text="scenarioData ? scenarioData.scenario_name : 'Loading showcase scenario...'"></h2>
+                                    <p class="text-xs text-warm-secondary" x-text="scenarioData ? scenarioData.description : ''"></p>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <button @click="runScenario(activeScenario, 'DETERMINISTIC')" :disabled="scenarioRunning"
+                                            class="px-3 py-1.5 rounded border border-warm-border bg-warm-surface hover:bg-warm-subtle text-warm-text font-semibold text-xs transition active:scale-95">
+                                        Run Deterministic
+                                    </button>
                                 </div>
                             </div>
 
-                            <!-- Failure Type -->
-                            <div class="space-y-1">
-                                <label class="text-[11px] font-semibold text-warm-secondary block">Failure Type</label>
-                                <select x-model="customForm.failure_type"
-                                        class="w-full px-2.5 py-1.5 rounded border border-warm-border font-mono bg-warm-surface text-warm-text focus:outline-none focus:border-brand-600">
-                                    <option value="gateway_timeout">GATEWAY_TIMEOUT</option>
-                                    <option value="insufficient_funds">INSUFFICIENT_FUNDS</option>
-                                    <option value="expired_card">EXPIRED_CARD</option>
-                                    <option value="authentication_failure">3DS_OTP_DROPOFF</option>
-                                    <option value="mandate_revoked">MANDATE_REVOKED</option>
-                                    <option value="transient_network">TRANSIENT_NETWORK</option>
-                                </select>
-                            </div>
+                            <!-- 4 Core Sovereignty Panels -->
+                            <div x-show="scenarioData" class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                                
+                                <!-- Panel 1: AI Reasoning -->
+                                <div class="bg-warm-subtle border border-warm-border rounded p-3 text-xs space-y-2">
+                                    <div class="flex items-center justify-between pb-1 border-b border-warm-border">
+                                        <span class="font-bold text-warm-text">1. AI Diagnosis &amp; Proposal</span>
+                                        <span class="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-warm-surface text-brand-700 border border-warm-border">DETERMINISTIC</span>
+                                    </div>
+                                    <div class="space-y-1 text-xs">
+                                        <div>
+                                            <span class="text-warm-secondary block text-[11px]">Root Cause:</span>
+                                            <span class="font-mono font-bold text-warm-text text-xs break-all" x-text="scenarioData && scenarioData.ai_proposal ? scenarioData.ai_proposal.diagnosis_label : ''"></span>
+                                        </div>
+                                        <div class="flex justify-between items-center pt-0.5">
+                                            <span class="text-warm-secondary text-[11px]">Confidence:</span>
+                                            <span class="font-mono font-bold text-ai-text text-xs" x-text="scenarioData && scenarioData.ai_proposal ? (scenarioData.ai_proposal.confidence * 100).toFixed(0) + '%' : ''"></span>
+                                        </div>
+                                        <div>
+                                            <span class="text-warm-secondary block text-[11px]">Proposal:</span>
+                                            <span class="font-mono font-bold text-warm-text text-xs" x-text="scenarioData && scenarioData.ai_proposal ? (scenarioData.ai_proposal.action_type + ' (' + (scenarioData.ai_proposal.timing_window || 'IMMEDIATE') + ')') : ''"></span>
+                                        </div>
+                                    </div>
+                                    <div class="text-[11px] text-warm-secondary font-mono bg-warm-surface p-2 rounded border border-warm-border mt-1"
+                                         x-text="scenarioData && scenarioData.ai_proposal ? scenarioData.ai_proposal.rationale : ''"></div>
+                                </div>
 
-                            <!-- Consent Status -->
-                            <div class="space-y-1">
-                                <label class="text-[11px] font-semibold text-warm-secondary block">Customer Consent</label>
-                                <select x-model="customForm.consent"
-                                        class="w-full px-2.5 py-1.5 rounded border border-warm-border font-mono bg-warm-surface text-warm-text focus:outline-none focus:border-brand-600">
-                                    <option value="opted_in">OPTED_IN (Consent OK)</option>
-                                    <option value="opted_out">OPTED_OUT (Blocked)</option>
-                                </select>
-                            </div>
+                                <!-- Panel 2: Economic Engine -->
+                                <div class="bg-warm-subtle border border-warm-border rounded p-3 text-xs space-y-2">
+                                    <div class="flex items-center justify-between pb-1 border-b border-warm-border">
+                                        <span class="font-bold text-warm-text">2. Economic Engine</span>
+                                        <span class="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-warm-surface text-brand-700 border border-warm-border">OPTIMIZER</span>
+                                    </div>
+                                    <div class="space-y-1 text-xs">
+                                        <div class="flex justify-between">
+                                            <span class="text-warm-secondary text-[11px]">Evaluated:</span>
+                                            <span class="font-mono font-bold text-warm-text" x-text="(scenarioData && scenarioData.candidate_rankings ? scenarioData.candidate_rankings.length : 1) + ' candidate windows'"></span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-warm-secondary text-[11px]">Selected:</span>
+                                            <span class="font-mono font-bold text-brand-700" x-text="scenarioData && scenarioData.ai_proposal ? scenarioData.ai_proposal.timing_window || 'IMMEDIATE' : ''"></span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-warm-secondary text-[11px]">Expected Net:</span>
+                                            <span class="font-mono font-bold text-emerald-800"
+                                                  x-text="scenarioData && scenarioData.ai_proposal ? '₹' + formatINR(scenarioData.ai_proposal.expected_net_value_inr) : '₹0.00'"></span>
+                                        </div>
+                                    </div>
+                                    <div class="text-[11px] text-warm-secondary font-mono bg-warm-surface p-2 rounded border border-warm-border mt-1"
+                                         x-text="scenarioData && scenarioData.ai_proposal && scenarioData.ai_proposal.action_type === 'no_action' ? 'Selected baseline NO_ACTION (Net < 0)' : 'Maximizing expected incremental net recovery uplift.'"></div>
+                                </div>
 
-                            <!-- Customer Segment -->
-                            <div class="space-y-1">
-                                <label class="text-[11px] font-semibold text-warm-secondary block">Customer Segment</label>
-                                <select x-model="customForm.customer_segment"
-                                        class="w-full px-2.5 py-1.5 rounded border border-warm-border font-mono bg-warm-surface text-warm-text focus:outline-none focus:border-brand-600">
-                                    <option value="one_time">ONE_TIME_BUYER</option>
-                                    <option value="subscription">SAAS_SUBSCRIPTION</option>
-                                    <option value="enterprise">ENTERPRISE_LOYAL</option>
-                                </select>
-                            </div>
+                                <!-- Panel 3: Recovery Governor -->
+                                <div class="bg-warm-subtle border border-warm-border rounded p-3 text-xs space-y-2">
+                                    <div class="flex items-center justify-between pb-1 border-b border-warm-border">
+                                        <span class="font-bold text-warm-text">3. Recovery Governor</span>
+                                        <span class="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded"
+                                              :class="getVerdictBadge(scenarioData && scenarioData.governor_verdict ? scenarioData.governor_verdict.result : 'ALLOW')"
+                                              x-text="scenarioData && scenarioData.governor_verdict ? scenarioData.governor_verdict.result : 'ALLOW'"></span>
+                                    </div>
+                                    <div class="space-y-1 text-xs">
+                                        <div class="flex justify-between">
+                                            <span class="text-warm-secondary text-[11px]">Policy Invariants:</span>
+                                            <span class="font-mono font-bold text-warm-text">8/8 Evaluated</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-warm-secondary text-[11px]">Human Review:</span>
+                                            <span class="font-mono font-bold"
+                                                  :class="scenarioData && scenarioData.governor_verdict && scenarioData.governor_verdict.requires_human_approval ? 'text-amber-800' : 'text-warm-secondary'"
+                                                  x-text="scenarioData && scenarioData.governor_verdict && scenarioData.governor_verdict.requires_human_approval ? 'REQUIRED' : 'AUTONOMOUS'"></span>
+                                        </div>
+                                    </div>
+                                    <div class="text-[11px] text-warm-secondary font-mono bg-warm-surface p-2 rounded border border-warm-border mt-1 line-clamp-2"
+                                         x-text="scenarioData && scenarioData.governor_verdict ? (scenarioData.governor_verdict.rationale || scenarioData.governor_verdict.human_review_reason) : ''"></div>
+                                </div>
 
-                            <!-- Past Successful Payments -->
-                            <div class="space-y-1">
-                                <label class="text-[11px] font-semibold text-warm-secondary block">Past Success Count</label>
-                                <input type="number" x-model.number="customForm.recent_successful_payments" min="0" max="20"
-                                       class="w-full px-2.5 py-1.5 rounded border border-warm-border font-mono bg-warm-surface text-warm-text focus:outline-none focus:border-brand-600">
-                            </div>
+                                <!-- Panel 4: Tool Firewall Gate -->
+                                <div class="bg-warm-subtle border border-warm-border rounded p-3 text-xs space-y-2">
+                                    <div class="flex items-center justify-between pb-1 border-b border-warm-border">
+                                        <span class="font-bold text-warm-text">4. Tool Firewall</span>
+                                        <span class="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-warm-surface text-warm-secondary border border-warm-border">GATEWAY</span>
+                                    </div>
+                                    <div class="space-y-1 text-xs">
+                                        <div class="flex justify-between">
+                                            <span class="text-warm-secondary text-[11px]">Schema &amp; Whitelist:</span>
+                                            <span class="font-mono font-bold text-emerald-800">VALIDATED</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-warm-secondary text-[11px]">Consent Gate:</span>
+                                            <span class="font-mono font-bold text-emerald-800"
+                                                  x-text="scenarioData && scenarioData.scenario_type === 'CONSENT_ENFORCEMENT' ? 'OPT-OUT (Blocked)' : 'VERIFIED'"></span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-warm-secondary text-[11px]">Reconciled State:</span>
+                                            <span class="font-mono font-bold" :class="scenarioData && scenarioData.is_recovered ? 'text-emerald-800' : 'text-warm-secondary'"
+                                                  x-text="scenarioData ? (scenarioData.is_recovered ? 'CAPTURED (Recovered)' : scenarioData.final_state) : ''"></span>
+                                        </div>
+                                    </div>
+                                    <div class="text-[11px] text-warm-secondary font-mono bg-warm-surface p-2 rounded border border-warm-border mt-1">
+                                        Idempotency verified &bull; Zero side-effects on deny
+                                    </div>
+                                </div>
 
-                            <!-- Retry Count -->
-                            <div class="space-y-1">
-                                <label class="text-[11px] font-semibold text-warm-secondary block">Prior Retries</label>
-                                <input type="number" x-model.number="customForm.retry_count" min="0" max="10"
-                                       class="w-full px-2.5 py-1.5 rounded border border-warm-border font-mono bg-warm-surface text-warm-text focus:outline-none focus:border-brand-600">
-                            </div>
-
-                            <!-- Payment State -->
-                            <div class="space-y-1">
-                                <label class="text-[11px] font-semibold text-warm-secondary block">Observed State</label>
-                                <input type="text" x-model="customForm.payment_state" readonly
-                                       class="w-full px-2.5 py-1.5 rounded border border-warm-border font-mono bg-warm-subtle text-warm-secondary">
-                            </div>
-
-                            <!-- Cart Stage -->
-                            <div class="space-y-1">
-                                <label class="text-[11px] font-semibold text-warm-secondary block">Checkout Stage</label>
-                                <select x-model="customForm.cart_stage"
-                                        class="w-full px-2.5 py-1.5 rounded border border-warm-border font-mono bg-warm-surface text-warm-text focus:outline-none focus:border-brand-600">
-                                    <option value="payment_execution">PAYMENT_GATEWAY</option>
-                                    <option value="3ds_otp">3DS_OTP_STEP</option>
-                                    <option value="cart_checkout">CART_CHECKOUT</option>
-                                </select>
                             </div>
 
                         </div>
 
-                        <!-- Customer Notes (Untrusted Input Field) -->
-                        <div class="space-y-1 text-xs">
-                            <label class="text-[11px] font-semibold text-warm-secondary block">Telemetry Notes &amp; Context</label>
-                            <input type="text" x-model="customForm.customer_notes" placeholder="e.g. Bank gateway timeout occurred during peak authorization window."
-                                   class="w-full px-2.5 py-1.5 rounded border border-warm-border font-mono text-[11px] bg-warm-surface text-warm-text focus:outline-none focus:border-brand-600">
-                        </div>
-
-                        <!-- Action Execution Buttons -->
-                        <div class="pt-2 flex items-center justify-between border-t border-warm-border">
-                            <div class="text-[11px] text-warm-secondary font-mono">
-                                <span x-show="!scenarioRunning">Ready for evaluation</span>
-                                <span x-show="scenarioRunning" class="text-ai-text font-bold animate-pulse">● Running decision pipeline...</span>
+                        <!-- Candidate Timing Table -->
+                        <template x-if="scenarioData && scenarioData.candidate_rankings">
+                            <div class="bg-warm-surface border border-warm-border rounded-lg p-4 shadow-xs space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs font-bold text-warm-text uppercase tracking-wider">Candidate Action &times; Timing Matrix</span>
+                                    <span class="text-[11px] font-mono text-brand-700">Economic Yield Optimization</span>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-xs text-left">
+                                        <thead class="bg-warm-subtle text-warm-secondary uppercase font-semibold border-b border-warm-border">
+                                            <tr>
+                                                <th class="py-2 px-3">Mechanism</th>
+                                                <th class="py-2 px-3">Timing Window</th>
+                                                <th class="py-2 px-3 font-mono">Recovery Prob</th>
+                                                <th class="py-2 px-3 font-mono">Action Cost</th>
+                                                <th class="py-2 px-3 font-mono">Expected Net Value</th>
+                                                <th class="py-2 px-3 text-right">Selection</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-warm-border font-mono text-xs">
+                                            <template x-for="c in scenarioData.candidate_rankings" :key="c.mechanism + c.timing">
+                                                <tr :class="c.selected ? 'bg-warm-subtle font-semibold' : ''">
+                                                    <td class="py-2 px-3 uppercase font-sans" x-text="c.mechanism"></td>
+                                                    <td class="py-2 px-3" x-text="c.timing"></td>
+                                                    <td class="py-2 px-3 text-brand-700" x-text="c.prob"></td>
+                                                    <td class="py-2 px-3 text-warm-secondary" x-text="'₹' + c.cost_inr.toFixed(2)"></td>
+                                                    <td class="py-2 px-3" :class="c.expected_net_inr >= 0 ? 'text-emerald-800' : 'text-rose-800'" x-text="'₹' + formatINR(c.expected_net_inr)"></td>
+                                                    <td class="py-2 px-3 text-right font-sans">
+                                                        <span x-show="c.selected" class="px-2 py-0.5 rounded text-[10px] bg-brand-700 text-white font-semibold">SELECTED OPTIMAL</span>
+                                                        <span x-show="!c.selected" class="text-warm-muted text-[11px]">Candidate</span>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
-                            <div class="flex items-center space-x-2.5">
-                                <button @click="executeCustomScenario('DETERMINISTIC')" :disabled="scenarioRunning"
-                                        class="px-3.5 py-1.5 rounded border border-warm-border bg-warm-surface hover:bg-warm-subtle text-warm-text font-medium text-xs transition active:scale-95">
-                                    Run Deterministic
-                                </button>
-                                <button @click="executeCustomScenario('LIVE_LLM')" :disabled="scenarioRunning"
-                                        class="px-4 py-1.5 rounded bg-brand-800 hover:bg-brand-700 text-white font-semibold text-xs transition flex items-center space-x-1.5 active:scale-95 shadow-xs">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-ai-border"></span>
-                                    <span>RUN LIVE AI &rarr;</span>
-                                </button>
+                        </template>
+
+                        <!-- 7-Layer Decision Anatomy Matrix -->
+                        <div x-show="scenarioData && scenarioData.decision_anatomy" class="bg-warm-surface border border-warm-border rounded-lg p-4 shadow-xs space-y-2">
+                            <div class="flex items-center justify-between pb-1.5 border-b border-warm-border">
+                                <h3 class="text-xs font-bold text-warm-text uppercase tracking-wider">7-Layer Decision Anatomy Matrix &amp; Provenance</h3>
+                                <span class="text-[10px] font-mono text-warm-secondary">Layered Safety Trace</span>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-xs text-left">
+                                    <thead class="bg-warm-subtle text-warm-secondary uppercase font-semibold border-b border-warm-border">
+                                        <tr>
+                                            <th class="py-2 px-3 w-12">Layer</th>
+                                            <th class="py-2 px-3">Component</th>
+                                            <th class="py-2 px-3">Authority Source</th>
+                                            <th class="py-2 px-3">Status</th>
+                                            <th class="py-2 px-3">Execution Summary</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-warm-border font-mono text-xs">
+                                        <template x-for="layer in (scenarioData ? scenarioData.decision_anatomy : [])" :key="layer.layer">
+                                            <tr class="hover:bg-warm-subtle">
+                                                <td class="py-2 px-3 font-bold text-warm-muted" x-text="'L' + layer.layer"></td>
+                                                <td class="py-2 px-3 font-sans font-semibold text-warm-text" x-text="layer.component"></td>
+                                                <td class="py-2 px-3">
+                                                    <span class="px-1.5 py-0.2 rounded text-[10px] font-bold"
+                                                          :class="getSourceBadgeClass(layer.source_badge)"
+                                                          x-text="layer.source_badge"></span>
+                                                </td>
+                                                <td class="py-2 px-3 text-emerald-800 font-bold" x-text="layer.status"></td>
+                                                <td class="py-2 px-3 text-warm-secondary text-[11px]" x-text="layer.summary"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
 
@@ -527,31 +620,200 @@
 
                 </div>
 
+            </div>
+
+            <!-- ========================================================================= -->
+            <!-- WORKSPACE 3: LIVE AI STUDIO (Dynamic Interactive Decision Playground) -->
+            <!-- ========================================================================= -->
+            <div x-show="activeTab === 'live_studio'" x-cloak class="space-y-4 workspace-enter">
+                
+                <!-- Dynamic Scenario Builder Form -->
+                <div class="bg-warm-surface border border-warm-border rounded-lg p-4 shadow-xs space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-warm-border pb-3">
+                        <div>
+                            <div class="flex items-center space-x-2">
+                                <h2 class="text-sm font-bold text-warm-text">Live AI Decision Studio</h2>
+                                <span class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-ai-bg text-ai-text font-bold uppercase border border-ai-border">REAL-TIME INFERENCE</span>
+                            </div>
+                            <p class="text-xs text-warm-secondary">Configure custom observable parameters to evaluate against live Groq LLM reasoning (<code class="font-mono text-[11px]">openai/gpt-oss-120b</code>) and deterministic Governor policies.</p>
+                        </div>
+                        <div class="flex items-center space-x-2 text-xs font-mono">
+                            <span class="w-2 h-2 rounded-full" :class="llmStatus.configured ? 'bg-emerald-500' : 'bg-amber-500'"></span>
+                            <span class="text-warm-secondary" x-text="'Provider: ' + (llmStatus.provider || 'Groq')"></span>
+                        </div>
+                    </div>
+
+                    <!-- Quick-Fill Template Chips -->
+                    <div class="space-y-1.5">
+                        <span class="text-[10px] font-bold text-warm-muted uppercase tracking-wider block">Quick-Fill Scenario Templates:</span>
+                        <div class="flex flex-wrap gap-1.5 text-xs">
+                            <button @click="applyTemplate('3ds_dropoff')" class="px-2.5 py-1 rounded bg-warm-subtle hover:bg-warm-border border border-warm-border text-warm-text transition">
+                                + 3DS OTP Drop-off (₹4,200)
+                            </button>
+                            <button @click="applyTemplate('gateway_timeout')" class="px-2.5 py-1 rounded bg-warm-subtle hover:bg-warm-border border border-warm-border text-warm-text transition">
+                                + Gateway Timeout (₹5,000)
+                            </button>
+                            <button @click="applyTemplate('subscription_mandate')" class="px-2.5 py-1 rounded bg-warm-subtle hover:bg-warm-border border border-warm-border text-warm-text transition">
+                                + SaaS Mandate (₹2,999)
+                            </button>
+                            <button @click="applyTemplate('enterprise_high')" class="px-2.5 py-1 rounded bg-warm-subtle hover:bg-warm-border border border-warm-border text-warm-text transition">
+                                + High-Ticket Enterprise (₹45,000)
+                            </button>
+                            <button @click="applyTemplate('micro_transaction')" class="px-2.5 py-1 rounded bg-warm-subtle hover:bg-warm-border border border-warm-border text-warm-text transition">
+                                + Micro-Ticket (₹10)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Interactive Form Grid -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs pt-1">
+                        
+                        <!-- 1. Amount -->
+                        <div class="space-y-1">
+                            <label class="text-[11px] font-semibold text-warm-secondary block">Amount (INR)</label>
+                            <div class="relative">
+                                <span class="absolute left-2.5 top-1.5 text-warm-muted font-mono font-semibold">₹</span>
+                                <input type="number" x-model.number="customForm.amount" step="100" min="1"
+                                       class="w-full pl-6 pr-2.5 py-1.5 rounded border border-warm-border font-mono font-bold bg-warm-surface text-warm-text focus:outline-none focus:border-brand-600">
+                            </div>
+                        </div>
+
+                        <!-- 2. Failure Root Cause -->
+                        <div class="space-y-1">
+                            <label class="text-[11px] font-semibold text-warm-secondary block">Failure Root Cause</label>
+                            <select x-model="customForm.failure_type"
+                                    class="w-full px-2.5 py-1.5 rounded border border-warm-border font-mono bg-warm-surface text-warm-text focus:outline-none focus:border-brand-600 text-xs">
+                                <option value="gateway_timeout">GATEWAY_TIMEOUT (Bank Downtime)</option>
+                                <option value="authentication_failure">3DS_OTP_DROPOFF (User Drop)</option>
+                                <option value="insufficient_funds">INSUFFICIENT_FUNDS (Decline)</option>
+                                <option value="expired_card">EXPIRED_CARD (Invalid Instrument)</option>
+                                <option value="mandate_revoked">MANDATE_REVOKED (SaaS Recurring)</option>
+                                <option value="transient_network">TRANSIENT_NETWORK (Socket Reset)</option>
+                            </select>
+                        </div>
+
+                        <!-- 3. Consent Status -->
+                        <div class="space-y-1">
+                            <label class="text-[11px] font-semibold text-warm-secondary block">Customer Consent</label>
+                            <select x-model="customForm.consent"
+                                    class="w-full px-2.5 py-1.5 rounded border border-warm-border font-mono bg-warm-surface text-warm-text focus:outline-none focus:border-brand-600 text-xs">
+                                <option value="opted_in">OPTED_IN (Consent OK)</option>
+                                <option value="opted_out">OPTED_OUT (Blocked by Policy)</option>
+                            </select>
+                        </div>
+
+                        <!-- 4. Customer Segment -->
+                        <div class="space-y-1">
+                            <label class="text-[11px] font-semibold text-warm-secondary block">Customer Segment</label>
+                            <select x-model="customForm.customer_segment"
+                                    class="w-full px-2.5 py-1.5 rounded border border-warm-border font-mono bg-warm-surface text-warm-text focus:outline-none focus:border-brand-600 text-xs">
+                                <option value="one_time">ONE_TIME_BUYER</option>
+                                <option value="subscription">SAAS_SUBSCRIPTION</option>
+                                <option value="enterprise">ENTERPRISE_VIP</option>
+                            </select>
+                        </div>
+
+                        <!-- 5. Past Success Count -->
+                        <div class="space-y-1">
+                            <label class="text-[11px] font-semibold text-warm-secondary block">Past Success Count</label>
+                            <div class="flex items-center space-x-1.5">
+                                <button @click="customForm.recent_successful_payments = Math.max(0, customForm.recent_successful_payments - 1)" class="w-7 h-7 rounded border border-warm-border bg-warm-surface font-bold text-warm-text">-</button>
+                                <input type="number" x-model.number="customForm.recent_successful_payments" min="0" max="20"
+                                       class="w-full px-2 py-1 rounded border border-warm-border font-mono font-bold text-center bg-warm-surface text-warm-text">
+                                <button @click="customForm.recent_successful_payments = customForm.recent_successful_payments + 1" class="w-7 h-7 rounded border border-warm-border bg-warm-surface font-bold text-warm-text">+</button>
+                            </div>
+                        </div>
+
+                        <!-- 6. Prior Retries -->
+                        <div class="space-y-1">
+                            <label class="text-[11px] font-semibold text-warm-secondary block">Prior Retries</label>
+                            <div class="flex items-center space-x-1.5">
+                                <button @click="customForm.retry_count = Math.max(0, customForm.retry_count - 1)" class="w-7 h-7 rounded border border-warm-border bg-warm-surface font-bold text-warm-text">-</button>
+                                <input type="number" x-model.number="customForm.retry_count" min="0" max="10"
+                                       class="w-full px-2 py-1 rounded border border-warm-border font-mono font-bold text-center bg-warm-surface text-warm-text">
+                                <button @click="customForm.retry_count = customForm.retry_count + 1" class="w-7 h-7 rounded border border-warm-border bg-warm-surface font-bold text-warm-text">+</button>
+                            </div>
+                        </div>
+
+                        <!-- 7. Checkout Stage -->
+                        <div class="space-y-1">
+                            <label class="text-[11px] font-semibold text-warm-secondary block">Checkout Stage</label>
+                            <select x-model="customForm.cart_stage"
+                                    class="w-full px-2.5 py-1.5 rounded border border-warm-border font-mono bg-warm-surface text-warm-text focus:outline-none focus:border-brand-600 text-xs">
+                                <option value="payment_execution">PAYMENT_GATEWAY</option>
+                                <option value="3ds_otp">3DS_OTP_VERIFICATION</option>
+                                <option value="cart_checkout">CART_CHECKOUT</option>
+                            </select>
+                        </div>
+
+                        <!-- 8. Observed Payment State -->
+                        <div class="space-y-1">
+                            <label class="text-[11px] font-semibold text-warm-secondary block">Observed State</label>
+                            <input type="text" x-model="customForm.payment_state" readonly
+                                   class="w-full px-2.5 py-1.5 rounded border border-warm-border font-mono bg-warm-subtle text-warm-secondary text-xs">
+                        </div>
+
+                    </div>
+
+                    <!-- Telemetry Notes (Untrusted free-text input) -->
+                    <div class="space-y-1 text-xs">
+                        <label class="text-[11px] font-semibold text-warm-secondary block">Telemetry Notes &amp; Observed Error Description</label>
+                        <input type="text" x-model="customForm.customer_notes" placeholder="e.g. Bank gateway timeout during peak authorization window."
+                               class="w-full px-2.5 py-1.5 rounded border border-warm-border font-mono text-[11px] bg-warm-surface text-warm-text focus:outline-none focus:border-brand-600">
+                    </div>
+
+                    <!-- Action Execution Controls -->
+                    <div class="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-warm-border">
+                        <div class="text-[11px] text-warm-secondary font-mono flex items-center space-x-2">
+                            <span x-show="!scenarioRunning">Ready for dynamic evaluation</span>
+                            <span x-show="scenarioRunning" class="text-ai-text font-bold flex items-center space-x-1.5">
+                                <span class="w-2 h-2 rounded-full bg-ai-accent animate-ping"></span>
+                                <span>Evaluating through closed-loop runtime pipeline...</span>
+                            </span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <button @click="executeCustomScenario('DETERMINISTIC')" :disabled="scenarioRunning"
+                                    class="px-3.5 py-1.5 rounded border border-warm-border bg-warm-surface hover:bg-warm-subtle text-warm-text font-medium text-xs transition active:scale-95">
+                                Run Deterministic
+                            </button>
+                            <button @click="executeCustomScenario('LIVE_LLM')" :disabled="scenarioRunning"
+                                    class="px-4 py-1.5 rounded bg-brand-800 hover:bg-brand-700 text-white font-semibold text-xs transition flex items-center space-x-1.5 active:scale-95 shadow-xs">
+                                <span class="w-1.5 h-1.5 rounded-full bg-ai-border"></span>
+                                <span>RUN LIVE AI &rarr;</span>
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+
                 <!-- Fail-Closed Alert when Live LLM Fails -->
-                <template x-if="scenarioData && scenarioData.status === 'error'">
-                    <div class="p-4 rounded-lg bg-rose-50 border border-rose-200 text-rose-900 space-y-1 text-xs font-mono">
+                <template x-if="liveStudioData && liveStudioData.status === 'error'">
+                    <div class="p-4 rounded-lg bg-rose-50 border border-rose-200 text-rose-900 space-y-1.5 text-xs font-mono">
                         <div class="font-bold flex items-center space-x-2">
                             <span class="w-2 h-2 rounded-full bg-rose-600"></span>
                             <span>LIVE LLM EXECUTION FAILED CLOSED</span>
                         </div>
-                        <p class="text-rose-800" x-text="scenarioData.error_message"></p>
+                        <p class="text-rose-800" x-text="liveStudioData.error_message"></p>
                         <div class="text-[11px] text-rose-700 bg-white p-2 rounded border border-rose-200">
-                            <strong>Sovereignty Principle:</strong> ₹0.00 financial execution dispatched. Zero silent fallback to deterministic rules.
+                            <strong>Strict Invariant:</strong> ₹0.00 financial execution dispatched. Zero silent fallback to deterministic rules.
                         </div>
                     </div>
                 </template>
 
-                <!-- Step-by-Step Decision Pipeline Visual Strip -->
-                <div x-show="scenarioData && scenarioData.status !== 'error'" class="bg-warm-surface border border-warm-border rounded-lg p-3.5 shadow-xs space-y-3">
+                <!-- Step-by-Step Animated Pipeline Flow Visual -->
+                <div x-show="liveStudioData && liveStudioData.status !== 'error'" class="bg-warm-surface border border-warm-border rounded-lg p-4 shadow-xs space-y-3">
                     <div class="flex items-center justify-between pb-2 border-b border-warm-border">
-                        <span class="text-[11px] font-bold text-warm-muted uppercase tracking-wider">Live Decision Pipeline Flow</span>
-                        <span class="text-[11px] font-mono text-warm-secondary">Click any stage to inspect analytical provenance</span>
+                        <div>
+                            <span class="text-xs font-bold text-warm-text uppercase tracking-wider">Live Decision Pipeline Flow</span>
+                            <span class="text-[11px] text-warm-secondary ml-2 font-mono" x-text="'Mode: ' + (liveStudioData ? liveStudioData.execution_mode : 'DETERMINISTIC')"></span>
+                        </div>
+                        <span class="text-[10px] font-mono text-warm-muted">9 Sequential Verification Stages</span>
                     </div>
 
-                    <!-- Pipeline Nodes -->
+                    <!-- 9 Pipeline Stages -->
                     <div class="grid grid-cols-3 sm:grid-cols-9 gap-1.5 text-center text-xs font-mono">
                         
-                        <!-- 1. Observe -->
+                        <!-- 1. Ingest -->
                         <div class="p-2 rounded bg-warm-subtle border border-warm-border space-y-0.5">
                             <div class="text-[9px] uppercase text-warm-muted">1. Ingest</div>
                             <div class="font-bold text-warm-text text-[11px]">WEBHOOK</div>
@@ -568,28 +830,28 @@
                         <!-- 3. AI Diagnosis -->
                         <div class="p-2 rounded bg-ai-bg border border-ai-border space-y-0.5">
                             <div class="text-[9px] uppercase text-ai-text font-bold">3. Diagnosis</div>
-                            <div class="font-bold text-warm-text text-[11px] truncate" x-text="scenarioData.ai_proposal ? scenarioData.ai_proposal.diagnosis_label : 'Inferred'"></div>
-                            <span class="text-[9px] text-ai-text font-semibold" x-text="scenarioData.execution_mode === 'LIVE_LLM' ? 'LIVE LLM ✓' : 'RULES ✓'"></span>
+                            <div class="font-bold text-warm-text text-[11px] truncate" x-text="liveStudioData && liveStudioData.ai_proposal ? liveStudioData.ai_proposal.diagnosis_label : 'Inferred'"></div>
+                            <span class="text-[9px] text-ai-text font-semibold" x-text="liveStudioData && liveStudioData.execution_mode === 'LIVE_LLM' ? 'LIVE LLM ✓' : 'RULES ✓'"></span>
                         </div>
 
                         <!-- 4. AI Strategy -->
                         <div class="p-2 rounded bg-ai-bg border border-ai-border space-y-0.5">
                             <div class="text-[9px] uppercase text-ai-text font-bold">4. Strategy</div>
-                            <div class="font-bold text-warm-text text-[11px] truncate" x-text="scenarioData.ai_proposal ? scenarioData.ai_proposal.action_type : 'Strategy'"></div>
-                            <span class="text-[9px] text-ai-text font-semibold" x-text="scenarioData.execution_mode === 'LIVE_LLM' ? 'LIVE LLM ✓' : 'RULES ✓'"></span>
+                            <div class="font-bold text-warm-text text-[11px] truncate" x-text="liveStudioData && liveStudioData.ai_proposal ? liveStudioData.ai_proposal.action_type : 'Strategy'"></div>
+                            <span class="text-[9px] text-ai-text font-semibold" x-text="liveStudioData && liveStudioData.execution_mode === 'LIVE_LLM' ? 'LIVE LLM ✓' : 'RULES ✓'"></span>
                         </div>
 
                         <!-- 5. Economics -->
                         <div class="p-2 rounded bg-warm-subtle border border-warm-border space-y-0.5">
                             <div class="text-[9px] uppercase text-brand-700 font-bold">5. Economics</div>
                             <div class="font-bold text-warm-text text-[11px]">OPTIMIZE</div>
-                            <span class="text-[9px] text-brand-700">NET YIELD ✓</span>
+                            <span class="text-[9px] text-brand-700 font-semibold">NET YIELD ✓</span>
                         </div>
 
                         <!-- 6. Governor -->
                         <div class="p-2 rounded bg-warm-subtle border border-warm-border space-y-0.5">
                             <div class="text-[9px] uppercase text-emerald-800 font-bold">6. Governor</div>
-                            <div class="font-bold text-[11px]" :class="getVerdictTextColor(scenarioData.governor_verdict ? scenarioData.governor_verdict.result : 'ALLOW')" x-text="scenarioData.governor_verdict ? scenarioData.governor_verdict.result : 'ALLOW'"></div>
+                            <div class="font-bold text-[11px]" :class="getVerdictTextColor(liveStudioData && liveStudioData.governor_verdict ? liveStudioData.governor_verdict.result : 'ALLOW')" x-text="liveStudioData && liveStudioData.governor_verdict ? liveStudioData.governor_verdict.result : 'ALLOW'"></div>
                             <span class="text-[9px] text-emerald-800">8 CHECKS ✓</span>
                         </div>
 
@@ -610,41 +872,42 @@
                         <!-- 9. Verify -->
                         <div class="p-2 rounded bg-warm-subtle border border-warm-border space-y-0.5">
                             <div class="text-[9px] uppercase text-warm-muted">9. Verify</div>
-                            <div class="font-bold text-emerald-800 text-[11px]" x-text="scenarioData.is_recovered ? 'RECOVERED' : 'AUDITED'"></div>
+                            <div class="font-bold text-emerald-800 text-[11px]" x-text="liveStudioData && liveStudioData.is_recovered ? 'RECOVERED' : 'AUDITED'"></div>
                             <span class="text-[9px] text-warm-secondary">RECONCILED ✓</span>
                         </div>
 
                     </div>
                 </div>
 
-                <!-- 4 Core Sovereignty Panels -->
-                <div x-show="scenarioData && scenarioData.status !== 'error'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                <!-- 4 Core Sovereignty Panels for Dynamic Run -->
+                <div x-show="liveStudioData && liveStudioData.status !== 'error'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                     
-                    <!-- Panel 1: AI Reasoning -->
+                    <!-- Panel 1: AI Diagnosis & Proposal -->
                     <div class="bg-warm-surface border border-warm-border rounded-lg p-3.5 shadow-xs space-y-2 flex flex-col justify-between text-xs">
                         <div>
                             <div class="flex items-center justify-between pb-1.5 border-b border-warm-border">
                                 <span class="font-bold text-warm-text">1. AI Reasoning</span>
                                 <span class="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded"
-                                      :class="getSourceBadgeClass(scenarioData.ai_diagnosis ? scenarioData.ai_diagnosis.source_badge : (scenarioData.execution_mode === 'LIVE_LLM' ? 'LIVE LLM' : 'DETERMINISTIC'))"
-                                      x-text="scenarioData.ai_diagnosis ? scenarioData.ai_diagnosis.source_badge : (scenarioData.execution_mode === 'LIVE_LLM' ? 'LIVE LLM' : 'DETERMINISTIC')"></span>
+                                      :class="getSourceBadgeClass(liveStudioData && liveStudioData.ai_proposal ? liveStudioData.ai_proposal.diagnosis_source : (liveStudioData && liveStudioData.execution_mode === 'LIVE_LLM' ? 'LIVE LLM' : 'DETERMINISTIC'))"
+                                      x-text="liveStudioData && liveStudioData.ai_proposal ? (liveStudioData.ai_proposal.diagnosis_source === 'live_llm' ? 'LIVE LLM' : 'DETERMINISTIC') : 'DETERMINISTIC'"></span>
                             </div>
                             <div class="space-y-1.5 pt-1.5">
-                                <div class="flex justify-between">
-                                    <span class="text-warm-secondary">Root Cause:</span>
-                                    <span class="font-mono font-bold text-warm-text" x-text="scenarioData.ai_proposal.diagnosis_label"></span>
+                                <div>
+                                    <span class="text-warm-secondary text-[11px] block">Root Cause:</span>
+                                    <span class="font-mono font-bold text-warm-text text-xs break-all" x-text="liveStudioData && liveStudioData.ai_proposal ? liveStudioData.ai_proposal.diagnosis_label : ''"></span>
                                 </div>
-                                <div class="flex justify-between">
-                                    <span class="text-warm-secondary">Confidence:</span>
-                                    <span class="font-mono font-bold text-ai-text" x-text="(scenarioData.ai_proposal.confidence * 100).toFixed(0) + '%'"></span>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-warm-secondary text-[11px]">Confidence:</span>
+                                    <span class="font-mono font-bold text-ai-text text-xs" x-text="liveStudioData && liveStudioData.ai_proposal ? (liveStudioData.ai_proposal.confidence * 100).toFixed(0) + '%' : ''"></span>
                                 </div>
-                                <div class="flex justify-between">
-                                    <span class="text-warm-secondary">Proposal:</span>
-                                    <span class="font-mono font-bold text-warm-text" x-text="scenarioData.ai_proposal.action_type + ' (' + (scenarioData.ai_proposal.timing_window || 'IMMEDIATE') + ')'"></span>
+                                <div>
+                                    <span class="text-warm-secondary text-[11px] block">Proposal:</span>
+                                    <span class="font-mono font-bold text-warm-text text-xs" x-text="liveStudioData && liveStudioData.ai_proposal ? (liveStudioData.ai_proposal.action_type + ' (' + (liveStudioData.ai_proposal.timing_window || 'IMMEDIATE') + ')') : ''"></span>
                                 </div>
                             </div>
                         </div>
-                        <div class="text-[11px] text-warm-secondary font-mono bg-warm-subtle p-2 rounded border border-warm-border mt-2 line-clamp-2" x-text="scenarioData.ai_proposal.rationale"></div>
+                        <div class="text-[11px] text-warm-secondary font-mono bg-warm-subtle p-2 rounded border border-warm-border mt-2"
+                             x-text="liveStudioData && liveStudioData.ai_proposal ? liveStudioData.ai_proposal.rationale : ''"></div>
                     </div>
 
                     <!-- Panel 2: Economic Engine -->
@@ -652,26 +915,26 @@
                         <div>
                             <div class="flex items-center justify-between pb-1.5 border-b border-warm-border">
                                 <span class="font-bold text-warm-text">2. Economic Engine</span>
-                                <span class="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-warm-subtle text-brand-700">DETERMINISTIC</span>
+                                <span class="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-warm-subtle text-brand-700">OPTIMIZER</span>
                             </div>
                             <div class="space-y-1.5 pt-1.5">
                                 <div class="flex justify-between">
-                                    <span class="text-warm-secondary">Evaluated:</span>
-                                    <span class="font-mono font-bold text-warm-text" x-text="(scenarioData.candidate_rankings ? scenarioData.candidate_rankings.length : 1) + ' candidate windows'"></span>
+                                    <span class="text-warm-secondary text-[11px]">Evaluated:</span>
+                                    <span class="font-mono font-bold text-warm-text" x-text="(liveStudioData && liveStudioData.candidate_rankings ? liveStudioData.candidate_rankings.length : 1) + ' candidate windows'"></span>
                                 </div>
                                 <div class="flex justify-between">
-                                    <span class="text-warm-secondary">Selected:</span>
-                                    <span class="font-mono font-bold text-brand-700" x-text="scenarioData.ai_proposal.timing_window || 'IMMEDIATE'"></span>
+                                    <span class="text-warm-secondary text-[11px]">Selected:</span>
+                                    <span class="font-mono font-bold text-brand-700" x-text="liveStudioData && liveStudioData.ai_proposal ? liveStudioData.ai_proposal.timing_window || 'IMMEDIATE' : ''"></span>
                                 </div>
                                 <div class="flex justify-between">
-                                    <span class="text-warm-secondary">Expected Net:</span>
-                                    <span class="font-mono font-bold" :class="scenarioData.ai_proposal.expected_net_value_inr >= 0 ? 'text-emerald-800' : 'text-rose-800'"
-                                          x-text="'₹' + formatINR(scenarioData.ai_proposal.expected_net_value_inr)"></span>
+                                    <span class="text-warm-secondary text-[11px]">Expected Net:</span>
+                                    <span class="font-mono font-bold" :class="liveStudioData && liveStudioData.ai_proposal && liveStudioData.ai_proposal.expected_net_value_inr >= 0 ? 'text-emerald-800' : 'text-rose-800'"
+                                          x-text="liveStudioData && liveStudioData.ai_proposal ? '₹' + formatINR(liveStudioData.ai_proposal.expected_net_value_inr) : '₹0.00'"></span>
                                 </div>
                             </div>
                         </div>
                         <div class="text-[11px] text-warm-secondary font-mono bg-warm-subtle p-2 rounded border border-warm-border mt-2"
-                             x-text="scenarioData.ai_proposal.action_type === 'no_action' ? 'Selected baseline NO_ACTION (Net < 0)' : 'Optimal window maximizing Expected Net Yield'"></div>
+                             x-text="liveStudioData && liveStudioData.ai_proposal && liveStudioData.ai_proposal.action_type === 'no_action' ? 'Selected baseline NO_ACTION (Net < 0)' : 'Maximizing expected net recovery yield.'"></div>
                     </div>
 
                     <!-- Panel 3: Recovery Governor -->
@@ -680,23 +943,23 @@
                             <div class="flex items-center justify-between pb-1.5 border-b border-warm-border">
                                 <span class="font-bold text-warm-text">3. Recovery Governor</span>
                                 <span class="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded"
-                                      :class="getVerdictBadge(scenarioData.governor_verdict.result)"
-                                      x-text="scenarioData.governor_verdict.result"></span>
+                                      :class="getVerdictBadge(liveStudioData && liveStudioData.governor_verdict ? liveStudioData.governor_verdict.result : 'ALLOW')"
+                                      x-text="liveStudioData && liveStudioData.governor_verdict ? liveStudioData.governor_verdict.result : 'ALLOW'"></span>
                             </div>
                             <div class="space-y-1.5 pt-1.5">
                                 <div class="flex justify-between">
-                                    <span class="text-warm-secondary">Policy Checks:</span>
+                                    <span class="text-warm-secondary text-[11px]">Policy Checks:</span>
                                     <span class="font-mono font-bold text-warm-text">8/8 Evaluated</span>
                                 </div>
                                 <div class="flex justify-between">
-                                    <span class="text-warm-secondary">Human Review:</span>
-                                    <span class="font-mono font-bold" :class="scenarioData.governor_verdict.requires_human_approval ? 'text-amber-800' : 'text-warm-secondary'"
-                                          x-text="scenarioData.governor_verdict.requires_human_approval ? 'REQUIRED' : 'AUTONOMOUS'"></span>
+                                    <span class="text-warm-secondary text-[11px]">Human Review:</span>
+                                    <span class="font-mono font-bold" :class="liveStudioData && liveStudioData.governor_verdict && liveStudioData.governor_verdict.requires_human_approval ? 'text-amber-800' : 'text-warm-secondary'"
+                                          x-text="liveStudioData && liveStudioData.governor_verdict && liveStudioData.governor_verdict.requires_human_approval ? 'REQUIRED' : 'AUTONOMOUS'"></span>
                                 </div>
                             </div>
                         </div>
                         <div class="text-[11px] text-warm-secondary font-mono bg-warm-subtle p-2 rounded border border-warm-border mt-2 line-clamp-2"
-                             x-text="scenarioData.governor_verdict.rationale || scenarioData.governor_verdict.human_review_reason"></div>
+                             x-text="liveStudioData && liveStudioData.governor_verdict ? (liveStudioData.governor_verdict.rationale || liveStudioData.governor_verdict.human_review_reason) : ''"></div>
                     </div>
 
                     <!-- Panel 4: Tool Firewall -->
@@ -708,30 +971,30 @@
                             </div>
                             <div class="space-y-1.5 pt-1.5">
                                 <div class="flex justify-between">
-                                    <span class="text-warm-secondary">Schema &amp; Whitelist:</span>
+                                    <span class="text-warm-secondary text-[11px]">Schema &amp; Whitelist:</span>
                                     <span class="font-mono font-bold text-emerald-800">VALIDATED</span>
                                 </div>
                                 <div class="flex justify-between">
-                                    <span class="text-warm-secondary">Consent Gate:</span>
-                                    <span class="font-mono font-bold" :class="scenarioData.scenario_type === 'CONSENT_ENFORCEMENT' ? 'text-rose-800' : 'text-emerald-800'"
-                                          x-text="scenarioData.scenario_type === 'CONSENT_ENFORCEMENT' ? 'OPT-OUT (Blocked)' : 'VERIFIED'"></span>
+                                    <span class="text-warm-secondary text-[11px]">Consent Gate:</span>
+                                    <span class="font-mono font-bold" :class="liveStudioData && liveStudioData.governor_verdict && liveStudioData.governor_verdict.checks && liveStudioData.governor_verdict.checks.consent === 'FAIL' ? 'text-rose-800' : 'text-emerald-800'"
+                                          x-text="liveStudioData && liveStudioData.governor_verdict && liveStudioData.governor_verdict.checks && liveStudioData.governor_verdict.checks.consent === 'FAIL' ? 'OPT-OUT (Blocked)' : 'VERIFIED'"></span>
                                 </div>
                                 <div class="flex justify-between">
-                                    <span class="text-warm-secondary">Execution State:</span>
-                                    <span class="font-mono font-bold" :class="scenarioData.is_recovered ? 'text-emerald-800' : 'text-warm-secondary'"
-                                          x-text="scenarioData.is_recovered ? 'CAPTURED (Recovered)' : scenarioData.final_state"></span>
+                                    <span class="text-warm-secondary text-[11px]">Reconciled State:</span>
+                                    <span class="font-mono font-bold" :class="liveStudioData && liveStudioData.is_recovered ? 'text-emerald-800' : 'text-warm-secondary'"
+                                          x-text="liveStudioData ? (liveStudioData.is_recovered ? 'CAPTURED (Recovered)' : liveStudioData.final_state) : ''"></span>
                                 </div>
                             </div>
                         </div>
                         <div class="text-[11px] text-warm-secondary font-mono bg-warm-subtle p-2 rounded border border-warm-border mt-2">
-                            Validated authorization &bull; Reconciled aggregate
+                            Validated authorization &bull; Saved to audit log
                         </div>
                     </div>
 
                 </div>
 
-                <!-- Candidate Timing Table (Only when candidate rankings exist) -->
-                <template x-if="scenarioData && scenarioData.candidate_rankings">
+                <!-- Action Matrix for Dynamic Run -->
+                <template x-if="liveStudioData && liveStudioData.candidate_rankings">
                     <div class="bg-warm-surface border border-warm-border rounded-lg p-4 shadow-xs space-y-2">
                         <div class="flex items-center justify-between">
                             <span class="text-xs font-bold text-warm-text uppercase tracking-wider">Candidate Action &times; Timing Matrix</span>
@@ -750,7 +1013,7 @@
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-warm-border font-mono text-xs">
-                                    <template x-for="c in scenarioData.candidate_rankings" :key="c.mechanism + c.timing">
+                                    <template x-for="c in liveStudioData.candidate_rankings" :key="c.mechanism + c.timing">
                                         <tr :class="c.selected ? 'bg-warm-subtle font-semibold' : ''">
                                             <td class="py-2 px-3 uppercase font-sans" x-text="c.mechanism"></td>
                                             <td class="py-2 px-3" x-text="c.timing"></td>
@@ -769,46 +1032,80 @@
                     </div>
                 </template>
 
-                <!-- 7-Layer Decision Anatomy Matrix & Provenance -->
-                <div x-show="scenarioData && scenarioData.decision_anatomy" class="bg-warm-surface border border-warm-border rounded-lg p-4 shadow-xs space-y-2">
-                    <div class="flex items-center justify-between pb-1.5 border-b border-warm-border">
-                        <h3 class="text-xs font-bold text-warm-text uppercase tracking-wider">7-Layer Decision Anatomy Matrix & Provenance</h3>
-                        <span class="text-[10px] font-mono text-warm-secondary">Layered Safety Trace</span>
+            </div>
+
+            <!-- ========================================================================= -->
+            <!-- WORKSPACE 4: RUN HISTORY (Session Audit of Dynamic & Custom Runs) -->
+            <!-- ========================================================================= -->
+            <div x-show="activeTab === 'run_history'" x-cloak class="space-y-4 workspace-enter">
+                <div class="bg-warm-surface border border-warm-border rounded-lg shadow-xs overflow-hidden">
+                    <div class="p-4 border-b border-warm-border flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <h2 class="text-xs font-bold text-warm-text uppercase tracking-wider">Dynamic Scenario Run History</h2>
+                            <p class="text-xs text-warm-secondary">Audit log of all custom scenarios evaluated during this session with complete decision traces.</p>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xs font-mono font-semibold text-warm-secondary bg-warm-subtle px-2 py-0.5 rounded" x-text="dynamicHistory.length + ' runs logged'"></span>
+                            <button @click="setTab('live_studio')" class="px-2.5 py-1 rounded bg-brand-700 hover:bg-brand-800 text-white font-semibold text-xs transition">
+                                + New Dynamic Run
+                            </button>
+                        </div>
                     </div>
+
                     <div class="overflow-x-auto">
                         <table class="w-full text-xs text-left">
                             <thead class="bg-warm-subtle text-warm-secondary uppercase font-semibold border-b border-warm-border">
                                 <tr>
-                                    <th class="py-2 px-3 w-12">Layer</th>
-                                    <th class="py-2 px-3">Component</th>
-                                    <th class="py-2 px-3">Authority Source</th>
-                                    <th class="py-2 px-3">Status</th>
-                                    <th class="py-2 px-3">Execution Summary</th>
+                                    <th class="py-2.5 px-3">Run ID</th>
+                                    <th class="py-2.5 px-3 font-mono">Amount</th>
+                                    <th class="py-2.5 px-3">Failure Type</th>
+                                    <th class="py-2.5 px-3">Mode</th>
+                                    <th class="py-2.5 px-3">AI Diagnosis</th>
+                                    <th class="py-2.5 px-3">Governor</th>
+                                    <th class="py-2.5 px-3 font-mono">Net Value</th>
+                                    <th class="py-2.5 px-3 text-right">Action</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-warm-border font-mono text-xs">
-                                <template x-for="layer in scenarioData.decision_anatomy" :key="layer.layer">
+                            <tbody class="divide-y divide-warm-border">
+                                <template x-for="run in dynamicHistory" :key="run.run_id">
                                     <tr class="hover:bg-warm-subtle">
-                                        <td class="py-2 px-3 font-bold text-warm-muted" x-text="'L' + layer.layer"></td>
-                                        <td class="py-2 px-3 font-sans font-semibold text-warm-text" x-text="layer.component"></td>
-                                        <td class="py-2 px-3">
-                                            <span class="px-1.5 py-0.2 rounded text-[10px] font-bold"
-                                                  :class="getSourceBadgeClass(layer.source_badge)"
-                                                  x-text="layer.source_badge"></span>
+                                        <td class="py-2.5 px-3 font-mono font-semibold text-warm-text" x-text="run.run_id"></td>
+                                        <td class="py-2.5 px-3 font-mono text-warm-text" x-text="'₹' + formatINR(run.amount_inr)"></td>
+                                        <td class="py-2.5 px-3 font-mono text-warm-secondary text-[11px]" x-text="run.failure_type"></td>
+                                        <td class="py-2.5 px-3">
+                                            <span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold"
+                                                  :class="run.execution_mode === 'LIVE_LLM' ? 'bg-ai-bg text-ai-text border border-ai-border' : 'bg-warm-subtle text-warm-secondary'"
+                                                  x-text="run.execution_mode"></span>
                                         </td>
-                                        <td class="py-2 px-3 text-emerald-800 font-bold" x-text="layer.status"></td>
-                                        <td class="py-2 px-3 text-warm-secondary text-[11px]" x-text="layer.summary"></td>
+                                        <td class="py-2.5 px-3 font-medium text-warm-text" x-text="run.diagnosis_label"></td>
+                                        <td class="py-2.5 px-3">
+                                            <span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold"
+                                                  :class="getVerdictBadge(run.governor_result)"
+                                                  x-text="run.governor_result"></span>
+                                        </td>
+                                        <td class="py-2.5 px-3 font-mono font-bold"
+                                            :class="run.net_value_inr >= 0 ? 'text-emerald-800' : 'text-rose-800'"
+                                            x-text="'₹' + formatINR(run.net_value_inr)"></td>
+                                        <td class="py-2.5 px-3 text-right">
+                                            <button @click="selectCase(run.run_id)" class="px-2 py-0.5 rounded bg-warm-subtle hover:bg-warm-border text-warm-text font-medium transition text-xs">
+                                                Replay &rarr;
+                                            </button>
+                                        </td>
                                     </tr>
                                 </template>
+                                <tr x-show="dynamicHistory.length === 0">
+                                    <td colspan="8" class="py-6 text-center text-warm-muted text-xs">
+                                        No dynamic runs logged yet. Visit <strong class="text-warm-text cursor-pointer hover:underline" @click="setTab('live_studio')">Live AI Studio</strong> to create and evaluate custom recovery scenarios.
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
-
             </div>
 
             <!-- ========================================================================= -->
-            <!-- WORKSPACE 3: RECOVERY QUEUE -->
+            <!-- WORKSPACE 5: RECOVERY QUEUE -->
             <!-- ========================================================================= -->
             <div x-show="activeTab === 'queue'" x-cloak class="space-y-4 workspace-enter">
                 <div class="bg-warm-surface border border-warm-border rounded-lg shadow-xs overflow-hidden">
@@ -865,7 +1162,7 @@
             </div>
 
             <!-- ========================================================================= -->
-            <!-- WORKSPACE 4: CASE REPLAY -->
+            <!-- WORKSPACE 6: CASE REPLAY -->
             <!-- ========================================================================= -->
             <div x-show="activeTab === 'replay'" x-cloak class="space-y-4 workspace-enter">
                 <div class="bg-warm-surface border border-warm-border rounded-lg p-4 shadow-xs space-y-4">
@@ -940,7 +1237,7 @@
             </div>
 
             <!-- ========================================================================= -->
-            <!-- WORKSPACE 5: EVALUATION LAB -->
+            <!-- WORKSPACE 7: EVALUATION LAB -->
             <!-- ========================================================================= -->
             <div x-show="activeTab === 'evaluation'" x-cloak class="space-y-4 workspace-enter">
                 <div class="bg-warm-surface border border-warm-border rounded-lg p-4 shadow-xs space-y-4">
@@ -984,7 +1281,7 @@
             </div>
 
             <!-- ========================================================================= -->
-            <!-- WORKSPACE 6: EXCEPTIONS & AUDIT -->
+            <!-- WORKSPACE 8: EXCEPTIONS & AUDIT -->
             <!-- ========================================================================= -->
             <div x-show="activeTab === 'exceptions'" x-cloak class="space-y-4 workspace-enter">
                 <div class="bg-warm-surface border border-warm-border rounded-lg shadow-xs overflow-hidden">
@@ -1033,7 +1330,7 @@
             </div>
 
             <!-- ========================================================================= -->
-            <!-- WORKSPACE 7: MERCHANT POLICY -->
+            <!-- WORKSPACE 9: MERCHANT POLICY -->
             <!-- ========================================================================= -->
             <div x-show="activeTab === 'policies'" x-cloak class="space-y-4 workspace-enter">
                 <div class="bg-warm-surface border border-warm-border rounded-lg p-4 shadow-xs space-y-4">
@@ -1110,6 +1407,7 @@
                 },
                 activeScenario: 'scen_demo_timing',
                 scenarioData: null,
+                liveStudioData: null,
                 selectedCaseId: 'dec_sig_001',
                 replayData: null,
                 controlRoom: {},
@@ -1117,33 +1415,42 @@
                 evaluation: {},
                 policies: {},
                 exceptions: [],
+                dynamicHistory: [],
                 policySaving: false,
                 policySaveStatus: '',
 
                 customForm: {
-                    amount: 5000,
+                    amount: 4200,
                     payment_state: 'FAILED',
-                    failure_type: 'gateway_timeout',
+                    failure_type: 'authentication_failure',
                     consent: 'opted_in',
                     customer_segment: 'one_time',
                     recent_successful_payments: 3,
                     retry_count: 0,
                     contact_count_24h: 0,
-                    cart_stage: 'payment_execution',
-                    customer_notes: 'Transient gateway timeout observed during merchant checkout.'
+                    cart_stage: '3ds_otp',
+                    customer_notes: 'User dropped off during 3DS OTP verification.'
                 },
 
                 presets: [
-                    { key: 'scen_demo_abstain', number: '01', title: 'Economic Abstention', amount: 1.0, error_label: 'EXPIRED CARD', tag: 'ABSTAIN', badge_class: 'bg-emerald-50 text-emerald-800', failure_type: 'expired_card', consent: 'opted_in', customer_segment: 'one_time', recent_successful_payments: 1 },
-                    { key: 'scen_demo_timing', number: '02', title: 'Action × Timing', amount: 5000.0, error_label: 'GATEWAY TIMEOUT', tag: 'TIMING', badge_class: 'bg-brand-50 text-brand-700', failure_type: 'gateway_timeout', consent: 'opted_in', customer_segment: 'one_time', recent_successful_payments: 3 },
-                    { key: 'scen_demo_stale', number: '03', title: 'Stale Protection', amount: 2500.0, error_label: 'LATE CAPTURE', tag: 'STALE', badge_class: 'bg-amber-50 text-amber-800', failure_type: 'gateway_timeout', consent: 'opted_in', customer_segment: 'one_time', recent_successful_payments: 2 },
-                    { key: 'scen_demo_consent', number: '04', title: 'Customer Opt-Out', amount: 3000.0, error_label: 'CONSENT GATE', tag: 'CONSENT', badge_class: 'bg-rose-50 text-rose-800', failure_type: 'insufficient_funds', consent: 'opted_out', customer_segment: 'one_time', recent_successful_payments: 1 },
-                    { key: 'scen_demo_uncertainty', number: '05', title: 'LLM Uncertainty', amount: 25000.0, error_label: 'HIGH VALUE', tag: 'ESCALATE', badge_class: 'bg-ai-bg text-ai-text', failure_type: 'insufficient_funds', consent: 'opted_in', customer_segment: 'enterprise', recent_successful_payments: 0 },
-                    { key: 'scen_demo_subscription', number: '06', title: 'SaaS Subscription', amount: 2999.0, error_label: 'REVOKED MANDATE', tag: 'MANDATE', badge_class: 'bg-brand-50 text-brand-700', failure_type: 'mandate_revoked', consent: 'opted_in', customer_segment: 'subscription', recent_successful_payments: 6 },
-                    { key: 'scen_demo_abandonment', number: '07', title: 'Cart Abandonment', amount: 4200.0, error_label: 'OTP DROP-OFF', tag: 'CHECKOUT', badge_class: 'bg-brand-50 text-brand-700', failure_type: 'authentication_failure', consent: 'opted_in', customer_segment: 'one_time', recent_successful_payments: 2 }
+                    { key: 'scen_demo_abstain', number: '01', title: 'Economic Abstention', amount: 1.0, error_label: 'EXPIRED CARD', tag: 'ABSTAIN', badge_class: 'bg-emerald-50 text-emerald-800' },
+                    { key: 'scen_demo_timing', number: '02', title: 'Action × Timing', amount: 5000.0, error_label: 'GATEWAY TIMEOUT', tag: 'TIMING', badge_class: 'bg-brand-50 text-brand-700' },
+                    { key: 'scen_demo_stale', number: '03', title: 'Stale Protection', amount: 2500.0, error_label: 'LATE CAPTURE', tag: 'STALE', badge_class: 'bg-amber-50 text-amber-800' },
+                    { key: 'scen_demo_consent', number: '04', title: 'Customer Opt-Out', amount: 3000.0, error_label: 'CONSENT GATE', tag: 'CONSENT', badge_class: 'bg-rose-50 text-rose-800' },
+                    { key: 'scen_demo_uncertainty', number: '05', title: 'LLM Uncertainty', amount: 25000.0, error_label: 'HIGH VALUE', tag: 'ESCALATE', badge_class: 'bg-ai-bg text-ai-text' },
+                    { key: 'scen_demo_subscription', number: '06', title: 'SaaS Subscription', amount: 2999.0, error_label: 'REVOKED MANDATE', tag: 'MANDATE', badge_class: 'bg-brand-50 text-brand-700' },
+                    { key: 'scen_demo_abandonment', number: '07', title: 'Cart Abandonment', amount: 4200.0, error_label: 'OTP DROP-OFF', tag: 'CHECKOUT', badge_class: 'bg-brand-50 text-brand-700' }
                 ],
 
                 async initApp() {
+                    // Load any cached local storage history
+                    try {
+                        const localHist = localStorage.getItem('recoveryos_dynamic_history');
+                        if (localHist) {
+                            this.dynamicHistory = JSON.parse(localHist);
+                        }
+                    } catch (e) {}
+
                     await this.refreshAll();
                     await this.runScenario('scen_demo_timing', 'DETERMINISTIC');
                 },
@@ -1162,7 +1469,9 @@
                 getWorkspaceBreadcrumb() {
                     const map = {
                         'control_room': 'Control Room — Overview',
-                        'scenario_lab': 'Scenario Lab — Live Decision Studio',
+                        'scenario_lab': 'Scenario Lab — Track 03 Benchmarks',
+                        'live_studio': 'Live AI Studio — Dynamic Playground',
+                        'run_history': 'Run History — Dynamic Audit Trail',
                         'queue': 'Recovery Queue — Open Opportunities',
                         'replay': 'Case Replay — Decision Provenance',
                         'evaluation': 'Evaluation Lab — Benchmark & Oracle',
@@ -1172,18 +1481,21 @@
                     return map[this.activeTab] || 'Operations Console';
                 },
 
-                loadPresetIntoForm(preset) {
-                    this.activeScenario = preset.key;
-                    this.customForm.amount = preset.amount;
-                    this.customForm.failure_type = preset.failure_type;
-                    this.customForm.consent = preset.consent;
-                    this.customForm.customer_segment = preset.customer_segment;
-                    this.customForm.recent_successful_payments = preset.recent_successful_payments;
-                    this.customForm.customer_notes = `${preset.title}: ${preset.error_label} simulation case.`;
-                },
-
                 applyTemplate(tpl) {
-                    if (tpl === 'failed_payment') {
+                    if (tpl === '3ds_dropoff') {
+                        this.customForm = {
+                            amount: 4200,
+                            payment_state: 'FAILED',
+                            failure_type: 'authentication_failure',
+                            consent: 'opted_in',
+                            customer_segment: 'one_time',
+                            recent_successful_payments: 2,
+                            retry_count: 0,
+                            contact_count_24h: 0,
+                            cart_stage: '3ds_otp',
+                            customer_notes: 'User dropped off during 3DS OTP verification.'
+                        };
+                    } else if (tpl === 'gateway_timeout') {
                         this.customForm = {
                             amount: 5000,
                             payment_state: 'FAILED',
@@ -1196,7 +1508,7 @@
                             cart_stage: 'payment_execution',
                             customer_notes: 'Transient gateway timeout on card transaction.'
                         };
-                    } else if (tpl === 'subscription') {
+                    } else if (tpl === 'subscription_mandate') {
                         this.customForm = {
                             amount: 2999,
                             payment_state: 'FAILED',
@@ -1209,18 +1521,31 @@
                             cart_stage: 'payment_execution',
                             customer_notes: 'Auto-debit recurring mandate failure on subscription renewal.'
                         };
-                    } else if (tpl === 'checkout_recovery') {
+                    } else if (tpl === 'enterprise_high') {
                         this.customForm = {
-                            amount: 4200,
+                            amount: 45000,
                             payment_state: 'FAILED',
-                            failure_type: 'authentication_failure',
+                            failure_type: 'insufficient_funds',
                             consent: 'opted_in',
-                            customer_segment: 'one_time',
-                            recent_successful_payments: 2,
+                            customer_segment: 'enterprise',
+                            recent_successful_payments: 5,
                             retry_count: 0,
                             contact_count_24h: 0,
-                            cart_stage: '3ds_otp',
-                            customer_notes: 'User dropped off during 3DS OTP verification.'
+                            cart_stage: 'payment_execution',
+                            customer_notes: 'High-ticket B2B invoice authorization failure.'
+                        };
+                    } else if (tpl === 'micro_transaction') {
+                        this.customForm = {
+                            amount: 10,
+                            payment_state: 'FAILED',
+                            failure_type: 'expired_card',
+                            consent: 'opted_in',
+                            customer_segment: 'one_time',
+                            recent_successful_payments: 0,
+                            retry_count: 0,
+                            contact_count_24h: 0,
+                            cart_stage: 'payment_execution',
+                            customer_notes: 'Micro-ticket test transaction with expired instrument.'
                         };
                     }
                 },
@@ -1238,7 +1563,28 @@
                             })
                         });
                         const data = await res.json();
-                        this.scenarioData = data;
+                        this.liveStudioData = data;
+
+                        // Add to session history
+                        if (data.status === 'success' || data.run_id) {
+                            const newHistoryItem = {
+                                run_id: data.run_id || ('dec_dyn_' + Date.now().toString().slice(-6)),
+                                payment_id: data.payment_id || 'pay_custom',
+                                amount_inr: data.amount_inr || this.customForm.amount,
+                                failure_type: this.customForm.failure_type,
+                                customer_segment: this.customForm.customer_segment,
+                                execution_mode: execMode,
+                                diagnosis_label: data.ai_proposal ? data.ai_proposal.diagnosis_label : 'Evaluated',
+                                governor_result: data.governor_verdict ? data.governor_verdict.result : 'ALLOW',
+                                net_value_inr: data.net_value_inr || 0,
+                                created_at_str: new Date().toISOString().slice(11, 19) + ' UTC'
+                            };
+                            this.dynamicHistory.unshift(newHistoryItem);
+                            try {
+                                localStorage.setItem('recoveryos_dynamic_history', JSON.stringify(this.dynamicHistory.slice(0, 50)));
+                            } catch (e) {}
+                        }
+
                         await this.refreshAll();
                     } catch (err) {
                         console.error("Custom live execution failed:", err);
@@ -1270,13 +1616,14 @@
                 async refreshAll() {
                     this.loading = true;
                     try {
-                        const [crRes, qRes, evalRes, polRes, excRes, llmRes] = await Promise.all([
+                        const [crRes, qRes, evalRes, polRes, excRes, llmRes, histRes] = await Promise.all([
                             fetch('/dashboard/api/control-room').then(r => r.json()),
                             fetch('/dashboard/api/recovery-queue').then(r => r.json()),
                             fetch('/dashboard/api/evaluation').then(r => r.json()),
                             fetch('/dashboard/api/policies').then(r => r.json()),
                             fetch('/dashboard/api/exceptions').then(r => r.json()),
                             fetch('/dashboard/api/llm/status').then(r => r.json()).catch(() => ({ configured: false })),
+                            fetch('/dashboard/api/dynamic-runs/history').then(r => r.json()).catch(() => ([])),
                         ]);
 
                         this.controlRoom = crRes;
@@ -1286,6 +1633,15 @@
                         this.exceptions = excRes;
                         if (llmRes && llmRes.status) {
                             this.llmStatus = llmRes;
+                        }
+                        if (histRes && Array.isArray(histRes) && histRes.length > 0) {
+                            // Merge server history with local history
+                            const ids = new Set(this.dynamicHistory.map(h => h.run_id));
+                            for (const item of histRes) {
+                                if (!ids.has(item.run_id)) {
+                                    this.dynamicHistory.push(item);
+                                }
+                            }
                         }
                     } catch (err) {
                         console.error("Dashboard refresh error:", err);
@@ -1348,13 +1704,13 @@
                 },
 
                 getSourceBadgeClass(sourceBadge) {
-                    if (!sourceBadge) return 'bg-warm-subtle text-warm-secondary';
+                    if (!sourceBadge) return 'bg-warm-subtle text-warm-secondary border border-warm-border';
                     const s = sourceBadge.toUpperCase();
                     if (s.includes('LIVE') || s.includes('LLM')) return 'bg-ai-bg text-ai-text border border-ai-border';
-                    if (s.includes('DETERMINISTIC') || s.includes('RULES')) return 'bg-warm-subtle text-brand-700';
-                    if (s.includes('RAG')) return 'bg-emerald-50 text-emerald-800';
-                    if (s.includes('SIMULATOR') || s.includes('RAZORPAY')) return 'bg-warm-subtle text-warm-text';
-                    return 'bg-warm-subtle text-warm-secondary';
+                    if (s.includes('DETERMINISTIC') || s.includes('RULES') || s.includes('OPTIMIZER')) return 'bg-warm-subtle text-brand-700 border border-warm-border';
+                    if (s.includes('RAG')) return 'bg-emerald-50 text-emerald-800 border border-emerald-200';
+                    if (s.includes('SIMULATOR') || s.includes('RAZORPAY')) return 'bg-warm-subtle text-warm-text border border-warm-border';
+                    return 'bg-warm-subtle text-warm-secondary border border-warm-border';
                 },
 
                 getVerdictBadge(verdict) {
@@ -1362,7 +1718,7 @@
                     if (verdict === 'DENY') return 'bg-rose-50 text-rose-800 border border-rose-200';
                     if (verdict === 'ABSTAIN') return 'bg-amber-50 text-amber-800 border border-amber-200';
                     if (verdict === 'ESCALATE') return 'bg-ai-bg text-ai-text border border-ai-border';
-                    return 'bg-brand-50 text-brand-700';
+                    return 'bg-brand-50 text-brand-700 border border-brand-200';
                 },
 
                 getVerdictTextColor(verdict) {

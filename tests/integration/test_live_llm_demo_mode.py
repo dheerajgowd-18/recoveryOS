@@ -130,3 +130,40 @@ async def test_live_demo_run_custom_scenario_consent_opt_out_blocked():
         data = res.json()
         assert data["status"] == "success"
         assert data["governor_verdict"]["checks"]["consent"] == "FAIL"
+
+
+@pytest.mark.anyio
+async def test_dynamic_runs_history_recording_and_endpoint():
+    """Verify custom scenario executions are recorded and accessible via GET /dashboard/api/dynamic-runs/history."""
+    custom_payload = {
+        "mode": "DETERMINISTIC",
+        "scenario": {
+            "amount": 4200,
+            "payment_state": "FAILED",
+            "failure_type": "authentication_failure",
+            "consent": "opted_in",
+            "customer_segment": "subscription",
+            "recent_successful_payments": 3,
+            "retry_count": 0,
+            "cart_stage": "3ds_otp",
+            "customer_notes": "OTP dropped test."
+        }
+    }
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        # 1. Run dynamic custom scenario
+        run_res = await client.post("/dashboard/api/live-demo/run", json=custom_payload)
+        assert run_res.status_code == 200
+        run_data = run_res.json()
+        assert "run_id" in run_data
+
+        # 2. Query history
+        hist_res = await client.get("/dashboard/api/dynamic-runs/history")
+        assert hist_res.status_code == 200
+        history = hist_res.json()
+        assert isinstance(history, list)
+        assert len(history) > 0
+        latest = history[0]
+        assert latest["run_id"] == run_data["run_id"]
+        assert latest["amount_inr"] == 4200.0
+        assert latest["failure_type"] == "authentication_failure"
+        assert latest["execution_mode"] == "DETERMINISTIC"
