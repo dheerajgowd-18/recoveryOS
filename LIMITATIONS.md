@@ -23,17 +23,17 @@ In accordance with Track 03 engineering rigor, this document details the archite
 - **Current Implementation**: The policy evaluates candidates across 5 discrete timing buckets (`IMMEDIATE`, `PLUS_2H`, `PLUS_6H`, `PLUS_12H`, `PLUS_24H`) and manages lifecycle state through `ScheduledLifecycleService`.
 - **Limitation**: The system does not perform continuous-time survival analysis, continuous mathematical delay optimization, or individual customer payday alignment. Discrete buckets provide transparent and verifiable deterministic scheduling benchmarks, but are not claimed to be a continuous causal timing optimizer.
 
-### 1.5 Headless API & CLI Interface vs Operations Console
-- **Current Implementation**: RecoveryOS exposes a headless Python API, an interactive CLI audit tool (`scripts/demo.py`), and programmatic replay capabilities.
-- **Limitation**: A graphical merchant dashboard / human-in-the-loop operations console is a non-goal for this phase and is planned for future platform expansion.
+### 1.5 Operations Console Prototype vs Enterprise SSO/RBAC
+- **Current Implementation**: RecoveryOS includes an interactive, single-page Operations Console (`GET /dashboard`) with real-time Control Room, Recovery Queue, Case Replay, Scenario Lab, Merchant Policy Controls, and Exceptions Audit views.
+- **Limitation**: Enterprise multi-tenant Role-Based Access Control (RBAC), SAML/SSO authentication, and external ticketing integrations (e.g. Zendesk/Jira) are out of scope for this prototype and are planned for future platform expansion.
 
 ### 1.6 Benchmark Population Scale
-- **Current Implementation**: The evaluation harness benchmarks a 100-scenario deterministic population across all archetypes and failure physics for high-speed local verification.
-- **Limitation**: Large-scale statistical stress tests across 10,000+ scenarios and Monte Carlo distributions are deferred to future production scale benchmarks.
+- **Current Implementation**: The evaluation harness benchmarks a 100-scenario deterministic population across all archetypes and failure physics for high-speed local verification, with support for multi-seed batch runs up to 5,000 scenarios via `scripts/benchmark.py`.
+- **Limitation**: Continuous real-time streaming Monte Carlo simulations at massive scale (100,000+ continuous events/sec) are deferred to distributed cloud deployments.
 
 ### 1.7 Human Review Escalation Execution
 - **Current Implementation**: The Recovery Governor routes high-value or uncertain decisions to human review with `stop_reason = "HUMAN_REVIEW_REQUIRED"`.
-- **Limitation**: In this phase, human review halts autonomous execution and records audit provenance without dispatching real-time notifications to a live ticketing system (e.g. Zendesk/Slack).
+- **Limitation**: In this prototype, human review halts autonomous execution and records audit provenance within the Operations Console without dispatching real-time external webhooks to external ticketing software.
 
 ---
 

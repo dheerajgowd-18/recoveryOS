@@ -23,7 +23,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="RecoveryOS Operations & Ingestion API",
         description="Autonomous AI revenue recovery platform - Ingestion, Operations Console & Governance engine",
-        version="0.1.0",
+        version="2.0.0",
     )
 
     app.include_router(webhooks_router)
@@ -35,7 +35,7 @@ def create_app() -> FastAPI:
         return HealthCheckResponse(
             status="healthy",
             service="RecoveryOS Ingestion API",
-            version="0.1.0",
+            version="2.0.0",
         )
 
     return app

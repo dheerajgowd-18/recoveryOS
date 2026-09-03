@@ -1,6 +1,6 @@
 # RecoveryOS: Autonomous AI Revenue Recovery Agent
 
-[![Build Status](https://img.shields.io/badge/tests-209%20passed-brightgreen.svg)]()
+[![Build Status](https://img.shields.io/badge/tests-297%20passed-brightgreen.svg)]()
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)]()
 [![Pydantic Version](https://img.shields.io/badge/pydantic-v2-orange.svg)]()
 [![Razorpay AI Buildathon 2026](https://img.shields.io/badge/Track%2003-AI%20Revenue%20Recovery-blueviolet.svg)]()
@@ -206,7 +206,7 @@ Traditional subscription dunning systems rely on static retry schedules and aggr
 ```bash
 make install    # Installs dependencies via pip install -r requirements.txt
 make test       # Runs the complete automated test suite (python -m pytest -v)
-make demo       # Runs the 5 signature demo cases CLI showcase (python scripts/demo.py)
+make demo       # Runs the 7 signature demo cases CLI showcase (python scripts/demo.py)
 ```
 
 ### Direct Python Fallback (If `make` is unavailable)
@@ -214,14 +214,14 @@ make demo       # Runs the 5 signature demo cases CLI showcase (python scripts/d
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Run automated test suite (176 passing tests)
+# 2. Run automated test suite (297 passing tests)
 python -m pytest -v
 
 # 3. Launch the Operations Console Dashboard
 uvicorn backend.app:app --host 127.0.0.1 --port 8000
 # Open http://127.0.0.1:8000/dashboard in your browser
 
-# 4. Run signature CLI demonstration (Fast 100-scenario showcase)
+# 4. Run signature CLI demonstration (Fast 7-case showcase + 100-scenario benchmark)
 python scripts/demo.py
 
 # 5. Run Expanded Evaluation Lab (Multi-seed 5,000 scenario benchmark with holdout & oracle regret)
@@ -229,12 +229,14 @@ python scripts/benchmark.py --scenarios 1000 --seeds 42,43,44 --holdout-seeds 45
 ```
 
 ### Operations Console Interface (`GET /dashboard`)
-The RecoveryOS Operations Console provides a production-grade, dark-themed merchant cockpit built with FastAPI, Jinja2, Tailwind CSS, and Alpine.js (zero Node.js build dependencies):
+The RecoveryOS Operations Console provides a production-inspired, high-density merchant operations cockpit built with FastAPI, Jinja2, Tailwind CSS, and Alpine.js (zero Node.js build dependencies):
 1. **Merchant Control Room**: Executive KPI strip displaying Revenue at Risk, Gross Recovered, Incremental Net Recovery, Interventions Avoided, and real-time event telemetry.
-2. **Recovery Queue**: Operational queue of active failure cohorts ranked by priority and expected incremental value.
-3. **Case Decision Replay**: Deep chronological audit trace reconstructing exact step-by-step reasoning ("Why We Acted" vs "Why We Did Not Act").
-4. **Evaluation Lab**: Interactive multi-seed statistical proof, baseline comparisons, Oracle hindsight ceiling, regret bounds, and sensitivity grid.
-5. **Exceptions & Audit**: Surveillance of stale action invalidations, consent opt-outs, and human review escalations.
+2. **Scenario Lab**: Interactive simulation lab for 7 signature Track 03 scenarios with live decision anatomy and timeline visualization.
+3. **Recovery Queue**: Operational queue of active failure cohorts ranked by priority and expected incremental value.
+4. **Case Decision Replay**: Deep chronological audit trace reconstructing exact step-by-step reasoning ("Why We Acted" vs "Why We Did Not Act" and 7-layer Decision Anatomy).
+5. **Evaluation Lab**: Interactive multi-seed statistical proof, baseline comparisons, Oracle hindsight ceiling, regret bounds, and sensitivity grid.
+6. **Exceptions & Audit**: Surveillance of stale action invalidations, consent opt-outs, and human review escalations.
+7. **Merchant Policy Controls**: Interactive policy configuration controls for live Governor risk tuning.
 
 ---
 

@@ -7,11 +7,11 @@ This document provides the choreographed 5-minute demonstration guide and walkth
 ## 1. Quickstart Execution Commands
 
 ```bash
-# Step 1: Run the full automated test suite (183 passing tests)
+# Step 1: Run the full automated test suite (297 passing tests)
 make test
 # (or: python -m pytest -v)
 
-# Step 2: Run the 5 signature demo cases CLI showcase (< 5 seconds)
+# Step 2: Run the 7 signature demo cases CLI showcase (< 5 seconds)
 make demo
 # (or: python scripts/demo.py)
 
@@ -25,7 +25,7 @@ uvicorn backend.app:app --host 127.0.0.1 --port 8000
 ## 2. Five-Minute Live Demo & Video Choreography
 
 ### [0:00–0:45] The Hook & Problem (Operations Console)
-- **Visual**: Show the dark-themed **Operations Console Dashboard** (`GET /dashboard`). Point to the top KPI strip: *Revenue at Risk*, *Gross Recovered*, *Incremental Net Recovery*, *Adjusted Net Recovery*, and *Interventions Avoided*.
+- **Visual**: Show the **Operations Console Dashboard** (`GET /dashboard`). Point to the top KPI strip: *Revenue at Risk*, *Gross Recovered*, *Incremental Net Recovery*, *Adjusted Net Recovery*, and *Interventions Avoided*.
 - **Narrative**:
   > *"Judges, traditional dunning treats failed payments as a brute-force messaging volume problem. They hammer gateways on expired cards, spam payment links, and claim credit for payments customers would have made organically anyway. RecoveryOS transforms revenue recovery into a sequential, causal decision problem. We measure **Incremental Adjusted Net Recovery**—net recovery above organic baseline minus direct costs and customer churn penalties."*
 

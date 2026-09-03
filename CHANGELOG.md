@@ -5,27 +5,24 @@ All notable changes to the RecoveryOS platform will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - 2026-09-02
+## [2.0.0] - 2026-09-03
 
-### Added
-- **Final Submission Freeze & Configuration Lock (`config/freeze.json`)**:
-  - Locked benchmark evaluation seeds: Development seeds `[42, 43, 44]`, Holdout seeds `[45, 46]`.
-  - Locked policy specification version: `v2.0.0`.
-  - Locked diagnosis model version: `deterministic-v1`.
-  - Locked scenario generator schema version: `2.0.0`.
-- **Exhaustive Adversarial Edge-Case Suite (`tests/adversarial/test_final_edge_cases.py`)**:
-  - Added 7 end-to-end automated adversarial tests covering:
-    1. Late authorization invalidating scheduled retries before dispatch.
-    2. Customer communication opt-outs blocked independently at both Recovery Governor and Tool Firewall.
-    3. Policy engine and LLM provider outages failing closed safely to conservative `NO_ACTION`.
-    4. Duplicate webhook delivery deduplication with strict HMAC and idempotency preservation.
-    5. Out-of-order event reconciliation rejecting invalid state transitions.
-    6. High-value transactions exceeding merchant risk limits escalating to human review.
-    7. Negative expected uplift triggering deliberate economic abstention to eliminate destructive fees.
-  - Test suite expanded to **183 passing automated unit, integration, benchmark, and adversarial tests** with 0 warnings.
-- **5-Minute Pitch & Demo Choreography (`DEMO.md`, `PITCH.md`)**:
-  - Timed 5-minute panel presentation breakdown covering problem hook, signature cases, Evaluation Lab multi-seed proof, and architectural governance.
-  - Sub-5-second execution guarantee for `make demo` and `make test`.
+### Added & Hardened
+- **Strict LLM Mode & Provenance Tracking (`intelligence/providers/`)**:
+  - Enforced strict fail-closed execution in `strict_no_fallback=True` mode across async and sync diagnosis and strategy providers (missing keys, timeouts, HTTP errors, malformed JSON, and schema errors raise immediate `RuntimeError` rather than masking with fallback).
+- **Evaluation Execution Modes (`evaluation/harness.py`, `evaluation/ablation.py`)**:
+  - Implemented explicit runtime modes: `OFFLINE_REPLAY`, `LIVE_LLM`, and `STRICT_NO_FALLBACK` ensuring authentic reproducibility.
+- **A/B/C Ablation Validity Engine (`evaluation/ablation.py`)**:
+  - If cohorts contain deterministic fallback during LLM contribution evaluation, the ablation explicitly marks uplifts as `UNAVAILABLE` rather than falsely attributing deterministic performance to LLM layers. Emits structured `ablation_summary.json` and `ablation_summary.md`.
+- **API & UI Schema Contract Unification (`dashboard/`, `GET /dashboard`)**:
+  - Unified `/dashboard/api/recovery-queue` and `/dashboard/api/cases/{id}/replay` to canonical contracts consumed identically across backend and frontend.
+  - Added 7-layer **Decision Anatomy** matrix view (*Observe &rarr; Risk &rarr; Context &rarr; Diagnosis &rarr; Strategy &rarr; Candidate Space &rarr; Economics &rarr; Governor &rarr; Firewall &rarr; Execution &rarr; Outcome*).
+- **Merchant Policy Demo Controls (`dashboard/routes.py`, `governor/`)**:
+  - Interactive policy mutation controls allowing runtime tuning of max retries, cooldown hours, 24h contact limits, human review thresholds, and min diagnosis confidence with instant Governor verdict propagation.
+- **Checkout Abandonment Revenue Recovery Workflow (`dashboard/service.py`, `scripts/demo.py`)**:
+  - Integrated Case 7 (Checkout Drop-Off & Cart Abandonment Recovery) into runtime, demo CLI, and Scenario Lab.
+- **Comprehensive Test Suite Expansion**:
+  - Expanded test suite to **297 passing automated unit, integration, benchmark, and adversarial tests** with 100% pass rate.
 
 ## [1.6.0] - 2026-09-02
 
