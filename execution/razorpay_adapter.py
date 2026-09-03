@@ -168,7 +168,7 @@ class RazorpayAdapter(RecoveryExecutor):
                     err_desc = ""
                     try:
                         err_desc = response.json().get("error", {}).get("description", "")
-                    except Exception:
+                    except (ValueError, KeyError, TypeError, json.JSONDecodeError):
                         err_desc = response.text
                     logger.warning("Razorpay API error creating payment link for %s: HTTP %s (%s)", payment_id, response.status_code, err_desc)
                     return {"success": False, "status_code": response.status_code, "error": err_desc or "API_ERROR"}

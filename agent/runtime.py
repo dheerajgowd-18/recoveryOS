@@ -1,5 +1,6 @@
 """AgentRuntime orchestrating the closed-loop observe-diagnose-propose-govern-schedule-execute recovery cycle."""
 from typing import List, Optional, Tuple
+import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
 from agent.risk import RiskAssessment, RiskDetector
@@ -223,7 +224,7 @@ class AgentRuntime:
                 # Schedule future action bound to current state version and exit cycle
                 try:
                     timing_win = TimingWindow(gov_decision.timing_window) if gov_decision.timing_window else TimingWindow.PLUS_6H
-                except Exception:
+                except (ValueError, KeyError, TypeError):
                     timing_win = TimingWindow.PLUS_6H
 
                 scheduled_action = self.scheduler.schedule_action(
@@ -323,7 +324,7 @@ class AgentRuntime:
             )
             try:
                 exec_result = await self.executor.execute(validated_action, exec_ctx)
-            except (TimeoutError, ConnectionError, PolicyOutageError, Exception) as e:
+            except (TimeoutError, ConnectionError, PolicyOutageError, RuntimeError, httpx.RequestError, httpx.HTTPError) as e:
                 record = AgentIterationRecord(
                     iteration=iteration,
                     risk_assessment=risk,

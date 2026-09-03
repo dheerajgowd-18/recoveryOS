@@ -220,7 +220,7 @@ class ReplayEngine:
 
         try:
             diag_label = DiagnosisLabel(record.diagnosis_label)
-        except Exception:
+        except (ValueError, KeyError, TypeError):
             diag_label = DiagnosisLabel.UNKNOWN_FAILURE
 
         diagnosis = StructuredDiagnosis(
@@ -257,7 +257,7 @@ class ReplayEngine:
         if record.governor_decision:
             try:
                 gov_res = GovernorDecisionResult(record.governor_decision)
-            except Exception:
+            except (ValueError, KeyError, TypeError):
                 gov_res = GovernorDecisionResult.ALLOW
 
             gov_decision = GovernorDecision(

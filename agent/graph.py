@@ -1,6 +1,7 @@
 """Stateful recovery orchestration graph connecting specialized agents, RAG, Governor, and Execution."""
 import time
 from typing import Any, Dict, List, Optional
+import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
 from agent.agents import (
@@ -421,15 +422,15 @@ class RecoveryStateGraph:
         try:
             exec_res = await self.executor.execute(validated_action, exec_ctx)
             state.execution_result = exec_res
-        except Exception as e:
+        except (TimeoutError, ConnectionError, PolicyOutageError, RuntimeError, httpx.RequestError, httpx.HTTPError) as e:
             state.is_terminal = True
-            state.stop_reason = "EXECUTION_FAILURE"
+            state.stop_reason = "POLICY_OUTAGE" if isinstance(e, PolicyOutageError) else "EXECUTION_FAILURE"
             state.step_traces.append(
                 WorkflowStepTrace(
                     step_name="NODE_9_EXECUTION",
                     status="ERROR",
                     elapsed_ms=round((time.perf_counter() - t0) * 1000.0, 2),
-                    summary=f"Executor raised exception: {str(e)}",
+                    summary=f"Executor raised operational exception: {str(e)}",
                     payload={"error": str(e)},
                 )
             )

@@ -4,6 +4,7 @@ import hmac
 import json
 import logging
 from typing import Any, Dict, Optional, Tuple
+from pydantic import ValidationError
 
 from domain.events import WebhookPayload
 
@@ -74,6 +75,6 @@ def parse_and_validate_razorpay_webhook(
 
     try:
         return WebhookPayload.model_validate(data)
-    except Exception as err:
+    except ValidationError as err:
         logger.warning("Failed to validate WebhookPayload schema: %s", err)
         raise WebhookPayloadValidationError(f"Invalid Razorpay webhook structure: {err}") from err
