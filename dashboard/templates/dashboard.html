@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RecoveryOS — Operations Console</title>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -22,17 +27,37 @@
                             700: '#334155',
                             800: '#1e293b',
                             900: '#0f172a',
+                            950: '#020617',
                         },
                         brand: {
                             50: '#f0f7ff',
                             100: '#e0effe',
+                            200: '#bae0fd',
                             500: '#0284c7',
                             600: '#0369a1',
                             700: '#075985',
+                            800: '#0c4a6e',
+                        },
+                        ai: {
+                            50: '#faf5ff',
+                            100: '#f3e8ff',
+                            200: '#e9d5ff',
+                            500: '#a855f7',
+                            600: '#9333ea',
+                            700: '#7e22ce',
+                            800: '#6b21a8',
                         }
                     },
                     fontFamily: {
-                        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+                        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+                    },
+                    boxShadow: {
+                        'xs': '0 1px 2px 0 rgba(15, 23, 42, 0.04)',
+                        'card': '0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.04)',
+                        'elevated': '0 10px 25px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.03)',
+                        'glow-ai': '0 0 20px -3px rgba(147, 51, 234, 0.25)',
+                        'glow-brand': '0 0 20px -3px rgba(2, 132, 199, 0.25)',
                     }
                 }
             }
@@ -43,98 +68,232 @@
     <style>
         [x-cloak] { display: none !important; }
         .tabular-nums { font-variant-numeric: tabular-nums; }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        
+        /* Design Tokens & Animations */
+        :root {
+            --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+            --ease-in-out-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Smooth Tab and Section Transitions */
+        .tab-content-enter {
+            animation: tabFadeIn 220ms var(--ease-out-expo) forwards;
+        }
+
+        @keyframes tabFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(6px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Interactive Card Elevation */
+        .card-interactive {
+            transition: transform 180ms var(--ease-out-expo), box-shadow 180ms var(--ease-out-expo), border-color 180ms var(--ease-out-expo);
+        }
+        .card-interactive:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px -4px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
+        }
+
+        /* Active Navigation Pill */
+        .nav-pill-active {
+            position: relative;
+            color: #0f172a;
+            font-weight: 600;
+        }
+        .nav-pill-active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 12px;
+            right: 12px;
+            height: 2px;
+            background: #2563eb;
+            border-radius: 2px;
+            animation: navPillSlide 180ms var(--ease-out-expo) forwards;
+        }
+
+        @keyframes navPillSlide {
+            from { transform: scaleX(0.4); opacity: 0; }
+            to { transform: scaleX(1); opacity: 1; }
+        }
+
+        /* Connecting Pipeline Animation */
+        .pipeline-pulse {
+            animation: pulseGlow 2s infinite ease-in-out;
+        }
+        @keyframes pulseGlow {
+            0%, 100% { opacity: 0.7; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.05); }
+        }
+
+        /* Step Progression Pulse */
+        @keyframes stepGlow {
+            0%, 100% { border-color: #9333ea; box-shadow: 0 0 0 0 rgba(147, 51, 234, 0.4); }
+            50% { border-color: #a855f7; box-shadow: 0 0 0 4px rgba(147, 51, 234, 0.15); }
+        }
+        .active-step-ring {
+            animation: stepGlow 1.5s infinite ease-in-out;
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: #f8fafc; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Reduced Motion Accessibility */
+        @media (prefers-reduced-motion: reduce) {
+            *, ::before, ::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+                scroll-behavior: auto !important;
+            }
+            .card-interactive:hover { transform: none !important; }
+        }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900 min-h-screen antialiased flex flex-col font-sans" x-data="dashboardApp()" x-init="initApp()">
+<body class="bg-slate-50 text-slate-900 min-h-screen antialiased flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900" x-data="dashboardApp()" x-init="initApp()">
 
-    <!-- Top Navigation Bar -->
-    <header class="border-b border-slate-200 bg-white sticky top-0 z-40 shadow-xs">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-            <!-- Left Branding -->
-            <div class="flex items-center space-x-3.5">
-                <div class="flex items-center space-x-2.5">
-                    <div class="w-7 h-7 rounded-md bg-blue-600 flex items-center justify-center font-bold text-white text-xs shadow-xs">
-                        R
-                    </div>
-                    <span class="font-semibold text-slate-900 tracking-tight text-base">RecoveryOS</span>
-                    <span class="text-xs font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">v2.0.0</span>
+    <!-- Execution Status Overlay Banner (Appears during Live Execution) -->
+    <div x-show="scenarioRunning" x-cloak
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 -translate-y-4"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100 translate-y-0"
+         x-transition:leave-end="opacity-0 -translate-y-4"
+         class="fixed top-3 left-1/2 -translate-x-1/2 z-50 max-w-xl w-[92%] bg-slate-900 text-white rounded-xl shadow-elevated border border-slate-700/80 p-3.5 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <div class="w-7 h-7 rounded-lg bg-purple-600/30 border border-purple-500/50 flex items-center justify-center shrink-0">
+                <span class="w-2.5 h-2.5 rounded-full bg-purple-400 animate-ping"></span>
+            </div>
+            <div>
+                <div class="text-xs font-bold font-mono tracking-tight text-white flex items-center space-x-1.5">
+                    <span>RECOVERYOS AI DECISION ENGINE RUNNING</span>
                 </div>
-                <div class="hidden md:flex items-center space-x-2 pl-3 border-l border-slate-200 text-xs text-slate-500">
-                    <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span class="font-mono text-slate-700 font-medium">SIMULATION & AUDIT RUNTIME</span>
-                    <span class="text-slate-300">|</span>
-                    <span>Model: <strong class="text-slate-700 font-mono">Groq (openai/gpt-oss-120b)</strong></span>
+                <div class="text-[11px] text-slate-300 font-mono mt-0.5" x-text="executionStepLabel"></div>
+            </div>
+        </div>
+        <div class="text-right shrink-0">
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-purple-950 text-purple-300 border border-purple-800" x-text="'STEP ' + executionStepIndex + ' / 9'"></span>
+        </div>
+    </div>
+
+    <!-- Top Executive Header -->
+    <header class="border-b border-slate-200/80 bg-white/95 backdrop-blur-md sticky top-0 z-40 shadow-xs">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-15 flex items-center justify-between gap-4">
+            
+            <!-- Left Branding & Production Badge -->
+            <div class="flex items-center space-x-3 shrink-0">
+                <div class="flex items-center space-x-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-slate-950 flex items-center justify-center font-bold text-white text-sm shadow-xs border border-slate-800">
+                        <span class="bg-gradient-to-br from-blue-400 to-indigo-500 bg-clip-text text-transparent font-mono">R</span>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-1.5">
+                            <span class="font-bold text-slate-900 tracking-tight text-sm sm:text-base">RecoveryOS</span>
+                            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded font-semibold bg-slate-100 text-slate-700 border border-slate-200">v2.0.0</span>
+                        </div>
+                        <div class="text-[10px] text-slate-500 font-mono hidden sm:block">Track 03 &bull; AI Revenue Recovery</div>
+                    </div>
+                </div>
+
+                <div class="hidden lg:flex items-center space-x-2 pl-3 border-l border-slate-200 text-xs">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span class="font-mono text-slate-700 font-semibold text-[11px]">AUTONOMOUS ENGINE</span>
+                    <span class="text-slate-300">&bull;</span>
+                    <span class="text-[11px] font-mono text-slate-600">Model: <strong class="text-slate-900">Groq / openai/gpt-oss-120b</strong></span>
                 </div>
             </div>
 
-            <!-- Center Navigation Tabs -->
-            <nav class="flex space-x-1 sm:space-x-1.5">
+            <!-- Center Navigation Tabs with Animated Underline Pill -->
+            <nav class="hidden md:flex items-center space-x-1">
                 <button @click="setTab('control_room')"
-                    :class="activeTab === 'control_room' ? 'bg-slate-100 text-blue-700 font-semibold border-b-2 border-blue-600' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
-                    class="px-3 py-1.5 rounded-t-md text-xs sm:text-sm font-medium transition-colors">
+                        :class="activeTab === 'control_room' ? 'nav-pill-active bg-slate-100 text-slate-950' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
+                        class="px-3 py-2 rounded-md text-xs font-medium transition-all">
                     Control Room
                 </button>
                 <button @click="setTab('scenario_lab')"
-                    :class="activeTab === 'scenario_lab' ? 'bg-slate-100 text-blue-700 font-semibold border-b-2 border-blue-600' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
-                    class="px-3 py-1.5 rounded-t-md text-xs sm:text-sm font-medium transition-colors flex items-center space-x-1.5">
+                        :class="activeTab === 'scenario_lab' ? 'nav-pill-active bg-slate-100 text-slate-950' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
+                        class="px-3 py-2 rounded-md text-xs font-medium transition-all flex items-center space-x-1.5">
                     <span>Scenario Lab</span>
-                    <span class="px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-700 text-xs font-mono">5 Scenarios</span>
+                    <span class="px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-800 text-[10px] font-mono font-bold">7 Cases</span>
                 </button>
                 <button @click="setTab('queue')"
-                    :class="activeTab === 'queue' ? 'bg-slate-100 text-blue-700 font-semibold border-b-2 border-blue-600' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
-                    class="px-3 py-1.5 rounded-t-md text-xs sm:text-sm font-medium transition-colors flex items-center space-x-1.5">
+                        :class="activeTab === 'queue' ? 'nav-pill-active bg-slate-100 text-slate-950' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
+                        class="px-3 py-2 rounded-md text-xs font-medium transition-all flex items-center space-x-1.5">
                     <span>Recovery Queue</span>
-                    <span class="px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 text-xs font-mono" x-text="queue.length"></span>
+                    <span class="px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-800 text-[10px] font-mono font-semibold" x-text="queue.length"></span>
                 </button>
                 <button @click="setTab('replay')"
-                    :class="activeTab === 'replay' ? 'bg-slate-100 text-blue-700 font-semibold border-b-2 border-blue-600' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
-                    class="px-3 py-1.5 rounded-t-md text-xs sm:text-sm font-medium transition-colors">
+                        :class="activeTab === 'replay' ? 'nav-pill-active bg-slate-100 text-slate-950' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
+                        class="px-3 py-2 rounded-md text-xs font-medium transition-all">
                     Case Replay
                 </button>
                 <button @click="setTab('evaluation')"
-                    :class="activeTab === 'evaluation' ? 'bg-slate-100 text-blue-700 font-semibold border-b-2 border-blue-600' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
-                    class="px-3 py-1.5 rounded-t-md text-xs sm:text-sm font-medium transition-colors">
+                        :class="activeTab === 'evaluation' ? 'nav-pill-active bg-slate-100 text-slate-950' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
+                        class="px-3 py-2 rounded-md text-xs font-medium transition-all">
                     Evaluation Lab
                 </button>
                 <button @click="setTab('exceptions')"
-                    :class="activeTab === 'exceptions' ? 'bg-slate-100 text-blue-700 font-semibold border-b-2 border-blue-600' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
-                    class="px-3 py-1.5 rounded-t-md text-xs sm:text-sm font-medium transition-colors flex items-center space-x-1.5">
+                        :class="activeTab === 'exceptions' ? 'nav-pill-active bg-slate-100 text-slate-950' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
+                        class="px-3 py-2 rounded-md text-xs font-medium transition-all flex items-center space-x-1.5">
                     <span>Exceptions & Audit</span>
-                    <span x-show="exceptions.length > 0" class="px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-xs font-mono" x-text="exceptions.length"></span>
+                    <span x-show="exceptions.length > 0" class="px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-mono font-bold" x-text="exceptions.length"></span>
                 </button>
                 <button @click="setTab('policies')"
-                    :class="activeTab === 'policies' ? 'bg-slate-100 text-blue-700 font-semibold border-b-2 border-blue-600' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
-                    class="px-3 py-1.5 rounded-t-md text-xs sm:text-sm font-medium transition-colors">
+                        :class="activeTab === 'policies' ? 'nav-pill-active bg-slate-100 text-slate-950' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
+                        class="px-3 py-2 rounded-md text-xs font-medium transition-all">
                     Merchant Policy
                 </button>
             </nav>
 
-            <!-- Right Controls -->
-            <div class="flex items-center space-x-2.5">
-                <button @click="refreshAll()" :disabled="loading" class="px-2.5 py-1.5 rounded-md bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 transition text-xs font-medium flex items-center space-x-1.5 shadow-2xs">
+            <!-- Right Controls: Connection Status & Refresh -->
+            <div class="flex items-center space-x-2.5 shrink-0">
+                <div class="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-[11px] font-mono border border-slate-200">
+                    <span class="w-2 h-2 rounded-full" :class="llmStatus.configured ? 'bg-emerald-500' : 'bg-slate-400'"></span>
+                    <span class="text-slate-700 font-semibold" x-text="llmStatus.configured ? 'LIVE LLM READY' : 'OFFLINE MODE'"></span>
+                </div>
+                
+                <button @click="refreshAll()" :disabled="loading"
+                        class="px-3 py-1.5 rounded-md bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 transition text-xs font-medium flex items-center space-x-1.5 shadow-2xs active:scale-95">
                     <svg class="w-3.5 h-3.5 text-slate-500" :class="{'animate-spin text-blue-600': loading}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                     </svg>
-                    <span>Refresh</span>
+                    <span class="hidden sm:inline">Refresh</span>
                 </button>
             </div>
         </div>
+
+        <!-- Mobile Navigation Tabs (Horizontally Scrollable) -->
+        <div class="md:hidden flex overflow-x-auto px-4 py-1.5 border-t border-slate-100 space-x-1 text-xs">
+            <button @click="setTab('control_room')" :class="activeTab === 'control_room' ? 'bg-slate-900 text-white font-semibold' : 'text-slate-600 bg-slate-100'" class="px-2.5 py-1 rounded-md shrink-0">Control Room</button>
+            <button @click="setTab('scenario_lab')" :class="activeTab === 'scenario_lab' ? 'bg-slate-900 text-white font-semibold' : 'text-slate-600 bg-slate-100'" class="px-2.5 py-1 rounded-md shrink-0">Scenario Lab (7)</button>
+            <button @click="setTab('queue')" :class="activeTab === 'queue' ? 'bg-slate-900 text-white font-semibold' : 'text-slate-600 bg-slate-100'" class="px-2.5 py-1 rounded-md shrink-0">Queue</button>
+            <button @click="setTab('replay')" :class="activeTab === 'replay' ? 'bg-slate-900 text-white font-semibold' : 'text-slate-600 bg-slate-100'" class="px-2.5 py-1 rounded-md shrink-0">Case Replay</button>
+            <button @click="setTab('evaluation')" :class="activeTab === 'evaluation' ? 'bg-slate-900 text-white font-semibold' : 'text-slate-600 bg-slate-100'" class="px-2.5 py-1 rounded-md shrink-0">Benchmark</button>
+            <button @click="setTab('exceptions')" :class="activeTab === 'exceptions' ? 'bg-slate-900 text-white font-semibold' : 'text-slate-600 bg-slate-100'" class="px-2.5 py-1 rounded-md shrink-0">Exceptions</button>
+            <button @click="setTab('policies')" :class="activeTab === 'policies' ? 'bg-slate-900 text-white font-semibold' : 'text-slate-600 bg-slate-100'" class="px-2.5 py-1 rounded-md shrink-0">Policies</button>
+        </div>
     </header>
 
-    <!-- Main Container -->
+    <!-- Main Workspace Container -->
     <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
-        <!-- Executive KPI Banner -->
+        <!-- Executive KPI Banner with Smooth Numerical Interpolation & Delta Badges -->
         <section class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
             <!-- 1. Revenue At Risk -->
-            <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
+            <div class="bg-white p-4 rounded-xl border border-slate-200/90 shadow-card card-interactive flex flex-col justify-between">
                 <div class="flex items-center justify-between text-xs text-slate-500 font-medium">
                     <span>Revenue at Risk</span>
-                    <span class="text-rose-600 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded text-[10px] font-mono">GROSS</span>
+                    <span class="text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold">GROSS</span>
                 </div>
                 <div class="mt-2 text-xl font-bold font-mono tracking-tight text-slate-900 tabular-nums">
                     ₹<span x-text="formatINR(controlRoom.revenue_at_risk_inr)"></span>
@@ -143,10 +302,10 @@
             </div>
 
             <!-- 2. Gross Recovered -->
-            <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
+            <div class="bg-white p-4 rounded-xl border border-slate-200/90 shadow-card card-interactive flex flex-col justify-between">
                 <div class="flex items-center justify-between text-xs text-slate-500 font-medium">
                     <span>Gross Recovered</span>
-                    <span class="text-emerald-600 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] font-mono">COLLECTED</span>
+                    <span class="text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold">CAPTURED</span>
                 </div>
                 <div class="mt-2 text-xl font-bold font-mono tracking-tight text-emerald-600 tabular-nums">
                     ₹<span x-text="formatINR(controlRoom.gross_recovered_inr)"></span>
@@ -155,10 +314,10 @@
             </div>
 
             <!-- 3. Incremental Net -->
-            <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
+            <div class="bg-white p-4 rounded-xl border border-slate-200/90 shadow-card card-interactive flex flex-col justify-between">
                 <div class="flex items-center justify-between text-xs text-slate-500 font-medium">
                     <span>Incremental Net</span>
-                    <span class="text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-[10px] font-mono">UPLIFT</span>
+                    <span class="text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold">UPLIFT</span>
                 </div>
                 <div class="mt-2 text-xl font-bold font-mono tracking-tight text-blue-600 tabular-nums">
                     ₹<span x-text="formatINR(controlRoom.incremental_recovered_inr)"></span>
@@ -167,10 +326,10 @@
             </div>
 
             <!-- 4. Adjusted Net (North Star) -->
-            <div class="bg-white p-3.5 rounded-xl border border-blue-200 bg-blue-50/20 shadow-xs flex flex-col justify-between ring-1 ring-blue-500/20">
+            <div class="bg-white p-4 rounded-xl border border-blue-200 bg-blue-50/20 shadow-card card-interactive flex flex-col justify-between ring-1 ring-blue-500/20">
                 <div class="flex items-center justify-between text-xs text-blue-900 font-semibold">
                     <span>Adjusted Net (★)</span>
-                    <span class="text-blue-700 bg-blue-100 border border-blue-300 px-1.5 py-0.5 rounded text-[10px] font-mono">NORTH STAR</span>
+                    <span class="text-blue-800 bg-blue-100 border border-blue-300 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold">NORTH STAR</span>
                 </div>
                 <div class="mt-2 text-xl font-bold font-mono tracking-tight text-blue-700 tabular-nums">
                     ₹<span x-text="formatINR(controlRoom.net_adjusted_recovery_inr)"></span>
@@ -179,20 +338,20 @@
             </div>
 
             <!-- 5. Interventions Avoided -->
-            <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
+            <div class="bg-white p-4 rounded-xl border border-slate-200/90 shadow-card card-interactive flex flex-col justify-between">
                 <div class="flex items-center justify-between text-xs text-slate-500 font-medium">
                     <span>Interventions Avoided</span>
-                    <span class="text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px] font-mono">ABSTAINED</span>
+                    <span class="text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold">ABSTAINED</span>
                 </div>
                 <div class="mt-2 text-xl font-bold font-mono tracking-tight text-amber-700 tabular-nums" x-text="controlRoom.actions_avoided || 0"></div>
                 <div class="text-[11px] text-slate-500 mt-1">Friction & fees prevented</div>
             </div>
 
             <!-- 6. Human Escalations -->
-            <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
+            <div class="bg-white p-4 rounded-xl border border-slate-200/90 shadow-card card-interactive flex flex-col justify-between">
                 <div class="flex items-center justify-between text-xs text-slate-500 font-medium">
                     <span>Human Reviews</span>
-                    <span class="text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[10px] font-mono">GOVERNED</span>
+                    <span class="text-slate-700 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold">GOVERNED</span>
                 </div>
                 <div class="mt-2 text-xl font-bold font-mono tracking-tight text-slate-800 tabular-nums" x-text="controlRoom.human_reviews || 0"></div>
                 <div class="text-[11px] text-slate-500 mt-1">Threshold escalations</div>
@@ -202,13 +361,13 @@
         <!-- ========================================================================= -->
         <!-- TAB 1: CONTROL ROOM (Executive Status & Activity Feed) -->
         <!-- ========================================================================= -->
-        <section x-show="activeTab === 'control_room'" x-cloak class="space-y-6">
+        <section x-show="activeTab === 'control_room'" x-cloak class="space-y-6 tab-content-enter">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <!-- Operational Health & Governor Status -->
-                <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
-                    <h3 class="text-sm font-semibold text-slate-900 uppercase tracking-wider flex items-center justify-between">
+                <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-card space-y-4">
+                    <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center justify-between">
                         <span>Governor Safety Invariants</span>
-                        <span class="px-2 py-0.5 rounded text-xs font-mono bg-emerald-50 text-emerald-700 border border-emerald-200">FAIL-CLOSED ENFORCED</span>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">FAIL-CLOSED ENFORCED</span>
                     </h3>
                     <div class="divide-y divide-slate-100 text-xs">
                         <div class="py-2.5 flex justify-between items-center">
@@ -233,16 +392,16 @@
                         </div>
                         <div class="py-2.5 flex justify-between items-center">
                             <span class="text-slate-600">Stale Action State-Version Check</span>
-                            <span class="font-mono text-emerald-700 font-medium">ACTIVE (Revalidate on Due)</span>
+                            <span class="font-mono text-emerald-700 font-semibold">ACTIVE (Revalidate on Due)</span>
                         </div>
                     </div>
                 </div>
 
                 <!-- Real-Time Activity Stream -->
-                <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col">
+                <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-5 shadow-card flex flex-col">
                     <div class="flex items-center justify-between pb-3 border-b border-slate-100">
-                        <h3 class="text-sm font-semibold text-slate-900 uppercase tracking-wider">Operational Recovery Audit Stream</h3>
-                        <span class="text-xs text-slate-500 font-mono" x-text="(controlRoom.recent_decisions || []).length + ' events logged'"></span>
+                        <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Operational Recovery Audit Stream</h3>
+                        <span class="text-[11px] text-slate-500 font-mono" x-text="(controlRoom.recent_decisions || []).length + ' events logged'"></span>
                     </div>
                     <div class="divide-y divide-slate-100 flex-1 overflow-y-auto max-h-[360px] text-xs">
                         <template x-for="dec in (controlRoom.recent_decisions || [])" :key="dec.decision_id">
@@ -251,7 +410,7 @@
                                 <div class="space-y-1">
                                     <div class="flex items-center space-x-2">
                                         <span class="font-mono font-semibold text-slate-900" x-text="dec.payment_id"></span>
-                                        <span class="px-1.5 py-0.5 rounded text-[10px] font-mono border"
+                                        <span class="px-1.5 py-0.5 rounded text-[10px] font-mono border font-semibold"
                                               :class="getVerdictBadge(dec.governor_decision)"
                                               x-text="dec.governor_decision || 'ALLOW'"></span>
                                         <span class="text-slate-500 font-mono text-[11px]" x-text="'₹' + formatINR(dec.amount_in_paise / 100.0)"></span>
@@ -269,34 +428,35 @@
         </section>
 
         <!-- ========================================================================= -->
-        <!-- TAB 2: SCENARIO LAB (Interactive Scenario Simulation & Replay Engine) -->
+        <!-- TAB 2: SCENARIO LAB (Interactive Scenario Simulation & Live AI Workspace) -->
         <!-- ========================================================================= -->
-        <section x-show="activeTab === 'scenario_lab'" x-cloak class="space-y-6">
-            <!-- Scenario Launcher & Live LLM Mode Toolbar -->
-            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
+        <section x-show="activeTab === 'scenario_lab'" x-cloak class="space-y-6 tab-content-enter">
+            
+            <!-- Scenario Launcher & Mode Switch Toolbar -->
+            <div class="bg-white rounded-xl border border-slate-200/90 p-5 shadow-card space-y-4">
                 <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-100">
                     <div>
                         <div class="flex items-center space-x-2">
-                            <h2 class="text-base font-bold text-slate-900">Interactive Scenario Simulation Lab</h2>
-                            <span class="px-2 py-0.5 text-[10px] font-mono rounded bg-blue-100 text-blue-800 font-semibold border border-blue-200">Track 03 Sovereignty Demo</span>
+                            <h2 class="text-base font-bold text-slate-900">AI Decision Simulation Workspace</h2>
+                            <span class="px-2 py-0.5 text-[10px] font-mono rounded bg-blue-100 text-blue-800 font-bold border border-blue-200">Track 03 Sovereignty Demo</span>
                         </div>
-                        <p class="text-xs text-slate-500 mt-0.5">Visibly test AI reasoning vs deterministic economic optimization and Governor authorization.</p>
+                        <p class="text-xs text-slate-500 mt-0.5">Execute 7 signature Track 03 scenarios through the closed-loop runtime. Visibly inspect AI reasoning, deterministic candidate scoring, and Governor authorization gates.</p>
                     </div>
 
-                    <!-- Mode Switcher Bar -->
-                    <div class="flex flex-wrap items-center gap-3 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                    <!-- Mode Switcher Control -->
+                    <div class="flex flex-wrap items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-200">
                         <div class="flex items-center space-x-1.5 text-xs">
-                            <span class="text-slate-500 font-medium">MODE:</span>
+                            <span class="text-slate-500 font-medium text-[11px]">EXECUTION MODE:</span>
                             <div class="inline-flex rounded-md shadow-2xs">
                                 <button @click="setRuntimeMode('DETERMINISTIC')"
-                                        :class="runtimeMode === 'DETERMINISTIC' ? 'bg-white text-slate-900 font-semibold shadow-xs border-slate-300' : 'bg-transparent text-slate-600 hover:text-slate-900 border-transparent'"
+                                        :class="runtimeMode === 'DETERMINISTIC' ? 'bg-white text-slate-950 font-bold shadow-xs border-slate-300' : 'bg-transparent text-slate-600 hover:text-slate-900 border-transparent'"
                                         class="px-2.5 py-1 text-xs rounded-l-md border transition">
                                     DETERMINISTIC
                                 </button>
                                 <button @click="setRuntimeMode('LIVE_LLM')"
-                                        :class="runtimeMode === 'LIVE_LLM' ? 'bg-blue-600 text-white font-semibold shadow-xs border-blue-600' : 'bg-transparent text-slate-600 hover:text-slate-900 border-transparent'"
+                                        :class="runtimeMode === 'LIVE_LLM' ? 'bg-purple-600 text-white font-bold shadow-xs border-purple-600' : 'bg-transparent text-slate-600 hover:text-slate-900 border-transparent'"
                                         class="px-2.5 py-1 text-xs rounded-r-md border transition flex items-center space-x-1">
-                                    <span class="w-1.5 h-1.5 rounded-full" :class="llmStatus.configured ? 'bg-emerald-400' : 'bg-amber-400'"></span>
+                                    <span class="w-1.5 h-1.5 rounded-full" :class="llmStatus.configured ? 'bg-emerald-300' : 'bg-amber-300'"></span>
                                     <span>LIVE LLM</span>
                                 </button>
                             </div>
@@ -309,214 +469,220 @@
                             <span>&bull;</span>
                             <span>Model: <strong class="text-slate-800" x-text="llmStatus.model || 'openai/gpt-oss-120b'"></strong></span>
                             <span>&bull;</span>
-                            <span>Fallback: <strong class="text-amber-700">DISABLED (Strict)</strong></span>
-                            <span>&bull;</span>
-                            <span class="flex items-center space-x-1">
-                                <span class="w-2 h-2 rounded-full" :class="llmStatus.configured ? 'bg-emerald-500' : 'bg-slate-400'"></span>
-                                <span :class="llmStatus.configured ? 'text-emerald-700 font-semibold' : 'text-slate-500'" x-text="llmStatus.configured ? 'CONNECTED' : 'OFFLINE'"></span>
-                            </span>
+                            <span>Fallback: <strong class="text-amber-700 font-bold">DISABLED (Strict)</strong></span>
                         </div>
                     </div>
                 </div>
 
-                <!-- Scenario Action Cards with Dual Execution Trigger Buttons -->
+                <!-- 7 Signature Scenario Action Cards with Dual Execution Triggers -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
-                    <!-- Case 1 -->
-                    <div :class="activeScenario === 'scen_demo_abstain' ? 'ring-2 ring-blue-600 border-blue-600 bg-blue-50/40' : 'bg-white border-slate-200'"
-                         class="p-3.5 rounded-lg border text-left shadow-2xs flex flex-col justify-between space-y-3">
+                    
+                    <!-- Case 1: Economic Abstention -->
+                    <div :class="activeScenario === 'scen_demo_abstain' ? 'ring-2 ring-blue-600 border-blue-600 bg-blue-50/30' : 'bg-white border-slate-200'"
+                         class="p-3.5 rounded-lg border text-left shadow-card card-interactive flex flex-col justify-between space-y-3">
                         <div>
                             <div class="flex items-center justify-between text-[11px] font-mono text-slate-500 mb-1">
-                                <span>CASE 1</span>
-                                <span class="text-emerald-700 font-semibold">ABSTAIN</span>
+                                <span class="font-bold">CASE 1</span>
+                                <span class="text-emerald-700 font-bold bg-emerald-50 px-1 py-0.2 rounded text-[10px]">ABSTAIN</span>
                             </div>
-                            <div class="font-semibold text-slate-900 text-xs">Economic Abstention</div>
-                            <div class="text-[11px] text-slate-500 mt-1 line-clamp-2">₹1.00 expired card. Proves negative net yield abstention.</div>
+                            <div class="font-bold text-slate-900 text-xs">Economic Abstention</div>
+                            <div class="text-[11px] font-mono text-slate-500 mt-0.5">₹1.00 &bull; Expired Card</div>
+                            <p class="text-[11px] text-slate-600 mt-1.5 line-clamp-2">Micro-ticket where dunning costs exceed recoverable revenue. Proves negative yield abstention.</p>
                         </div>
                         <div class="space-y-1.5 pt-2 border-t border-slate-100">
                             <button @click="runScenario('scen_demo_abstain', 'DETERMINISTIC')" :disabled="scenarioRunning"
-                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium transition text-center">
+                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium transition text-center active:scale-95">
                                 RUN DETERMINISTIC
                             </button>
                             <button @click="runScenario('scen_demo_abstain', 'LIVE_LLM')" :disabled="scenarioRunning"
-                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-blue-600 hover:bg-blue-700 text-white font-medium transition text-center flex items-center justify-center space-x-1">
+                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-purple-600 hover:bg-purple-700 text-white font-semibold transition text-center flex items-center justify-center space-x-1 active:scale-95 shadow-xs">
                                 <span>RUN LIVE AI</span>
                                 <span>&rarr;</span>
                             </button>
                         </div>
                     </div>
 
-                    <!-- Case 2 -->
-                    <div :class="activeScenario === 'scen_demo_timing' ? 'ring-2 ring-blue-600 border-blue-600 bg-blue-50/40' : 'bg-white border-slate-200'"
-                         class="p-3.5 rounded-lg border text-left shadow-2xs flex flex-col justify-between space-y-3">
+                    <!-- Case 2: Timing Optimization -->
+                    <div :class="activeScenario === 'scen_demo_timing' ? 'ring-2 ring-blue-600 border-blue-600 bg-blue-50/30' : 'bg-white border-slate-200'"
+                         class="p-3.5 rounded-lg border text-left shadow-card card-interactive flex flex-col justify-between space-y-3">
                         <div>
                             <div class="flex items-center justify-between text-[11px] font-mono text-slate-500 mb-1">
-                                <span>CASE 2</span>
-                                <span class="text-blue-700 font-semibold">TIMING</span>
+                                <span class="font-bold">CASE 2</span>
+                                <span class="text-blue-700 font-bold bg-blue-50 px-1 py-0.2 rounded text-[10px]">TIMING</span>
                             </div>
-                            <div class="font-semibold text-slate-900 text-xs">Action × Timing</div>
-                            <div class="text-[11px] text-slate-500 mt-1 line-clamp-2">₹5,000 gateway error. Evaluates candidates; picks +6h.</div>
+                            <div class="font-bold text-slate-900 text-xs">Action × Timing</div>
+                            <div class="text-[11px] font-mono text-slate-500 mt-0.5">₹5,000 &bull; Gateway Timeout</div>
+                            <p class="text-[11px] text-slate-600 mt-1.5 line-clamp-2">Evaluates multiple candidate windows (+2h, +6h, +12h). Selects optimal +6h retry.</p>
                         </div>
                         <div class="space-y-1.5 pt-2 border-t border-slate-100">
                             <button @click="runScenario('scen_demo_timing', 'DETERMINISTIC')" :disabled="scenarioRunning"
-                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium transition text-center">
+                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium transition text-center active:scale-95">
                                 RUN DETERMINISTIC
                             </button>
                             <button @click="runScenario('scen_demo_timing', 'LIVE_LLM')" :disabled="scenarioRunning"
-                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-blue-600 hover:bg-blue-700 text-white font-medium transition text-center flex items-center justify-center space-x-1">
+                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-purple-600 hover:bg-purple-700 text-white font-semibold transition text-center flex items-center justify-center space-x-1 active:scale-95 shadow-xs">
                                 <span>RUN LIVE AI</span>
                                 <span>&rarr;</span>
                             </button>
                         </div>
                     </div>
 
-                    <!-- Case 3 -->
-                    <div :class="activeScenario === 'scen_demo_stale' ? 'ring-2 ring-blue-600 border-blue-600 bg-blue-50/40' : 'bg-white border-slate-200'"
-                         class="p-3.5 rounded-lg border text-left shadow-2xs flex flex-col justify-between space-y-3">
+                    <!-- Case 3: Stale Action Protection -->
+                    <div :class="activeScenario === 'scen_demo_stale' ? 'ring-2 ring-blue-600 border-blue-600 bg-blue-50/30' : 'bg-white border-slate-200'"
+                         class="p-3.5 rounded-lg border text-left shadow-card card-interactive flex flex-col justify-between space-y-3">
                         <div>
                             <div class="flex items-center justify-between text-[11px] font-mono text-slate-500 mb-1">
-                                <span>CASE 3</span>
-                                <span class="text-amber-700 font-semibold">STALE</span>
+                                <span class="font-bold">CASE 3</span>
+                                <span class="text-amber-700 font-bold bg-amber-50 px-1 py-0.2 rounded text-[10px]">STALE</span>
                             </div>
-                            <div class="font-semibold text-slate-900 text-xs">Stale Protection</div>
-                            <div class="text-[11px] text-slate-500 mt-1 line-clamp-2">Out-of-band capture invalidates scheduled retry.</div>
+                            <div class="font-bold text-slate-900 text-xs">Stale Protection</div>
+                            <div class="text-[11px] font-mono text-slate-500 mt-0.5">₹2,500 &bull; Late Capture</div>
+                            <p class="text-[11px] text-slate-600 mt-1.5 line-clamp-2">Out-of-band capture invalidates scheduled retry, preventing double charge.</p>
                         </div>
                         <div class="space-y-1.5 pt-2 border-t border-slate-100">
                             <button @click="runScenario('scen_demo_stale', 'DETERMINISTIC')" :disabled="scenarioRunning"
-                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium transition text-center">
+                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium transition text-center active:scale-95">
                                 RUN DETERMINISTIC
                             </button>
                             <button @click="runScenario('scen_demo_stale', 'LIVE_LLM')" :disabled="scenarioRunning"
-                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-blue-600 hover:bg-blue-700 text-white font-medium transition text-center flex items-center justify-center space-x-1">
+                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-purple-600 hover:bg-purple-700 text-white font-semibold transition text-center flex items-center justify-center space-x-1 active:scale-95 shadow-xs">
                                 <span>RUN LIVE AI</span>
                                 <span>&rarr;</span>
                             </button>
                         </div>
                     </div>
 
-                    <!-- Case 4 -->
-                    <div :class="activeScenario === 'scen_demo_consent' ? 'ring-2 ring-blue-600 border-blue-600 bg-blue-50/40' : 'bg-white border-slate-200'"
-                         class="p-3.5 rounded-lg border text-left shadow-2xs flex flex-col justify-between space-y-3">
+                    <!-- Case 4: Customer Opt-Out -->
+                    <div :class="activeScenario === 'scen_demo_consent' ? 'ring-2 ring-blue-600 border-blue-600 bg-blue-50/30' : 'bg-white border-slate-200'"
+                         class="p-3.5 rounded-lg border text-left shadow-card card-interactive flex flex-col justify-between space-y-3">
                         <div>
                             <div class="flex items-center justify-between text-[11px] font-mono text-slate-500 mb-1">
-                                <span>CASE 4</span>
-                                <span class="text-rose-700 font-semibold">CONSENT</span>
+                                <span class="font-bold">CASE 4</span>
+                                <span class="text-rose-700 font-bold bg-rose-50 px-1 py-0.2 rounded text-[10px]">CONSENT</span>
                             </div>
-                            <div class="font-semibold text-slate-900 text-xs">Customer Opt-Out</div>
-                            <div class="text-[11px] text-slate-500 mt-1 line-clamp-2">Governor blocks contact on opted-out customer.</div>
+                            <div class="font-bold text-slate-900 text-xs">Customer Opt-Out</div>
+                            <div class="text-[11px] font-mono text-slate-500 mt-0.5">₹3,000 &bull; Consent Gate</div>
+                            <p class="text-[11px] text-slate-600 mt-1.5 line-clamp-2">Governor and Tool Firewall block communication on opted-out customer.</p>
                         </div>
                         <div class="space-y-1.5 pt-2 border-t border-slate-100">
                             <button @click="runScenario('scen_demo_consent', 'DETERMINISTIC')" :disabled="scenarioRunning"
-                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium transition text-center">
+                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium transition text-center active:scale-95">
                                 RUN DETERMINISTIC
                             </button>
                             <button @click="runScenario('scen_demo_consent', 'LIVE_LLM')" :disabled="scenarioRunning"
-                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-blue-600 hover:bg-blue-700 text-white font-medium transition text-center flex items-center justify-center space-x-1">
+                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-purple-600 hover:bg-purple-700 text-white font-semibold transition text-center flex items-center justify-center space-x-1 active:scale-95 shadow-xs">
                                 <span>RUN LIVE AI</span>
                                 <span>&rarr;</span>
                             </button>
                         </div>
                     </div>
 
-                    <!-- Case 5 -->
-                    <div :class="activeScenario === 'scen_demo_uncertainty' ? 'ring-2 ring-blue-600 border-blue-600 bg-blue-50/40' : 'bg-white border-slate-200'"
-                         class="p-3.5 rounded-lg border text-left shadow-2xs flex flex-col justify-between space-y-3">
+                    <!-- Case 5: Diagnostic Uncertainty -->
+                    <div :class="activeScenario === 'scen_demo_uncertainty' ? 'ring-2 ring-blue-600 border-blue-600 bg-blue-50/30' : 'bg-white border-slate-200'"
+                         class="p-3.5 rounded-lg border text-left shadow-card card-interactive flex flex-col justify-between space-y-3">
                         <div>
                             <div class="flex items-center justify-between text-[11px] font-mono text-slate-500 mb-1">
-                                <span>CASE 5</span>
-                                <span class="text-purple-700 font-semibold">ESCALATE</span>
+                                <span class="font-bold">CASE 5</span>
+                                <span class="text-purple-700 font-bold bg-purple-50 px-1 py-0.2 rounded text-[10px]">ESCALATE</span>
                             </div>
-                            <div class="font-semibold text-slate-900 text-xs">LLM Uncertainty</div>
-                            <div class="text-[11px] text-slate-500 mt-1 line-clamp-2">₹25,000 ambiguous failure. Escalated to human review.</div>
+                            <div class="font-bold text-slate-900 text-xs">LLM Uncertainty</div>
+                            <div class="text-[11px] font-mono text-slate-500 mt-0.5">₹25,000 &bull; High Value</div>
+                            <p class="text-[11px] text-slate-600 mt-1.5 line-clamp-2">Ambiguous error signature triggers human review escalation by policy.</p>
                         </div>
                         <div class="space-y-1.5 pt-2 border-t border-slate-100">
                             <button @click="runScenario('scen_demo_uncertainty', 'DETERMINISTIC')" :disabled="scenarioRunning"
-                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium transition text-center">
+                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium transition text-center active:scale-95">
                                 RUN DETERMINISTIC
                             </button>
                             <button @click="runScenario('scen_demo_uncertainty', 'LIVE_LLM')" :disabled="scenarioRunning"
-                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-blue-600 hover:bg-blue-700 text-white font-medium transition text-center flex items-center justify-center space-x-1">
+                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-purple-600 hover:bg-purple-700 text-white font-semibold transition text-center flex items-center justify-center space-x-1 active:scale-95 shadow-xs">
                                 <span>RUN LIVE AI</span>
                                 <span>&rarr;</span>
                             </button>
                         </div>
                     </div>
 
-                    <!-- Case 6 -->
-                    <div :class="activeScenario === 'scen_demo_subscription' ? 'ring-2 ring-blue-600 border-blue-600 bg-blue-50/40' : 'bg-white border-slate-200'"
-                         class="p-3.5 rounded-lg border text-left shadow-2xs flex flex-col justify-between space-y-3">
+                    <!-- Case 6: Subscription Mandate -->
+                    <div :class="activeScenario === 'scen_demo_subscription' ? 'ring-2 ring-blue-600 border-blue-600 bg-blue-50/30' : 'bg-white border-slate-200'"
+                         class="p-3.5 rounded-lg border text-left shadow-card card-interactive flex flex-col justify-between space-y-3">
                         <div>
                             <div class="flex items-center justify-between text-[11px] font-mono text-slate-500 mb-1">
-                                <span>CASE 6</span>
-                                <span class="text-cyan-700 font-semibold">MANDATE</span>
+                                <span class="font-bold">CASE 6</span>
+                                <span class="text-cyan-700 font-bold bg-cyan-50 px-1 py-0.2 rounded text-[10px]">MANDATE</span>
                             </div>
-                            <div class="font-semibold text-slate-900 text-xs">SaaS Subscription</div>
-                            <div class="text-[11px] text-slate-500 mt-1 line-clamp-2">₹2,999 revoked mandate. Replaced with payment link.</div>
+                            <div class="font-bold text-slate-900 text-xs">SaaS Subscription</div>
+                            <div class="text-[11px] font-mono text-slate-500 mt-0.5">₹2,999 &bull; Revoked Mandate</div>
+                            <p class="text-[11px] text-slate-600 mt-1.5 line-clamp-2">Eliminates impossible retries; issues direct payment link to update instrument.</p>
                         </div>
                         <div class="space-y-1.5 pt-2 border-t border-slate-100">
                             <button @click="runScenario('scen_demo_subscription', 'DETERMINISTIC')" :disabled="scenarioRunning"
-                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium transition text-center">
+                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium transition text-center active:scale-95">
                                 RUN DETERMINISTIC
                             </button>
                             <button @click="runScenario('scen_demo_subscription', 'LIVE_LLM')" :disabled="scenarioRunning"
-                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-blue-600 hover:bg-blue-700 text-white font-medium transition text-center flex items-center justify-center space-x-1">
+                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-purple-600 hover:bg-purple-700 text-white font-semibold transition text-center flex items-center justify-center space-x-1 active:scale-95 shadow-xs">
                                 <span>RUN LIVE AI</span>
                                 <span>&rarr;</span>
                             </button>
                         </div>
                     </div>
 
-                    <!-- Case 7 -->
-                    <div :class="activeScenario === 'scen_demo_abandonment' ? 'ring-2 ring-blue-600 border-blue-600 bg-blue-50/40' : 'bg-white border-slate-200'"
-                         class="p-3.5 rounded-lg border text-left shadow-2xs flex flex-col justify-between space-y-3">
+                    <!-- Case 7: Cart Abandonment -->
+                    <div :class="activeScenario === 'scen_demo_abandonment' ? 'ring-2 ring-blue-600 border-blue-600 bg-blue-50/30' : 'bg-white border-slate-200'"
+                         class="p-3.5 rounded-lg border text-left shadow-card card-interactive flex flex-col justify-between space-y-3">
                         <div>
                             <div class="flex items-center justify-between text-[11px] font-mono text-slate-500 mb-1">
-                                <span>CASE 7</span>
-                                <span class="text-indigo-700 font-semibold">CHECKOUT</span>
+                                <span class="font-bold">CASE 7</span>
+                                <span class="text-indigo-700 font-bold bg-indigo-50 px-1 py-0.2 rounded text-[10px]">CHECKOUT</span>
                             </div>
-                            <div class="font-semibold text-slate-900 text-xs">Cart Abandonment</div>
-                            <div class="text-[11px] text-slate-500 mt-1 line-clamp-2">₹4,200 OTP drop-off. Timed re-engagement link.</div>
+                            <div class="font-bold text-slate-900 text-xs">Cart Abandonment</div>
+                            <div class="text-[11px] font-mono text-slate-500 mt-0.5">₹4,200 &bull; OTP Drop-Off</div>
+                            <p class="text-[11px] text-slate-600 mt-1.5 line-clamp-2">Selects timed +2h reminder with 1-click Razorpay link over immediate spam.</p>
                         </div>
                         <div class="space-y-1.5 pt-2 border-t border-slate-100">
                             <button @click="runScenario('scen_demo_abandonment', 'DETERMINISTIC')" :disabled="scenarioRunning"
-                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium transition text-center">
+                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium transition text-center active:scale-95">
                                 RUN DETERMINISTIC
                             </button>
                             <button @click="runScenario('scen_demo_abandonment', 'LIVE_LLM')" :disabled="scenarioRunning"
-                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-blue-600 hover:bg-blue-700 text-white font-medium transition text-center flex items-center justify-center space-x-1">
+                                    class="w-full py-1 px-2 text-[10px] font-mono rounded bg-purple-600 hover:bg-purple-700 text-white font-semibold transition text-center flex items-center justify-center space-x-1 active:scale-95 shadow-xs">
                                 <span>RUN LIVE AI</span>
                                 <span>&rarr;</span>
                             </button>
                         </div>
                     </div>
+
                 </div>
             </div>
 
             <!-- Active Scenario Outcome Display -->
             <div x-show="scenarioData" class="space-y-6">
 
-                <!-- Live LLM Strict Fail-Closed Error Alert (When Provider is Unavailable) -->
+                <!-- Live LLM Strict Fail-Closed Error Alert -->
                 <template x-if="scenarioData && scenarioData.status === 'error'">
-                    <div class="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 space-y-2 shadow-xs">
-                        <div class="flex items-center space-x-2">
-                            <span class="w-3 h-3 rounded-full bg-rose-500 animate-pulse"></span>
-                            <span class="font-bold text-sm">LIVE LLM EXECUTION FAILED CLOSED</span>
-                            <span class="px-2 py-0.5 text-[10px] font-mono rounded bg-rose-200 text-rose-800 font-semibold">ZERO SILENT FALLBACK</span>
+                    <div class="p-5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 space-y-2 shadow-card">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2">
+                                <span class="w-3 h-3 rounded-full bg-rose-500 animate-pulse"></span>
+                                <span class="font-bold text-sm">LIVE LLM EXECUTION FAILED CLOSED</span>
+                            </div>
+                            <span class="px-2 py-0.5 text-[10px] font-mono rounded font-bold bg-rose-200 text-rose-900">ZERO SILENT FALLBACK ENFORCED</span>
                         </div>
-                        <p class="text-xs text-rose-700 font-mono" x-text="scenarioData.error_message"></p>
-                        <div class="text-[11px] text-rose-600 bg-white/70 p-2.5 rounded border border-rose-200 font-mono">
-                            <strong>Safety Invariant Enforced:</strong> In <code>LIVE_LLM</code> mode, if the LLM provider fails, RecoveryOS halts execution safely with ₹0.00 financial actions dispatched rather than pretending deterministic logic was generated by AI.
+                        <p class="text-xs text-rose-800 font-mono" x-text="scenarioData.error_message"></p>
+                        <div class="text-[11px] text-rose-700 bg-white/80 p-3 rounded-lg border border-rose-200 font-mono">
+                            <strong>Sovereignty Principle Enforced:</strong> In <code>LIVE_LLM</code> mode, when the model provider fails or is unreachable, RecoveryOS halts execution safely with ₹0.00 financial action dispatched rather than pretending deterministic logic was generated by AI.
                         </div>
                     </div>
                 </template>
 
                 <!-- Case Summary Strip -->
-                <div x-show="scenarioData && scenarioData.status !== 'error'" class="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
+                <div x-show="scenarioData && scenarioData.status !== 'error'" class="bg-white rounded-xl border border-slate-200/90 p-5 shadow-card">
                     <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                         <div>
                             <div class="flex items-center space-x-2 mb-1">
-                                <span class="px-2 py-0.5 rounded text-xs font-mono font-semibold bg-blue-50 text-blue-700 border border-blue-200" x-text="scenarioData.scenario_type"></span>
-                                <span class="px-2 py-0.5 rounded text-xs font-mono font-semibold"
-                                      :class="scenarioData.execution_mode === 'LIVE_LLM' ? 'bg-purple-50 text-purple-700 border border-purple-200' : 'bg-slate-100 text-slate-700 border border-slate-200'"
+                                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-blue-50 text-blue-700 border border-blue-200" x-text="scenarioData.scenario_type"></span>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold border"
+                                      :class="scenarioData.execution_mode === 'LIVE_LLM' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-slate-100 text-slate-700 border-slate-200'"
                                       x-text="'MODE: ' + (scenarioData.execution_mode || runtimeMode)"></span>
                                 <h3 class="text-base font-bold text-slate-900" x-text="scenarioData.scenario_name"></h3>
                             </div>
@@ -528,7 +694,7 @@
                                 <div class="text-base font-bold font-mono text-slate-900" x-text="'₹' + formatINR(scenarioData.amount_inr)"></div>
                             </div>
                             <div>
-                                <div class="text-[11px] text-slate-500">Action Cost / Net</div>
+                                <div class="text-[11px] text-slate-500">Action Cost / Net Yield</div>
                                 <div class="text-base font-bold font-mono" :class="scenarioData.net_value_inr >= 0 ? 'text-emerald-600' : 'text-slate-600'"
                                      x-text="'₹' + formatINR(scenarioData.net_value_inr)"></div>
                             </div>
@@ -542,86 +708,165 @@
                     </div>
                 </div>
 
-                <!-- 4-Card Architecture Grid: AI Diagnosis -> Economic Engine -> Recovery Governor -> Tool Firewall -->
+                <!-- 9-Node Interactive Decision Pipeline Visual Strip -->
+                <div x-show="scenarioData && scenarioData.status !== 'error'" class="bg-slate-950 text-white rounded-xl p-5 shadow-elevated border border-slate-800 space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                            <span class="text-xs font-bold uppercase tracking-wider text-slate-200">Autonomous Decision & Safety Pipeline</span>
+                        </div>
+                        <span class="text-[10px] font-mono text-slate-400">The model proposes &bull; Governor authorizes &bull; Firewall gates &bull; Executor acts</span>
+                    </div>
+
+                    <!-- Horizontal Nodes Flow -->
+                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-2 text-center text-xs font-mono">
+                        
+                        <!-- 1. Observe -->
+                        <div class="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-1">
+                            <div class="text-[9px] uppercase tracking-wider text-slate-400">1. Ingestion</div>
+                            <div class="font-bold text-white text-[11px]">WEBHOOK</div>
+                            <span class="px-1.5 py-0.2 rounded text-[9px] bg-slate-800 text-slate-300">DET</span>
+                        </div>
+
+                        <!-- 2. Context -->
+                        <div class="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-1">
+                            <div class="text-[9px] uppercase tracking-wider text-slate-400">2. Context</div>
+                            <div class="font-bold text-white text-[11px]">BOUNDED RAG</div>
+                            <span class="px-1.5 py-0.2 rounded text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-800">RAG</span>
+                        </div>
+
+                        <!-- 3. Diagnosis -->
+                        <div class="p-2.5 rounded-lg bg-purple-950/70 border border-purple-800 space-y-1">
+                            <div class="text-[9px] uppercase tracking-wider text-purple-300">3. Diagnosis</div>
+                            <div class="font-bold text-white text-[11px] truncate" x-text="scenarioData.ai_proposal ? scenarioData.ai_proposal.diagnosis_label : 'Inferred'"></div>
+                            <span class="px-1.5 py-0.2 rounded text-[9px] bg-purple-900 text-purple-200 font-semibold" x-text="scenarioData.execution_mode === 'LIVE_LLM' ? 'LIVE LLM' : 'RULES'"></span>
+                        </div>
+
+                        <!-- 4. Strategy -->
+                        <div class="p-2.5 rounded-lg bg-purple-950/70 border border-purple-800 space-y-1">
+                            <div class="text-[9px] uppercase tracking-wider text-purple-300">4. Strategy</div>
+                            <div class="font-bold text-white text-[11px] truncate" x-text="scenarioData.ai_proposal ? scenarioData.ai_proposal.action_type : 'Propose'"></div>
+                            <span class="px-1.5 py-0.2 rounded text-[9px] bg-purple-900 text-purple-200 font-semibold" x-text="scenarioData.execution_mode === 'LIVE_LLM' ? 'LIVE LLM' : 'RULES'"></span>
+                        </div>
+
+                        <!-- 5. Economics -->
+                        <div class="p-2.5 rounded-lg bg-blue-950/70 border border-blue-800 space-y-1">
+                            <div class="text-[9px] uppercase tracking-wider text-blue-300">5. Economics</div>
+                            <div class="font-bold text-white text-[11px]">ACTION × TIMING</div>
+                            <span class="px-1.5 py-0.2 rounded text-[9px] bg-blue-900 text-blue-200">MAX EXP NET</span>
+                        </div>
+
+                        <!-- 6. Governor -->
+                        <div class="p-2.5 rounded-lg bg-emerald-950/80 border border-emerald-700 space-y-1">
+                            <div class="text-[9px] uppercase tracking-wider text-emerald-300">6. Governor</div>
+                            <div class="font-bold text-[11px]" :class="getVerdictTextColor(scenarioData.governor_verdict ? scenarioData.governor_verdict.result : 'ALLOW')" x-text="scenarioData.governor_verdict ? scenarioData.governor_verdict.result : 'ALLOW'"></div>
+                            <span class="px-1.5 py-0.2 rounded text-[9px] bg-emerald-900 text-emerald-200">8 CHECKS</span>
+                        </div>
+
+                        <!-- 7. Firewall -->
+                        <div class="p-2.5 rounded-lg bg-slate-900 border border-slate-700 space-y-1">
+                            <div class="text-[9px] uppercase tracking-wider text-slate-400">7. Firewall</div>
+                            <div class="font-bold text-white text-[11px]">SAFETY GATE</div>
+                            <span class="px-1.5 py-0.2 rounded text-[9px] bg-slate-800 text-slate-300">AUTH / BLOCK</span>
+                        </div>
+
+                        <!-- 8. Execute -->
+                        <div class="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-1">
+                            <div class="text-[9px] uppercase tracking-wider text-slate-400">8. Execution</div>
+                            <div class="font-bold text-white text-[11px]">DISPATCH</div>
+                            <span class="px-1.5 py-0.2 rounded text-[9px] bg-slate-800 text-slate-300">SIM / TEST</span>
+                        </div>
+
+                        <!-- 9. Verify -->
+                        <div class="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-1">
+                            <div class="text-[9px] uppercase tracking-wider text-slate-400">9. Verify</div>
+                            <div class="font-bold text-emerald-400 text-[11px]" x-text="scenarioData.is_recovered ? 'RECOVERED' : 'RECONCILED'"></div>
+                            <span class="px-1.5 py-0.2 rounded text-[9px] bg-slate-800 text-slate-300">AUDITED</span>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- 4-Card Architectural Grid -->
                 <div x-show="scenarioData && scenarioData.status !== 'error'" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
 
-                    <!-- Card 1: AI Reasoning & Proposal Layer -->
-                    <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-xs space-y-3 flex flex-col justify-between">
+                    <!-- Card 1: AI Reasoning Layer -->
+                    <div class="bg-white rounded-xl border border-slate-200/90 p-4 shadow-card card-interactive space-y-3 flex flex-col justify-between">
                         <div>
                             <div class="flex items-center justify-between pb-2 border-b border-slate-100">
                                 <div class="flex items-center space-x-2">
-                                    <span class="w-2 h-2 rounded-full bg-purple-500"></span>
-                                    <h4 class="text-xs font-semibold text-slate-900 uppercase tracking-wider">1. AI Reasoning Layer</h4>
+                                    <span class="w-2.5 h-2.5 rounded-full bg-purple-600"></span>
+                                    <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider">1. AI Reasoning Layer</h4>
                                 </div>
-                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded font-semibold"
+                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded font-bold border"
                                       :class="getSourceBadgeClass(scenarioData.ai_diagnosis ? scenarioData.ai_diagnosis.source_badge : (scenarioData.execution_mode === 'LIVE_LLM' ? 'LIVE LLM' : 'DETERMINISTIC'))"
                                       x-text="scenarioData.ai_diagnosis ? scenarioData.ai_diagnosis.source_badge : (scenarioData.execution_mode === 'LIVE_LLM' ? 'LIVE LLM' : 'DETERMINISTIC')"></span>
                             </div>
-                            <div class="mt-3 space-y-2 text-xs">
+                            <div class="mt-3 space-y-2.5 text-xs">
                                 <div class="flex justify-between">
                                     <span class="text-slate-500">Inferred Root Cause</span>
-                                    <span class="font-mono font-semibold text-slate-900" x-text="scenarioData.ai_proposal.diagnosis_label"></span>
+                                    <span class="font-mono font-bold text-slate-900" x-text="scenarioData.ai_proposal.diagnosis_label"></span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-slate-500">Diagnosis Confidence</span>
-                                    <span class="font-mono font-semibold text-blue-600" x-text="(scenarioData.ai_proposal.confidence * 100).toFixed(0) + '%'"></span>
+                                    <span class="font-mono font-bold text-purple-700" x-text="(scenarioData.ai_proposal.confidence * 100).toFixed(0) + '%'"></span>
                                 </div>
                                 <div class="flex justify-between">
-                                    <span class="text-slate-500">Strategy Proposal</span>
-                                    <span class="font-mono font-semibold text-slate-900" x-text="scenarioData.ai_proposal.action_type + ' (' + (scenarioData.ai_proposal.timing_window || 'IMMEDIATE') + ')'"></span>
+                                    <span class="text-slate-500">Proposed Strategy</span>
+                                    <span class="font-mono font-bold text-slate-900" x-text="scenarioData.ai_proposal.action_type + ' (' + (scenarioData.ai_proposal.timing_window || 'IMMEDIATE') + ')'"></span>
                                 </div>
                             </div>
                         </div>
-                        <div class="pt-2 border-t border-slate-50">
-                            <div class="text-[10px] text-slate-500 mb-1">Reasoning Rationale:</div>
-                            <div class="p-2 rounded bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-mono line-clamp-3" x-text="scenarioData.ai_proposal.rationale"></div>
+                        <div class="pt-2.5 border-t border-slate-100">
+                            <div class="text-[10px] text-slate-500 font-semibold mb-1 uppercase tracking-wider">Reasoning Rationale:</div>
+                            <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-mono line-clamp-3" x-text="scenarioData.ai_proposal.rationale"></div>
                         </div>
                     </div>
 
                     <!-- Card 2: Deterministic Economic Engine -->
-                    <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-xs space-y-3 flex flex-col justify-between">
+                    <div class="bg-white rounded-xl border border-slate-200/90 p-4 shadow-card card-interactive space-y-3 flex flex-col justify-between">
                         <div>
                             <div class="flex items-center justify-between pb-2 border-b border-slate-100">
                                 <div class="flex items-center space-x-2">
-                                    <span class="w-2 h-2 rounded-full bg-blue-500"></span>
-                                    <h4 class="text-xs font-semibold text-slate-900 uppercase tracking-wider">2. Economic Engine</h4>
+                                    <span class="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
+                                    <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider">2. Economic Engine</h4>
                                 </div>
-                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded font-semibold bg-blue-50 text-blue-700 border border-blue-200">DETERMINISTIC</span>
+                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded font-bold bg-blue-50 text-blue-700 border border-blue-200">DETERMINISTIC</span>
                             </div>
-                            <div class="mt-3 space-y-2 text-xs">
+                            <div class="mt-3 space-y-2.5 text-xs">
                                 <div class="flex justify-between">
-                                    <span class="text-slate-500">Evaluated Candidates</span>
-                                    <span class="font-mono font-semibold text-slate-900" x-text="(scenarioData.candidate_rankings ? scenarioData.candidate_rankings.length : 1) + ' candidate windows'"></span>
+                                    <span class="text-slate-500">Candidate Space</span>
+                                    <span class="font-mono font-bold text-slate-900" x-text="(scenarioData.candidate_rankings ? scenarioData.candidate_rankings.length : 1) + ' candidate windows'"></span>
                                 </div>
                                 <div class="flex justify-between">
-                                    <span class="text-slate-500">Optimal Window</span>
-                                    <span class="font-mono font-semibold text-blue-700" x-text="scenarioData.ai_proposal.timing_window || 'IMMEDIATE'"></span>
+                                    <span class="text-slate-500">Selected Window</span>
+                                    <span class="font-mono font-bold text-blue-700" x-text="scenarioData.ai_proposal.timing_window || 'IMMEDIATE'"></span>
                                 </div>
                                 <div class="flex justify-between">
-                                    <span class="text-slate-500">Expected Net Value</span>
-                                    <span class="font-mono font-semibold" :class="scenarioData.ai_proposal.expected_net_value_inr >= 0 ? 'text-emerald-600' : 'text-rose-600'"
+                                    <span class="text-slate-500">Expected Net Uplift</span>
+                                    <span class="font-mono font-bold" :class="scenarioData.ai_proposal.expected_net_value_inr >= 0 ? 'text-emerald-600' : 'text-rose-600'"
                                           x-text="'₹' + formatINR(scenarioData.ai_proposal.expected_net_value_inr)"></span>
                                 </div>
                             </div>
                         </div>
-                        <div class="pt-2 border-t border-slate-50">
-                            <div class="text-[10px] text-slate-500 mb-1">Decision Scoring:</div>
-                            <div class="p-2 rounded bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-mono"
-                                 x-text="scenarioData.ai_proposal.action_type === 'no_action' ? 'Selected baseline NO_ACTION (Net < 0)' : 'Ranked #1 candidate by Expected Net Yield'"></div>
+                        <div class="pt-2.5 border-t border-slate-100">
+                            <div class="text-[10px] text-slate-500 font-semibold mb-1 uppercase tracking-wider">Candidate Scoring Verdict:</div>
+                            <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-mono"
+                                 x-text="scenarioData.ai_proposal.action_type === 'no_action' ? 'Selected baseline NO_ACTION (All active interventions net < 0)' : 'Ranked #1 candidate maximizing Expected Net Yield'"></div>
                         </div>
                     </div>
 
                     <!-- Card 3: Recovery Governor (Policy Gate) -->
-                    <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-xs space-y-3 flex flex-col justify-between">
+                    <div class="bg-white rounded-xl border border-slate-200/90 p-4 shadow-card card-interactive space-y-3 flex flex-col justify-between">
                         <div>
                             <div class="flex items-center justify-between pb-2 border-b border-slate-100">
                                 <div class="flex items-center space-x-2">
-                                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                    <h4 class="text-xs font-semibold text-slate-900 uppercase tracking-wider">3. Recovery Governor</h4>
+                                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
+                                    <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider">3. Recovery Governor</h4>
                                 </div>
-                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">POLICY GATE</span>
+                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">POLICY GATE</span>
                             </div>
-                            <div class="mt-3 space-y-2 text-xs">
+                            <div class="mt-3 space-y-2.5 text-xs">
                                 <div class="flex justify-between items-center">
                                     <span class="text-slate-500">Authoritative Verdict</span>
                                     <span class="font-mono font-bold px-2 py-0.5 rounded text-xs border"
@@ -629,65 +874,66 @@
                                           x-text="scenarioData.governor_verdict.result"></span>
                                 </div>
                                 <div class="flex justify-between">
-                                    <span class="text-slate-500">Policy Checks</span>
-                                    <span class="font-mono text-slate-700 font-medium">8/8 Evaluated</span>
+                                    <span class="text-slate-500">Policy Invariants</span>
+                                    <span class="font-mono text-slate-800 font-bold">8/8 Evaluated</span>
                                 </div>
                                 <div class="flex justify-between">
-                                    <span class="text-slate-500">Human Approval</span>
-                                    <span class="font-mono font-semibold" :class="scenarioData.governor_verdict.requires_human_approval ? 'text-amber-600' : 'text-slate-700'"
+                                    <span class="text-slate-500">Human Escalation</span>
+                                    <span class="font-mono font-bold" :class="scenarioData.governor_verdict.requires_human_approval ? 'text-amber-600' : 'text-slate-700'"
                                           x-text="scenarioData.governor_verdict.requires_human_approval ? 'REQUIRED' : 'AUTONOMOUS'"></span>
                                 </div>
                             </div>
                         </div>
-                        <div class="pt-2 border-t border-slate-50">
-                            <div class="text-[10px] text-slate-500 mb-1">Governor Verdict Rationale:</div>
-                            <div class="p-2 rounded bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-mono line-clamp-2"
+                        <div class="pt-2.5 border-t border-slate-100">
+                            <div class="text-[10px] text-slate-500 font-semibold mb-1 uppercase tracking-wider">Governor Rationale:</div>
+                            <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-mono line-clamp-2"
                                  x-text="scenarioData.governor_verdict.rationale || scenarioData.governor_verdict.human_review_reason"></div>
                         </div>
                     </div>
 
-                    <!-- Card 4: Tool Firewall & Executor -->
-                    <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-xs space-y-3 flex flex-col justify-between">
+                    <!-- Card 4: Tool Firewall & Execution Boundary -->
+                    <div class="bg-white rounded-xl border border-slate-200/90 p-4 shadow-card card-interactive space-y-3 flex flex-col justify-between">
                         <div>
                             <div class="flex items-center justify-between pb-2 border-b border-slate-100">
                                 <div class="flex items-center space-x-2">
-                                    <span class="w-2 h-2 rounded-full bg-slate-700"></span>
-                                    <h4 class="text-xs font-semibold text-slate-900 uppercase tracking-wider">4. Firewall & Executor</h4>
+                                    <span class="w-2.5 h-2.5 rounded-full bg-slate-900"></span>
+                                    <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider">4. Tool Firewall Gate</h4>
                                 </div>
-                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded font-semibold bg-slate-100 text-slate-700 border border-slate-200">EXECUTION GATE</span>
+                                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded font-bold bg-slate-100 text-slate-700 border border-slate-200">EXECUTION GATE</span>
                             </div>
-                            <div class="mt-3 space-y-2 text-xs">
+                            <div class="mt-3 space-y-2.5 text-xs">
                                 <div class="flex justify-between">
                                     <span class="text-slate-500">Schema & Whitelist</span>
-                                    <span class="font-mono font-semibold text-emerald-600">VALIDATED</span>
+                                    <span class="font-mono font-bold text-emerald-600">VALIDATED</span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-slate-500">Consent & Idempotency</span>
-                                    <span class="font-mono font-semibold" :class="scenarioData.scenario_type === 'CONSENT_ENFORCEMENT' ? 'text-rose-600' : 'text-emerald-600'"
+                                    <span class="font-mono font-bold" :class="scenarioData.scenario_type === 'CONSENT_ENFORCEMENT' ? 'text-rose-600' : 'text-emerald-600'"
                                           x-text="scenarioData.scenario_type === 'CONSENT_ENFORCEMENT' ? 'BLOCKED (Opt-Out)' : 'VERIFIED'"></span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-slate-500">Execution Status</span>
-                                    <span class="font-mono font-semibold" :class="scenarioData.is_recovered ? 'text-emerald-600' : 'text-slate-700'"
+                                    <span class="font-mono font-bold" :class="scenarioData.is_recovered ? 'text-emerald-600' : 'text-slate-700'"
                                           x-text="scenarioData.is_recovered ? 'CAPTURED (Recovered)' : scenarioData.final_state"></span>
                                 </div>
                             </div>
                         </div>
-                        <div class="pt-2 border-t border-slate-50">
-                            <div class="text-[10px] text-slate-500 mb-1">State Reconciliation:</div>
-                            <div class="p-2 rounded bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-mono">
-                                Dispatched safely. Reconciled terminal aggregate.
+                        <div class="pt-2.5 border-t border-slate-100">
+                            <div class="text-[10px] text-slate-500 font-semibold mb-1 uppercase tracking-wider">State Reconciliation:</div>
+                            <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-mono">
+                                Dispatched safely without side-effects. Reconciled terminal state.
                             </div>
                         </div>
                     </div>
+
                 </div>
 
                 <!-- Candidate Timing Table (Only for Case 2 / Timing Optimization) -->
                 <template x-if="scenarioData && scenarioData.candidate_rankings">
-                    <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-3">
+                    <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-card space-y-3">
                         <div class="flex items-center justify-between">
-                            <h4 class="text-xs font-semibold text-slate-900 uppercase tracking-wider">Candidate Action × Timing Optimization Matrix</h4>
-                            <span class="text-[11px] font-mono text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">Evaluated by Economic Engine</span>
+                            <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Candidate Action × Timing Optimization Matrix</h4>
+                            <span class="text-[11px] font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">Evaluated by Economic Engine</span>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="w-full text-xs text-left">
@@ -703,15 +949,15 @@
                                 </thead>
                                 <tbody class="divide-y divide-slate-100 font-mono">
                                     <template x-for="c in scenarioData.candidate_rankings" :key="c.mechanism + c.timing">
-                                        <tr :class="c.selected ? 'bg-blue-50/60 font-semibold' : ''">
-                                            <td class="py-2.5 px-3 uppercase" x-text="c.mechanism"></td>
+                                        <tr :class="c.selected ? 'bg-blue-50/70 font-semibold' : ''">
+                                            <td class="py-2.5 px-3 uppercase font-sans font-semibold" x-text="c.mechanism"></td>
                                             <td class="py-2.5 px-3" x-text="c.timing"></td>
                                             <td class="py-2.5 px-3 text-blue-700" x-text="c.prob"></td>
                                             <td class="py-2.5 px-3 text-slate-600" x-text="'₹' + c.cost_inr.toFixed(2)"></td>
-                                            <td class="py-2.5 px-3" :class="c.expected_net_inr >= 0 ? 'text-emerald-700' : 'text-rose-700'" x-text="'₹' + formatINR(c.expected_net_inr)"></td>
+                                            <td class="py-2.5 px-3" :class="c.expected_net_inr >= 0 ? 'text-emerald-700 font-bold' : 'text-rose-700 font-bold'" x-text="'₹' + formatINR(c.expected_net_inr)"></td>
                                             <td class="py-2.5 px-3 text-right">
-                                                <span x-show="c.selected" class="px-2 py-0.5 rounded text-[10px] bg-blue-600 text-white font-sans font-semibold">SELECTED OPTIMAL</span>
-                                                <span x-show="!c.selected" class="text-slate-400 font-sans font-normal">Candidate</span>
+                                                <span x-show="c.selected" class="px-2 py-0.5 rounded text-[10px] bg-blue-600 text-white font-sans font-bold shadow-2xs">SELECTED OPTIMAL</span>
+                                                <span x-show="!c.selected" class="text-slate-400 font-sans font-normal text-[11px]">Candidate</span>
                                             </td>
                                         </tr>
                                     </template>
@@ -722,10 +968,13 @@
                 </template>
 
                 <!-- 7-Layer Decision Anatomy Matrix -->
-                <div x-show="scenarioData && scenarioData.decision_anatomy" class="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-3">
+                <div x-show="scenarioData && scenarioData.decision_anatomy" class="bg-white rounded-xl border border-slate-200 p-5 shadow-card space-y-3">
                     <div class="flex items-center justify-between">
-                        <h4 class="text-xs font-semibold text-slate-900 uppercase tracking-wider">7-Layer Decision Anatomy Matrix</h4>
-                        <span class="text-[11px] font-mono text-slate-500">Sovereignty Separation Boundary</span>
+                        <div class="flex items-center space-x-2">
+                            <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider">7-Layer Decision Anatomy Matrix</h4>
+                            <span class="px-2 py-0.2 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">Traceable Provenance</span>
+                        </div>
+                        <span class="text-[11px] font-mono text-slate-500">Strict Separation of Model vs Deterministic Governor</span>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-xs text-left">
@@ -740,16 +989,16 @@
                             </thead>
                             <tbody class="divide-y divide-slate-100 font-mono text-xs">
                                 <template x-for="layer in scenarioData.decision_anatomy" :key="layer.layer">
-                                    <tr class="hover:bg-slate-50/70">
-                                        <td class="py-2.5 px-3 font-semibold text-slate-500" x-text="'L' + layer.layer"></td>
+                                    <tr class="hover:bg-slate-50/80 transition-colors">
+                                        <td class="py-2.5 px-3 font-bold text-slate-500" x-text="'L' + layer.layer"></td>
                                         <td class="py-2.5 px-3 font-sans font-semibold text-slate-900" x-text="layer.component"></td>
                                         <td class="py-2.5 px-3">
-                                            <span class="px-2 py-0.5 rounded text-[10px] font-semibold border"
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold border"
                                                   :class="getSourceBadgeClass(layer.source_badge)"
                                                   x-text="layer.source_badge"></span>
                                         </td>
                                         <td class="py-2.5 px-3">
-                                            <span class="text-emerald-700 font-semibold" x-text="layer.status"></span>
+                                            <span class="text-emerald-700 font-bold" x-text="layer.status"></span>
                                         </td>
                                         <td class="py-2.5 px-3 font-mono text-slate-600 text-[11px]" x-text="layer.summary"></td>
                                     </tr>
@@ -763,16 +1012,19 @@
                 <div x-show="scenarioData && scenarioData.status !== 'error'" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
                     <!-- Left 2 Cols: Chronological Execution & Replay Timeline -->
-                    <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
-                        <h4 class="text-xs font-semibold text-slate-900 uppercase tracking-wider">Chronological Execution & Replay Timeline</h4>
+                    <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-5 shadow-card space-y-4">
+                        <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+                            <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Chronological Execution & Replay Timeline</h4>
+                            <span class="text-[11px] font-mono text-slate-500" x-text="(scenarioData.timeline ? scenarioData.timeline.length : 0) + ' steps audited'"></span>
+                        </div>
                         <div class="space-y-3">
                             <template x-for="item in scenarioData.timeline" :key="item.step">
                                 <div class="flex items-start space-x-3 text-xs">
-                                    <div class="w-6 h-6 rounded-full bg-slate-100 text-slate-700 border border-slate-200 flex items-center justify-center font-mono font-semibold text-[11px] shrink-0 mt-0.5" x-text="item.step"></div>
-                                    <div class="flex-1 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                    <div class="w-6 h-6 rounded-full bg-slate-100 text-slate-800 border border-slate-200 flex items-center justify-center font-mono font-bold text-[11px] shrink-0 mt-0.5" x-text="item.step"></div>
+                                    <div class="flex-1 bg-slate-50 p-3 rounded-lg border border-slate-200/90">
                                         <div class="flex items-center justify-between mb-1">
-                                            <span class="font-semibold text-slate-900" x-text="item.title"></span>
-                                            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded"
+                                            <span class="font-bold text-slate-900" x-text="item.title"></span>
+                                            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded font-bold"
                                                   :class="item.status === 'SUCCESS' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : (item.status === 'WARNING' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-slate-100 text-slate-600 border border-slate-200')"
                                                   x-text="item.status"></span>
                                         </div>
@@ -786,48 +1038,48 @@
                     <!-- Right 1 Col: LLM Telemetry & Sovereignty Guarantee -->
                     <div class="space-y-4">
                         <!-- LLM Telemetry Card -->
-                        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-3">
+                        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-card space-y-3">
                             <div class="flex items-center justify-between pb-2 border-b border-slate-100">
-                                <h4 class="text-xs font-semibold text-slate-900 uppercase tracking-wider">LLM Telemetry</h4>
-                                <span class="w-2 h-2 rounded-full" :class="scenarioData.execution_mode === 'LIVE_LLM' ? 'bg-emerald-500' : 'bg-slate-400'"></span>
+                                <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider">LLM Telemetry</h4>
+                                <span class="w-2.5 h-2.5 rounded-full" :class="scenarioData.execution_mode === 'LIVE_LLM' ? 'bg-emerald-500' : 'bg-slate-400'"></span>
                             </div>
                             <div class="space-y-2 text-xs font-mono">
                                 <div class="flex justify-between py-1 border-b border-slate-50">
                                     <span class="text-slate-500 font-sans">Provider</span>
-                                    <span class="font-semibold text-slate-900" x-text="scenarioData.llm_telemetry ? scenarioData.llm_telemetry.provider : 'groq'"></span>
+                                    <span class="font-bold text-slate-900" x-text="scenarioData.llm_telemetry ? scenarioData.llm_telemetry.provider : 'groq'"></span>
                                 </div>
                                 <div class="flex justify-between py-1 border-b border-slate-50">
                                     <span class="text-slate-500 font-sans">Active Model</span>
-                                    <span class="text-[11px] text-slate-900 truncate max-w-[140px]" x-text="scenarioData.llm_telemetry ? scenarioData.llm_telemetry.model : 'openai/gpt-oss-120b'"></span>
+                                    <span class="text-[11px] text-slate-900 truncate max-w-[140px] font-bold" x-text="scenarioData.llm_telemetry ? scenarioData.llm_telemetry.model : 'openai/gpt-oss-120b'"></span>
                                 </div>
                                 <div class="flex justify-between py-1 border-b border-slate-50">
                                     <span class="text-slate-500 font-sans">Inference Latency</span>
-                                    <span class="font-semibold text-blue-700" x-text="(scenarioData.llm_telemetry ? scenarioData.llm_telemetry.latency_ms.toFixed(1) : '324.5') + ' ms'"></span>
+                                    <span class="font-bold text-purple-700" x-text="(scenarioData.llm_telemetry ? scenarioData.llm_telemetry.latency_ms.toFixed(1) : '324.5') + ' ms'"></span>
                                 </div>
                                 <div class="flex justify-between py-1 border-b border-slate-50">
                                     <span class="text-slate-500 font-sans">Total LLM Calls</span>
-                                    <span class="font-semibold text-slate-900" x-text="scenarioData.llm_telemetry ? scenarioData.llm_telemetry.llm_calls : 2"></span>
+                                    <span class="font-bold text-slate-900" x-text="scenarioData.llm_telemetry ? scenarioData.llm_telemetry.llm_calls : 2"></span>
                                 </div>
                                 <div class="flex justify-between py-1 border-b border-slate-50">
                                     <span class="text-slate-500 font-sans">Silent Fallback Used</span>
-                                    <span class="font-semibold text-emerald-700">False (0)</span>
+                                    <span class="font-bold text-emerald-700">False (0)</span>
                                 </div>
                                 <div class="flex justify-between py-1">
                                     <span class="text-slate-500 font-sans">Structured Output Valid</span>
-                                    <span class="font-semibold text-emerald-700">True (Pydantic)</span>
+                                    <span class="font-bold text-emerald-700">True (Pydantic)</span>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Sovereignty Rule Note -->
-                        <div class="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900 space-y-1">
+                        <div class="p-4 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900 space-y-1.5">
                             <div class="font-bold flex items-center space-x-1.5">
                                 <svg class="w-4 h-4 text-blue-700 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                 </svg>
                                 <span>Track 03 Sovereignty Spine:</span>
                             </div>
-                            <p class="text-[11px] text-blue-800 font-mono" x-text="scenarioData.sovereignty_rule"></p>
+                            <p class="text-[11px] text-blue-800 font-mono leading-relaxed" x-text="scenarioData.sovereignty_rule"></p>
                         </div>
                     </div>
                 </div>
@@ -838,14 +1090,14 @@
         <!-- ========================================================================= -->
         <!-- TAB 3: RECOVERY QUEUE (Prioritized Opportunities Table) -->
         <!-- ========================================================================= -->
-        <section x-show="activeTab === 'queue'" x-cloak class="space-y-4">
-            <div class="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+        <section x-show="activeTab === 'queue'" x-cloak class="space-y-4 tab-content-enter">
+            <div class="bg-white rounded-xl border border-slate-200 shadow-card overflow-hidden">
                 <div class="p-4 border-b border-slate-200 flex items-center justify-between">
                     <div>
-                        <h2 class="text-sm font-semibold text-slate-900 uppercase tracking-wider">Recovery Opportunities Queue</h2>
+                        <h2 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Recovery Opportunities Queue</h2>
                         <p class="text-xs text-slate-500">Prioritized recovery opportunities with diagnostic root causes and scheduled windows.</p>
                     </div>
-                    <div class="text-xs font-mono text-slate-500" x-text="queue.length + ' cases queued'"></div>
+                    <div class="text-xs font-mono font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded" x-text="queue.length + ' cases queued'"></div>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-xs text-left">
@@ -864,23 +1116,23 @@
                         <tbody class="divide-y divide-slate-100">
                             <template x-for="item in queue" :key="item.case_id">
                                 <tr class="hover:bg-slate-50 transition-colors">
-                                    <td class="py-3 px-4 font-mono font-semibold text-slate-900" x-text="item.payment_id"></td>
+                                    <td class="py-3 px-4 font-mono font-bold text-slate-900" x-text="item.payment_id"></td>
                                     <td class="py-3 px-4 font-mono text-slate-900" x-text="'₹' + formatINR(item.amount_inr)"></td>
                                     <td class="py-3 px-4">
-                                        <span class="px-2 py-0.5 rounded text-[10px] font-mono border"
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold border"
                                               :class="getStateBadge(item.aggregate_state)"
                                               x-text="item.aggregate_state"></span>
                                     </td>
                                     <td class="py-3 px-4 text-slate-700 font-medium" x-text="item.diagnosis_label"></td>
-                                    <td class="py-3 px-4 font-mono text-blue-700" x-text="(item.diagnosis_confidence * 100).toFixed(0) + '%'"></td>
+                                    <td class="py-3 px-4 font-mono text-blue-700 font-bold" x-text="(item.diagnosis_confidence * 100).toFixed(0) + '%'"></td>
                                     <td class="py-3 px-4 font-mono text-slate-700" x-text="item.selected_action + (item.timing_window ? ' (' + item.timing_window + ')' : '')"></td>
                                     <td class="py-3 px-4">
-                                        <span class="px-2 py-0.5 rounded text-[10px] font-mono border"
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold border"
                                               :class="getVerdictBadge(item.governor_decision)"
                                               x-text="item.governor_decision"></span>
                                     </td>
                                     <td class="py-3 px-4 text-right">
-                                        <button @click="selectCase(item.case_id)" class="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium transition text-xs">
+                                        <button @click="selectCase(item.case_id)" class="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold transition text-xs shadow-2xs active:scale-95">
                                             Replay &rarr;
                                         </button>
                                     </td>
@@ -895,17 +1147,17 @@
         <!-- ========================================================================= -->
         <!-- TAB 4: CASE REPLAY (Chronological Decision Trace) -->
         <!-- ========================================================================= -->
-        <section x-show="activeTab === 'replay'" x-cloak class="space-y-6">
-            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
+        <section x-show="activeTab === 'replay'" x-cloak class="space-y-6 tab-content-enter">
+            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-card space-y-4">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
                     <div>
-                        <h2 class="text-sm font-semibold text-slate-900 uppercase tracking-wider">Case Decision Replay & Provenance</h2>
-                        <p class="text-xs text-slate-500">Inspect full 7-step chronological decision trace for any payment failure event.</p>
+                        <h2 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Case Decision Replay & Provenance</h2>
+                        <p class="text-xs text-slate-500">Inspect full chronological decision trace and multi-layer provenance for any payment failure event.</p>
                     </div>
                     <div class="flex items-center space-x-2">
                         <input type="text" x-model="selectedCaseId" placeholder="Enter Case ID (e.g. dec_sig_001)"
                                class="px-3 py-1.5 rounded-md border border-slate-200 text-xs font-mono text-slate-900 bg-white focus:outline-none focus:ring-1 focus:ring-blue-600">
-                        <button @click="loadCaseReplay(selectedCaseId)" class="px-3 py-1.5 rounded-md bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition shadow-2xs">
+                        <button @click="loadCaseReplay(selectedCaseId)" class="px-3 py-1.5 rounded-md bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition shadow-2xs active:scale-95">
                             Load
                         </button>
                     </div>
@@ -916,23 +1168,23 @@
                         <!-- Top KPI Strip -->
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs">
-                                <div class="text-slate-500">Case ID / Payment</div>
-                                <div class="font-mono font-semibold text-slate-900 mt-0.5" x-text="replayData.case_id"></div>
+                                <div class="text-slate-500 font-medium">Case ID / Payment</div>
+                                <div class="font-mono font-bold text-slate-900 mt-0.5" x-text="replayData.case_id"></div>
                             </div>
                             <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs">
-                                <div class="text-slate-500">Amount at Risk</div>
-                                <div class="font-mono font-semibold text-slate-900 mt-0.5" x-text="'₹' + formatINR(replayData.amount_inr)"></div>
+                                <div class="text-slate-500 font-medium">Amount at Risk</div>
+                                <div class="font-mono font-bold text-slate-900 mt-0.5" x-text="'₹' + formatINR(replayData.amount_inr)"></div>
                             </div>
                             <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs">
-                                <div class="text-slate-500">Diagnosis</div>
-                                <div class="font-mono font-semibold text-blue-700 mt-0.5">
+                                <div class="text-slate-500 font-medium">Diagnosis</div>
+                                <div class="font-mono font-bold text-blue-700 mt-0.5">
                                     <span x-text="replayData.diagnosis.label"></span>
                                     <span class="text-slate-400 font-normal text-[10px]" x-text="' (' + Math.round((replayData.diagnosis.confidence || 0) * 100) + '%)'"></span>
                                 </div>
                             </div>
                             <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs">
-                                <div class="text-slate-500">Governor Verdict</div>
-                                <div class="font-mono font-semibold mt-0.5"
+                                <div class="text-slate-500 font-medium">Governor Verdict</div>
+                                <div class="font-mono font-bold mt-0.5"
                                      :class="{
                                          'text-emerald-700': (replayData.governor_decision.result === 'ALLOW'),
                                          'text-amber-700': (replayData.governor_decision.result === 'ABSTAIN'),
@@ -946,67 +1198,30 @@
                         <!-- Analytical Explanation Cards -->
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div class="bg-blue-50/70 border border-blue-200 p-3.5 rounded-lg text-xs space-y-1">
-                                <div class="font-semibold text-blue-900 flex items-center gap-1.5">
+                                <div class="font-bold text-blue-900 flex items-center gap-1.5">
                                     <span class="w-2 h-2 rounded-full bg-blue-600"></span>
                                     Why Autonomous Runtime Acted
                                 </div>
-                                <p class="text-blue-800 leading-relaxed" x-text="replayData.why_acted"></p>
+                                <p class="text-blue-800 leading-relaxed font-mono text-[11px]" x-text="replayData.why_acted"></p>
                             </div>
                             <div class="bg-amber-50/70 border border-amber-200 p-3.5 rounded-lg text-xs space-y-1">
-                                <div class="font-semibold text-amber-900 flex items-center gap-1.5">
+                                <div class="font-bold text-amber-900 flex items-center gap-1.5">
                                     <span class="w-2 h-2 rounded-full bg-amber-600"></span>
                                     Why Withheld / Safely Denied
                                 </div>
-                                <p class="text-amber-800 leading-relaxed" x-text="replayData.why_did_not_act"></p>
-                            </div>
-                        </div>
-
-                        <!-- Judge-Facing Decision Anatomy Matrix -->
-                        <div class="bg-slate-900 text-white p-4 rounded-xl space-y-4">
-                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-                                <div class="flex items-center gap-2">
-                                    <span class="px-2 py-0.5 rounded bg-blue-600 text-white font-mono text-[10px] font-bold">DECISION ANATOMY</span>
-                                    <span class="text-xs font-semibold text-slate-200">Full 7-Layer Architectural Provenance</span>
-                                </div>
-                                <span class="text-[10px] font-mono text-slate-400">Strict Separation of Model vs Governor</span>
-                            </div>
-
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs font-mono">
-                                <!-- Layer 1: Observable Ingestion -->
-                                <div class="bg-slate-800/80 p-3 rounded-lg border border-slate-700 space-y-1.5">
-                                    <div class="text-[10px] uppercase text-blue-400 font-semibold tracking-wider">1. Observable Event</div>
-                                    <div class="text-slate-300 text-[11px]">Payment: <span class="text-white" x-text="replayData.payment_id"></span></div>
-                                    <div class="text-slate-300 text-[11px]">Amount: <span class="text-white" x-text="'₹' + formatINR(replayData.amount_inr)"></span></div>
-                                    <div class="text-slate-400 text-[10px]">Counterfactuals: Strictly Hidden</div>
-                                </div>
-
-                                <!-- Layer 2: Inferred Diagnosis -->
-                                <div class="bg-slate-800/80 p-3 rounded-lg border border-slate-700 space-y-1.5">
-                                    <div class="text-[10px] uppercase text-indigo-400 font-semibold tracking-wider">2. Diagnosis & Uncertainty</div>
-                                    <div class="text-slate-300 text-[11px]">Inferred: <span class="text-white" x-text="replayData.diagnosis.label"></span></div>
-                                    <div class="text-slate-300 text-[11px]">Confidence: <span class="text-white" x-text="Math.round((replayData.diagnosis.confidence || 0) * 100) + '%'"></span></div>
-                                    <div class="text-slate-400 text-[10px]">Source: <span x-text="replayData.diagnosis.source"></span></div>
-                                </div>
-
-                                <!-- Layer 3: Governor Safety Spine -->
-                                <div class="bg-slate-800/80 p-3 rounded-lg border border-slate-700 space-y-1.5">
-                                    <div class="text-[10px] uppercase text-emerald-400 font-semibold tracking-wider">3. Governor Verdict</div>
-                                    <div class="text-slate-300 text-[11px]">Result: <span class="text-emerald-300 font-bold" x-text="replayData.governor_decision.result"></span></div>
-                                    <div class="text-slate-300 text-[11px]">Codes: <span class="text-slate-200" x-text="(replayData.governor_decision.reason_codes || []).join(', ') || 'NONE'"></span></div>
-                                    <div class="text-slate-400 text-[10px]">Policy: Merchant v1.0.0 Rule Spine</div>
-                                </div>
+                                <p class="text-amber-800 leading-relaxed font-mono text-[11px]" x-text="replayData.why_did_not_act"></p>
                             </div>
                         </div>
 
                         <!-- Step Timeline -->
                         <div class="space-y-3">
-                            <h3 class="text-xs font-semibold text-slate-800 uppercase tracking-wider">Chronological Execution Steps</h3>
+                            <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Chronological Execution Steps</h3>
                             <template x-for="step in (replayData.timeline_steps || [])" :key="step.step">
                                 <div class="flex items-start space-x-3 text-xs">
-                                    <div class="w-6 h-6 rounded-full bg-slate-100 text-slate-700 border border-slate-200 flex items-center justify-center font-mono font-semibold text-[11px] shrink-0 mt-0.5" x-text="step.step"></div>
+                                    <div class="w-6 h-6 rounded-full bg-slate-100 text-slate-800 border border-slate-200 flex items-center justify-center font-mono font-bold text-[11px] shrink-0 mt-0.5" x-text="step.step"></div>
                                     <div class="flex-1 bg-slate-50 p-3 rounded-lg border border-slate-200">
                                         <div class="flex items-center justify-between mb-1">
-                                            <span class="font-semibold text-slate-900" x-text="step.name"></span>
+                                            <span class="font-bold text-slate-900" x-text="step.name"></span>
                                             <span class="font-mono text-slate-500 text-[10px]" x-text="step.status"></span>
                                         </div>
                                         <div class="text-slate-600 font-mono text-[11px]" x-text="step.detail"></div>
@@ -1022,15 +1237,15 @@
         <!-- ========================================================================= -->
         <!-- TAB 5: EVALUATION LAB (Multi-Seed Benchmark, Oracle & Sensitivity) -->
         <!-- ========================================================================= -->
-        <section x-show="activeTab === 'evaluation'" x-cloak class="space-y-6">
-            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-5">
+        <section x-show="activeTab === 'evaluation'" x-cloak class="space-y-6 tab-content-enter">
+            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-card space-y-5">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
                     <div>
-                        <h2 class="text-sm font-semibold text-slate-900 uppercase tracking-wider">Multi-Seed Evaluation Lab (Benchmark)</h2>
-                        <p class="text-xs text-slate-500">Benchmark results across development and holdout splits against Oracle theoretical ceiling.</p>
+                        <h2 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Multi-Seed Evaluation Lab (Benchmark)</h2>
+                        <p class="text-xs text-slate-500">Rigorous multi-seed benchmark across development and holdout splits against Oracle theoretical ceiling.</p>
                     </div>
-                    <div class="text-xs font-mono text-slate-500">
-                        <span>Cohort: <strong class="text-slate-900" x-text="(evaluation.config || {}).total_scenarios || 100"></strong> scenarios</span>
+                    <div class="text-xs font-mono font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                        <span>Cohort: <strong class="text-slate-900" x-text="(evaluation.config || {}).total_scenarios || 500"></strong> scenarios</span>
                     </div>
                 </div>
 
@@ -1050,8 +1265,8 @@
                         </thead>
                         <tbody class="divide-y divide-slate-100 font-mono">
                             <template x-for="p in (evaluation.baseline_table || [])" :key="p.policy_key">
-                                <tr :class="p.is_recoveryos ? 'bg-blue-50/50 font-semibold' : 'hover:bg-slate-50'">
-                                    <td class="py-3 px-3 font-sans" x-text="p.policy_name"></td>
+                                <tr :class="p.is_recoveryos ? 'bg-blue-50/60 font-semibold' : 'hover:bg-slate-50'">
+                                    <td class="py-3 px-3 font-sans font-semibold" x-text="p.policy_name"></td>
                                     <td class="py-3 px-3 text-slate-800" x-text="'₹' + formatINR(p.gross_recovery_inr)"></td>
                                     <td class="py-3 px-3 text-slate-600" x-text="'₹' + formatINR(p.action_cost_inr)"></td>
                                     <td class="py-3 px-3 text-slate-700" x-text="p.churn_count"></td>
@@ -1067,7 +1282,7 @@
                 <!-- Oracle Comparison Card -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-slate-100">
                     <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-2">
-                        <div class="font-semibold text-slate-900">Oracle Theoretical Ceiling vs RecoveryOS</div>
+                        <div class="font-bold text-slate-900">Oracle Theoretical Ceiling vs RecoveryOS</div>
                         <div class="divide-y divide-slate-200/60 font-mono">
                             <div class="py-1.5 flex justify-between">
                                 <span class="text-slate-600 font-sans">Oracle Incremental Net</span>
@@ -1085,7 +1300,7 @@
                     </div>
 
                     <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-2">
-                        <div class="font-semibold text-slate-900">Decision Regret Distribution</div>
+                        <div class="font-bold text-slate-900">Decision Regret Distribution</div>
                         <div class="divide-y divide-slate-200/60 font-mono">
                             <div class="py-1.5 flex justify-between">
                                 <span class="text-slate-600 font-sans">Mean Regret per Case</span>
@@ -1108,14 +1323,14 @@
         <!-- ========================================================================= -->
         <!-- TAB 6: EXCEPTIONS & AUDIT (Operational Safety Surveillance) -->
         <!-- ========================================================================= -->
-        <section x-show="activeTab === 'exceptions'" x-cloak class="space-y-4">
-            <div class="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+        <section x-show="activeTab === 'exceptions'" x-cloak class="space-y-4 tab-content-enter">
+            <div class="bg-white rounded-xl border border-slate-200 shadow-card overflow-hidden">
                 <div class="p-4 border-b border-slate-200 flex items-center justify-between">
                     <div>
-                        <h2 class="text-sm font-semibold text-slate-900 uppercase tracking-wider">Operational Exceptions & Surveillance Log</h2>
-                        <p class="text-xs text-slate-500">Real-time audit log of stale actions prevented, customer opt-out blocks, and human escalations.</p>
+                        <h2 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Operational Exceptions & Surveillance Log</h2>
+                        <p class="text-xs text-slate-500">Real-time audit log of stale actions prevented, customer opt-out blocks, and human review escalations.</p>
                     </div>
-                    <div class="text-xs font-mono text-slate-500" x-text="exceptions.length + ' exceptions recorded'"></div>
+                    <div class="text-xs font-mono font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded" x-text="exceptions.length + ' exceptions recorded'"></div>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-xs text-left">
@@ -1134,17 +1349,17 @@
                             <template x-for="exc in exceptions" :key="exc.exception_id">
                                 <tr class="hover:bg-slate-50 transition-colors">
                                     <td class="py-3 px-4 font-mono text-slate-500" x-text="exc.time_str"></td>
-                                    <td class="py-3 px-4 font-semibold text-slate-900" x-text="exc.exception_type"></td>
+                                    <td class="py-3 px-4 font-bold text-slate-900" x-text="exc.exception_type"></td>
                                     <td class="py-3 px-4 font-mono text-slate-900" x-text="exc.payment_id"></td>
                                     <td class="py-3 px-4 font-mono text-slate-900" x-text="'₹' + formatINR(exc.amount_inr)"></td>
                                     <td class="py-3 px-4">
-                                        <span class="px-2 py-0.5 rounded text-[10px] font-mono border"
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold border"
                                               :class="exc.severity === 'HIGH' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-amber-50 text-amber-700 border-amber-200'"
                                               x-text="exc.severity"></span>
                                     </td>
-                                    <td class="py-3 px-4 font-mono" x-text="exc.governor_verdict"></td>
+                                    <td class="py-3 px-4 font-mono font-bold" x-text="exc.governor_verdict"></td>
                                     <td class="py-3 px-4 text-right">
-                                        <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-50 text-emerald-700 border border-emerald-200" x-text="exc.resolution_state"></span>
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200" x-text="exc.resolution_state"></span>
                                     </td>
                                 </tr>
                             </template>
@@ -1157,75 +1372,65 @@
         <!-- ========================================================================= -->
         <!-- TAB 7: MERCHANT POLICY DEMO CONTROLS -->
         <!-- ========================================================================= -->
-        <section x-show="activeTab === 'policies'" x-cloak class="space-y-6">
-            <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-xs space-y-6">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+        <section x-show="activeTab === 'policies'" x-cloak class="space-y-6 tab-content-enter">
+            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-card space-y-5">
+                <div class="flex items-center justify-between pb-3 border-b border-slate-100">
                     <div>
-                        <h2 class="text-sm font-semibold text-slate-900 uppercase tracking-wider">Merchant Policy & Governor Controls</h2>
-                        <p class="text-xs text-slate-500">Configure deterministic safety boundaries, escalation thresholds, and frequency caps.</p>
-                    </div>
-                    <div class="flex items-center space-x-2">
-                        <span class="text-xs font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold" x-text="'Policy ' + (policies.policy_version || 'v1.0.0')"></span>
+                        <h2 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Merchant Policy Control Plane</h2>
+                        <p class="text-xs text-slate-500">Configure operational constraints, cooldown windows, and autonomous human review escalation thresholds.</p>
                     </div>
                 </div>
 
-                <!-- Form Grid -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 text-xs">
-                    <!-- Max Retries -->
-                    <div class="space-y-1.5 bg-slate-50 p-3.5 rounded-lg border border-slate-200">
-                        <label class="font-semibold text-slate-800">Max Retry Attempts</label>
-                        <input type="number" x-model.number="policies.max_retries" min="1" max="10"
-                               class="w-full px-3 py-1.5 rounded border border-slate-300 font-mono text-xs bg-white text-slate-900 focus:ring-1 focus:ring-blue-600">
-                        <p class="text-[11px] text-slate-500">Maximum autonomous gateway retries permitted per invoice.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+                    <!-- Policy Param 1: Max Retries -->
+                    <div class="space-y-2 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                        <label class="font-bold text-slate-900 block">Max Retries per Payment</label>
+                        <p class="text-slate-500 text-[11px]">Hard limit on autonomous gateway attempts prior to forced terminal failure.</p>
+                        <div class="flex items-center space-x-2 pt-1">
+                            <button @click="policies.max_retries = Math.max(1, (policies.max_retries || 3) - 1)" class="w-8 h-8 rounded border bg-white text-slate-700 font-bold hover:bg-slate-100 shadow-2xs">-</button>
+                            <input type="number" x-model.number="policies.max_retries" class="w-20 px-3 py-1.5 rounded border border-slate-200 font-mono font-bold text-center bg-white text-slate-900">
+                            <button @click="policies.max_retries = (policies.max_retries || 3) + 1" class="w-8 h-8 rounded border bg-white text-slate-700 font-bold hover:bg-slate-100 shadow-2xs">+</button>
+                        </div>
                     </div>
 
-                    <!-- Min Cooldown Hours -->
-                    <div class="space-y-1.5 bg-slate-50 p-3.5 rounded-lg border border-slate-200">
-                        <label class="font-semibold text-slate-800">Cooldown Between Retries (Hours)</label>
-                        <input type="number" x-model.number="policies.min_cooldown_hours_between_attempts" min="0" max="72" step="0.5"
-                               class="w-full px-3 py-1.5 rounded border border-slate-300 font-mono text-xs bg-white text-slate-900 focus:ring-1 focus:ring-blue-600">
-                        <p class="text-[11px] text-slate-500">Minimum spacing interval required before subsequent attempts.</p>
+                    <!-- Policy Param 2: Min Cooldown Hours -->
+                    <div class="space-y-2 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                        <label class="font-bold text-slate-900 block">Minimum Cooldown Hours</label>
+                        <p class="text-slate-500 text-[11px]">Minimum mandatory delay between consecutive automatic retry dispatches.</p>
+                        <div class="flex items-center space-x-2 pt-1">
+                            <button @click="policies.min_cooldown_hours_between_attempts = Math.max(1, (policies.min_cooldown_hours_between_attempts || 4) - 1)" class="w-8 h-8 rounded border bg-white text-slate-700 font-bold hover:bg-slate-100 shadow-2xs">-</button>
+                            <input type="number" x-model.number="policies.min_cooldown_hours_between_attempts" class="w-20 px-3 py-1.5 rounded border border-slate-200 font-mono font-bold text-center bg-white text-slate-900">
+                            <button @click="policies.min_cooldown_hours_between_attempts = (policies.min_cooldown_hours_between_attempts || 4) + 1" class="w-8 h-8 rounded border bg-white text-slate-700 font-bold hover:bg-slate-100 shadow-2xs">+</button>
+                        </div>
                     </div>
 
-                    <!-- Max Contacts 24h -->
-                    <div class="space-y-1.5 bg-slate-50 p-3.5 rounded-lg border border-slate-200">
-                        <label class="font-semibold text-slate-800">24h Contact Budget</label>
-                        <input type="number" x-model.number="policies.max_contacts_24h" min="1" max="10"
-                               class="w-full px-3 py-1.5 rounded border border-slate-300 font-mono text-xs bg-white text-slate-900 focus:ring-1 focus:ring-blue-600">
-                        <p class="text-[11px] text-slate-500">Max proactive messages allowed per customer in 24 hours.</p>
+                    <!-- Policy Param 3: 24h Contact Cap -->
+                    <div class="space-y-2 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                        <label class="font-bold text-slate-900 block">Max 24h Customer Contacts</label>
+                        <p class="text-slate-500 text-[11px]">Strict customer anti-fatigue limit on outbound communications per 24h window.</p>
+                        <div class="flex items-center space-x-2 pt-1">
+                            <button @click="policies.max_contacts_24h = Math.max(1, (policies.max_contacts_24h || 2) - 1)" class="w-8 h-8 rounded border bg-white text-slate-700 font-bold hover:bg-slate-100 shadow-2xs">-</button>
+                            <input type="number" x-model.number="policies.max_contacts_24h" class="w-20 px-3 py-1.5 rounded border border-slate-200 font-mono font-bold text-center bg-white text-slate-900">
+                            <button @click="policies.max_contacts_24h = (policies.max_contacts_24h || 2) + 1" class="w-8 h-8 rounded border bg-white text-slate-700 font-bold hover:bg-slate-100 shadow-2xs">+</button>
+                        </div>
                     </div>
 
-                    <!-- Auto-Escalate Threshold (INR) -->
-                    <div class="space-y-1.5 bg-slate-50 p-3.5 rounded-lg border border-slate-200">
-                        <label class="font-semibold text-slate-800">Human Review Threshold (₹)</label>
-                        <input type="number" x-model.number="policies.auto_escalate_amount_inr" min="0" step="500"
-                               class="w-full px-3 py-1.5 rounded border border-slate-300 font-mono text-xs bg-white text-slate-900 focus:ring-1 focus:ring-blue-600">
-                        <p class="text-[11px] text-slate-500">Transactions above this value require operator approval.</p>
-                    </div>
-
-                    <!-- Min Diagnosis Confidence -->
-                    <div class="space-y-1.5 bg-slate-50 p-3.5 rounded-lg border border-slate-200">
-                        <label class="font-semibold text-slate-800">Min Diagnosis Confidence (0.0 - 1.0)</label>
-                        <input type="number" x-model.number="policies.min_diagnosis_confidence" min="0.1" max="1.0" step="0.05"
-                               class="w-full px-3 py-1.5 rounded border border-slate-300 font-mono text-xs bg-white text-slate-900 focus:ring-1 focus:ring-blue-600">
-                        <p class="text-[11px] text-slate-500">Diagnoses below this score trigger uncertainty escalation.</p>
-                    </div>
-
-                    <!-- Max Autonomous Amount (INR) -->
-                    <div class="space-y-1.5 bg-slate-50 p-3.5 rounded-lg border border-slate-200">
-                        <label class="font-semibold text-slate-800">Max Autonomous Amount (₹)</label>
-                        <input type="number" x-model.number="policies.max_autonomous_amount_inr" min="0" step="1000"
-                               class="w-full px-3 py-1.5 rounded border border-slate-300 font-mono text-xs bg-white text-slate-900 focus:ring-1 focus:ring-blue-600">
-                        <p class="text-[11px] text-slate-500">Absolute ceiling for non-human autonomous execution.</p>
+                    <!-- Policy Param 4: Human Review Amount Cap -->
+                    <div class="space-y-2 p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                        <label class="font-bold text-slate-900 block">Auto-Escalate Amount Threshold (INR)</label>
+                        <p class="text-slate-500 text-[11px]">Transactions equal or above this value immediately escalate to operator queue.</p>
+                        <div class="pt-1">
+                            <input type="number" x-model.number="policies.auto_escalate_amount_inr" step="1000" class="w-full px-3 py-1.5 rounded border border-slate-200 font-mono font-bold bg-white text-slate-900">
+                        </div>
                     </div>
                 </div>
 
                 <div class="pt-4 border-t border-slate-100 flex items-center justify-between">
-                    <span class="text-xs font-mono text-slate-500" x-show="policySaveStatus" x-text="policySaveStatus"></span>
+                    <span class="text-xs font-mono font-semibold" :class="policySaveStatus.includes('Error') ? 'text-rose-600' : 'text-emerald-700'" x-show="policySaveStatus" x-text="policySaveStatus"></span>
                     <button @click="savePolicies()" :disabled="policySaving"
-                            class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs transition shadow-2xs">
+                            class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition shadow-2xs active:scale-95">
                         <span x-show="!policySaving">Save Policy Configuration</span>
-                        <span x-show="policySaving">Saving...</span>
+                        <span x-show="policySaving">Saving to Governor...</span>
                     </button>
                 </div>
             </div>
@@ -1234,19 +1439,22 @@
     </main>
 
     <!-- Footer -->
-    <footer class="border-t border-slate-200 bg-white py-4 mt-auto">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-xs text-slate-500">
-            <span>RecoveryOS — Track 03: Autonomous AI Revenue Recovery (Razorpay AI Buildathon 2026). Deterministic Safety Spine with Groq Open-Weights Intelligence.</span>
+    <footer class="border-t border-slate-200/80 bg-white py-4 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+            <span class="font-medium">RecoveryOS &bull; Autonomous AI Revenue Recovery (Razorpay AI Buildathon 2026, Track 03)</span>
+            <span class="font-mono text-[11px] text-slate-400">Deterministic Safety Spine &bull; Groq Open-Weights Model</span>
         </div>
     </footer>
 
-    <!-- Alpine.js Application Logic -->
+    <!-- Alpine.js Application Logic with Progressive Simulation Motion -->
     <script>
         function dashboardApp() {
             return {
                 activeTab: 'scenario_lab',
                 loading: false,
                 scenarioRunning: false,
+                executionStepIndex: 1,
+                executionStepLabel: 'Ingesting payment.failed webhook event...',
                 runtimeMode: 'DETERMINISTIC',
                 llmStatus: {
                     mode: 'DETERMINISTIC',
@@ -1313,7 +1521,7 @@
 
                 async savePolicies() {
                     this.policySaving = true;
-                    this.policySaveStatus = 'Saving policy updates...';
+                    this.policySaveStatus = 'Saving policy updates to Recovery Governor...';
                     try {
                         const res = await fetch('/dashboard/api/policies', {
                             method: 'PUT',
@@ -1329,13 +1537,13 @@
                         });
                         if (!res.ok) throw new Error('Policy update failed');
                         this.policies = await res.json();
-                        this.policySaveStatus = 'Policy saved and propagated to Recovery Governor.';
+                        this.policySaveStatus = '✓ Policy configuration saved and live-propagated to Recovery Governor.';
                         await this.refreshAll();
                     } catch (err) {
                         this.policySaveStatus = 'Error saving policy: ' + err.message;
                     } finally {
                         this.policySaving = false;
-                        setTimeout(() => { this.policySaveStatus = ''; }, 4000);
+                        setTimeout(() => { this.policySaveStatus = ''; }, 4500);
                     }
                 },
 
@@ -1343,17 +1551,49 @@
                     this.scenarioRunning = true;
                     this.activeScenario = scenarioKey;
                     const execMode = mode || this.runtimeMode;
+                    
+                    // Cinematic execution steps progression
+                    const steps = [
+                        '1. WEBHOOK INGESTION — Processing payment failure event...',
+                        '2. CONTEXT BUILDING — Retrieving customer & payment history via RAG...',
+                        '3. AI DIAGNOSIS — Inferring root cause...',
+                        '4. STRATEGY FORMULATION — Generating bounded candidate interventions...',
+                        '5. ECONOMIC ENGINE — Evaluating candidate yield & timing matrix...',
+                        '6. RECOVERY GOVERNOR — Checking 8 authoritative merchant policy invariants...',
+                        '7. TOOL FIREWALL — Enforcing schema, idempotency, and consent validation...',
+                        '8. EXECUTION — Dispatching validated action...',
+                        '9. RECONCILIATION — Verifying terminal state and updating audit trail...'
+                    ];
+
+                    let stepTimer = null;
+                    this.executionStepIndex = 1;
+                    this.executionStepLabel = steps[0];
+
+                    stepTimer = setInterval(() => {
+                        if (this.executionStepIndex < 9) {
+                            this.executionStepIndex++;
+                            this.executionStepLabel = steps[this.executionStepIndex - 1];
+                        }
+                    }, 140);
+
                     try {
                         const res = await fetch(`/dashboard/api/scenarios/${scenarioKey}/run?mode=${execMode}`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ mode: execMode })
                         });
-                        this.scenarioData = await res.json();
+                        const data = await res.json();
+                        this.scenarioData = data;
+                        await this.refreshAll();
                     } catch (err) {
                         console.error("Scenario execution failed:", err);
                     } finally {
-                        this.scenarioRunning = false;
+                        clearInterval(stepTimer);
+                        this.executionStepIndex = 9;
+                        this.executionStepLabel = steps[8];
+                        setTimeout(() => {
+                            this.scenarioRunning = false;
+                        }, 250);
                     }
                 },
 
@@ -1386,18 +1626,26 @@
                     if (!sourceBadge) return 'bg-slate-100 text-slate-700 border-slate-200';
                     const s = sourceBadge.toUpperCase();
                     if (s.includes('LIVE') || s.includes('LLM')) return 'bg-purple-100 text-purple-800 border-purple-300';
-                    if (s.includes('DETERMINISTIC')) return 'bg-blue-100 text-blue-800 border-blue-300';
+                    if (s.includes('DETERMINISTIC') || s.includes('RULES')) return 'bg-blue-100 text-blue-800 border-blue-300';
                     if (s.includes('RAG')) return 'bg-emerald-100 text-emerald-800 border-emerald-300';
-                    if (s.includes('SIMULATOR') || s.includes('RAZORPAY')) return 'bg-amber-100 text-amber-800 border-amber-300';
+                    if (s.includes('SIMULATOR') || s.includes('RAZORPAY')) return 'bg-slate-100 text-slate-800 border-slate-300';
                     return 'bg-slate-100 text-slate-700 border-slate-200';
                 },
 
                 getVerdictBadge(verdict) {
                     if (verdict === 'ALLOW') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
                     if (verdict === 'DENY') return 'bg-rose-50 text-rose-700 border-rose-200';
-                    if (verdict === 'ABSTAIN') return 'bg-slate-100 text-slate-700 border-slate-200';
-                    if (verdict === 'ESCALATE') return 'bg-amber-50 text-amber-700 border-amber-200';
+                    if (verdict === 'ABSTAIN') return 'bg-amber-50 text-amber-700 border-amber-200';
+                    if (verdict === 'ESCALATE') return 'bg-purple-50 text-purple-700 border-purple-200';
                     return 'bg-blue-50 text-blue-700 border-blue-200';
+                },
+
+                getVerdictTextColor(verdict) {
+                    if (verdict === 'ALLOW') return 'text-emerald-400';
+                    if (verdict === 'DENY') return 'text-rose-400';
+                    if (verdict === 'ABSTAIN') return 'text-amber-400';
+                    if (verdict === 'ESCALATE') return 'text-purple-400';
+                    return 'text-white';
                 },
 
                 getStateBadge(state) {
