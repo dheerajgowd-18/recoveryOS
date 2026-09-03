@@ -87,13 +87,22 @@ async def get_llm_status_api() -> Dict[str, Any]:
 
 @router.post("/dashboard/api/live-demo/run", response_model=Dict[str, Any], summary="Execute Live AI Demo Scenario")
 async def run_live_demo_api(request: Request) -> Dict[str, Any]:
-    """Executes a scenario in LIVE_LLM mode with strict fail-closed guarantees and zero silent fallback."""
+    """Executes a preset or custom scenario in LIVE_LLM or DETERMINISTIC mode with strict fail-closed guarantees."""
     try:
         body = await request.json() if request.headers.get("content-type") == "application/json" else {}
     except Exception:
         body = {}
-    scenario_id = body.get("scenario_id") or body.get("scenario_key") or request.query_params.get("scenario_id") or request.query_params.get("scenario_key") or "scen_demo_timing"
+    
     mode = body.get("mode") or request.query_params.get("mode") or "LIVE_LLM"
+    scenario_custom = body.get("scenario")
+    
+    if scenario_custom and isinstance(scenario_custom, dict):
+        try:
+            return await dashboard_service.run_custom_scenario(scenario_custom, mode=mode)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Custom live scenario execution failed: {str(e)}") from e
+
+    scenario_id = body.get("scenario_id") or body.get("scenario_key") or request.query_params.get("scenario_id") or request.query_params.get("scenario_key") or "scen_demo_timing"
     try:
         return await dashboard_service.run_scenario(scenario_id, mode=mode)
     except ValueError as e:

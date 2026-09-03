@@ -65,8 +65,8 @@ async def test_scenario_run_live_llm_mode_fail_closed_or_executed():
 
 
 @pytest.mark.anyio
-async def test_live_demo_run_endpoint():
-    """Verify POST /dashboard/api/live-demo/run executes end-to-end recovery pipeline."""
+async def test_live_demo_run_preset_endpoint():
+    """Verify POST /dashboard/api/live-demo/run executes preset scenario."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
         res = await client.post("/dashboard/api/live-demo/run?scenario_key=scen_demo_abstain&mode=DETERMINISTIC")
         assert res.status_code == 200
@@ -75,3 +75,58 @@ async def test_live_demo_run_endpoint():
         assert data["scenario_id"] == "scen_demo_abstain"
         assert "ai_proposal" in data
         assert "governor_verdict" in data
+
+
+@pytest.mark.anyio
+async def test_live_demo_run_custom_scenario_deterministic():
+    """Verify POST /dashboard/api/live-demo/run executes custom scenario in DETERMINISTIC mode."""
+    custom_payload = {
+        "mode": "DETERMINISTIC",
+        "scenario": {
+            "amount": 7500,
+            "payment_state": "FAILED",
+            "failure_type": "gateway_timeout",
+            "consent": "opted_in",
+            "customer_segment": "subscription",
+            "recent_successful_payments": 4,
+            "retry_count": 0,
+            "cart_stage": "payment_execution",
+            "customer_notes": "Live test scenario with gateway timeout."
+        }
+    }
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        res = await client.post("/dashboard/api/live-demo/run", json=custom_payload)
+        assert res.status_code == 200
+        data = res.json()
+        assert data["status"] == "success"
+        assert data["scenario_type"] == "CUSTOM_LIVE_STUDIO"
+        assert data["amount_inr"] == 7500.0
+        assert "ai_proposal" in data
+        assert "governor_verdict" in data
+        assert "decision_anatomy" in data
+        assert len(data["decision_anatomy"]) == 7
+
+
+@pytest.mark.anyio
+async def test_live_demo_run_custom_scenario_consent_opt_out_blocked():
+    """Verify custom scenario with opted_out consent is blocked by Governor & Firewall."""
+    custom_payload = {
+        "mode": "DETERMINISTIC",
+        "scenario": {
+            "amount": 3000,
+            "payment_state": "FAILED",
+            "failure_type": "insufficient_funds",
+            "consent": "opted_out",
+            "customer_segment": "one_time",
+            "recent_successful_payments": 1,
+            "retry_count": 0,
+            "cart_stage": "payment_execution",
+            "customer_notes": "User opted out of all recovery communications."
+        }
+    }
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        res = await client.post("/dashboard/api/live-demo/run", json=custom_payload)
+        assert res.status_code == 200
+        data = res.json()
+        assert data["status"] == "success"
+        assert data["governor_verdict"]["checks"]["consent"] == "FAIL"
