@@ -11,7 +11,7 @@ def client():
 
 
 class TestDashboardScenarioLab:
-    """Verifies that all 5 signature demo cases execute against real backend runtime via /dashboard/api/scenarios/{id}/run."""
+    """Verifies that signature demo cases execute against backend runtime via /dashboard/api/scenarios/{id}/run."""
 
     def test_run_abstention_scenario(self, client: TestClient):
         """Case 1: Correct economic abstention returns real trace and ₹0.00 cost."""
