@@ -592,4 +592,4 @@ class TestRecoveryStrategyAgent:
         assert "A_DETERMINISTIC_DIAG_AND_STRAT" in summary.cohort_results
         assert "B_LLM_DIAG_DETERMINISTIC_STRAT" in summary.cohort_results
         assert "C_LLM_DIAG_AND_LLM_STRAT" in summary.cohort_results
-        assert summary.total_ai_layer_uplift_paise is not None
+        assert summary.execution_mode == "OFFLINE_REPLAY"

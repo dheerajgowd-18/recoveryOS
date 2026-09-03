@@ -559,6 +559,74 @@ async def demo_case_6_subscription_mandate_recovery() -> None:
         print(f"  [GOVERNOR]  Verdict     : {gov.decision_result.value if gov else 'ALLOW'}")
 
 
+async def demo_case_7_checkout_abandonment() -> None:
+    print("\n" + HEADER)
+    print("  CASE 7: CHECKOUT DROP-OFF & CART ABANDONMENT RECOVERY")
+    print(HEADER)
+    print("  Scenario: User dropped off at 3DS OTP step on a ₹4,200.00 cart.")
+    print("  Challenge: Bank retries will fail because authorization was not created; immediate aggressive dunning annoys user.")
+    print("  RecoveryOS Decision: Diagnoses CUSTOMER_ABANDONMENT, selects +2h delayed 1-click payment link over spammy dunning.\n")
+
+    ingestion = IngestionService()
+    executor = SimulatorExecutor()
+    governor = RecoveryGovernor()
+    runtime = AgentRuntime(ingestion_service=ingestion, executor=executor, governor=governor)
+
+    customer = SimulatedCustomer(
+        customer_id="cust_demo_07",
+        name="Meera Iyer",
+        email="meera.iyer@example.com",
+        contact="+919876543207",
+        archetype=CustomerArchetype.HIGHLY_RESPONSIVE,
+    )
+    generator = SyntheticEntityGenerator()
+    scenario_cfg = ScenarioConfig(
+        scenario_id="scen_demo_abandonment",
+        seed=107,
+        archetype=CustomerArchetype.HIGHLY_RESPONSIVE,
+        failure_class=FailureClass.AUTHENTICATION_FAILURE,
+        amount_in_paise=420000,  # INR 4,200.00
+        attempt_count=1,
+    )
+    event, webhook = generator.generate_payment_scenario(
+        rng=__import__("random").Random(107),
+        scenario=scenario_cfg,
+        customer=customer,
+        created_at_epoch=1700000000,
+    )
+    hidden_outcomes = PotentialOutcomes(
+        no_action=ActionOutcome(action_type=SimulatedActionType.NO_ACTION, recovered=False, recovery_delay_seconds=0, recovered_amount_paise=0, customer_churned=True, fatigue_score=0.0, action_cost_paise=0),
+        retry_now=ActionOutcome(action_type=SimulatedActionType.RETRY_NOW, recovered=False, recovery_delay_seconds=0, recovered_amount_paise=0, customer_churned=False, fatigue_score=0.0, action_cost_paise=20),
+        retry_later=ActionOutcome(action_type=SimulatedActionType.RETRY_LATER, recovered=False, recovery_delay_seconds=0, recovered_amount_paise=0, customer_churned=False, fatigue_score=0.0, action_cost_paise=20),
+        payment_link=ActionOutcome(action_type=SimulatedActionType.PAYMENT_LINK, recovered=True, recovery_delay_seconds=7200, recovered_amount_paise=420000, customer_churned=False, fatigue_score=0.1, action_cost_paise=50),
+        reminder=ActionOutcome(action_type=SimulatedActionType.REMINDER, recovered=True, recovery_delay_seconds=7200, recovered_amount_paise=420000, customer_churned=False, fatigue_score=0.1, action_cost_paise=20),
+    )
+    scenario = SimulatedScenario(
+        scenario_id="scen_demo_abandonment",
+        customer=customer,
+        event=event,
+        webhook_payload=webhook,
+        archetype=CustomerArchetype.HIGHLY_RESPONSIVE,
+        failure_class=FailureClass.AUTHENTICATION_FAILURE,
+        hidden_outcomes=hidden_outcomes,
+    )
+
+    result: AgentRunResult = await runtime.run_recovery_loop(scenario)
+
+    print(f"  [RESULT] Stop Reason    : {result.stop_reason}")
+    print(f"  [RESULT] Final State    : {result.final_state}")
+    print(f"  [RESULT] Is Recovered   : {result.is_recovered}")
+    print(f"  [RESULT] Total Cost     : INR {result.total_cost_paise / 100:.2f}")
+    print(f"  [RESULT] Net Value      : INR {result.net_value_paise / 100:.2f}")
+    if result.trace:
+        diag = result.trace[0].diagnosis
+        dec = result.trace[0].decision
+        gov = result.trace[0].governor_decision
+        print(f"  [DIAGNOSIS] Label       : {diag.diagnosis_label.value if diag else 'customer_abandonment'}")
+        print(f"  [PROPOSAL]  Action      : {dec.action_type.value if dec else 'payment_link'}")
+        print(f"  [GOVERNOR]  Verdict     : {gov.decision_result.value if gov else 'ALLOW'}")
+
+
 async def main() -> None:
     print_banner()
     await demo_case_1_abstention()
@@ -566,9 +634,10 @@ async def main() -> None:
     await demo_case_3_late_state_change()
     await demo_case_4_safety_block()
     await demo_case_6_subscription_mandate_recovery()
+    await demo_case_7_checkout_abandonment()
     demo_case_5_batch_benchmark()
     print("\n" + HEADER)
-    print("  [OK] All 6 Signature RecoveryOS Showcase Scenarios Completed Successfully!")
+    print("  [OK] All 7 Signature RecoveryOS Showcase Scenarios Completed Successfully!")
     print(HEADER + "\n")
 
 

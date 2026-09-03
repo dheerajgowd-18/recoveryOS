@@ -17,6 +17,7 @@ class FailureClass(str, Enum):
     TRANSIENT_GATEWAY = "transient_gateway"
     INSUFFICIENT_FUNDS = "insufficient_funds"
     EXPIRED_PAYMENT_METHOD = "expired_payment_method"
+    AUTHENTICATION_FAILURE = "authentication_failure"
 
 
 class SimulatedActionType(str, Enum):

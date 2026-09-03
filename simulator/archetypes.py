@@ -131,4 +131,18 @@ FAILURE_CLASS_BEHAVIORS: Dict[FailureClass, FailureClassBehavior] = {
         error_step="payment_authentication",
         error_reason="card_expired",
     ),
+    FailureClass.AUTHENTICATION_FAILURE: FailureClassBehavior(
+        action_multipliers={
+            SimulatedActionType.NO_ACTION: 0.10,
+            SimulatedActionType.RETRY_NOW: 0.05,  # OTP/3DS failure cannot be blindly retried on backend
+            SimulatedActionType.RETRY_LATER: 0.10,
+            SimulatedActionType.PAYMENT_LINK: 0.90,  # 1-click re-authenticated checkout link
+            SimulatedActionType.REMINDER: 0.85,
+        },
+        base_error_code="BAD_REQUEST_ERROR",
+        base_error_description="Customer dropped off or failed two-factor 3DS authentication.",
+        error_source="customer",
+        error_step="payment_authentication",
+        error_reason="authentication_failed",
+    ),
 }

@@ -286,7 +286,7 @@
                 </div>
 
                 <!-- Scenario Action Buttons -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
                     <button @click="runScenario('scen_demo_abstain')" :disabled="scenarioRunning"
                             :class="activeScenario === 'scen_demo_abstain' ? 'ring-2 ring-blue-600 border-blue-600 bg-blue-50/50' : 'bg-white hover:bg-slate-50 border-slate-200'"
                             class="p-3.5 rounded-lg border text-left transition shadow-2xs flex flex-col justify-between">
@@ -296,7 +296,7 @@
                                 <span class="text-emerald-700 font-semibold">ABSTAIN</span>
                             </div>
                             <div class="font-semibold text-slate-900 text-xs">Economic Abstention</div>
-                            <div class="text-[11px] text-slate-500 mt-1 line-clamp-2">Micro-ticket (₹1.00) expired card. Avoids ₹1.00 dunning fee.</div>
+                            <div class="text-[11px] text-slate-500 mt-1 line-clamp-2">Micro-ticket (₹1.00) expired card. Avoids ₹1.00 fee.</div>
                         </div>
                         <div class="mt-3 text-[10px] font-mono text-blue-600 font-medium">Run Case 1 &rarr;</div>
                     </button>
@@ -310,7 +310,7 @@
                                 <span class="text-blue-700 font-semibold">TIMING</span>
                             </div>
                             <div class="font-semibold text-slate-900 text-xs">Action × Timing</div>
-                            <div class="text-[11px] text-slate-500 mt-1 line-clamp-2">₹5,000 gateway error. Ranks candidate windows; picks +6h.</div>
+                            <div class="text-[11px] text-slate-500 mt-1 line-clamp-2">₹5,000 gateway error. Evaluates candidates; picks +6h.</div>
                         </div>
                         <div class="mt-3 text-[10px] font-mono text-blue-600 font-medium">Run Case 2 &rarr;</div>
                     </button>
@@ -324,7 +324,7 @@
                                 <span class="text-amber-700 font-semibold">STALE</span>
                             </div>
                             <div class="font-semibold text-slate-900 text-xs">Stale Protection</div>
-                            <div class="text-[11px] text-slate-500 mt-1 line-clamp-2">Out-of-band capture invalidates scheduled retry. 0 double charge.</div>
+                            <div class="text-[11px] text-slate-500 mt-1 line-clamp-2">Out-of-band capture invalidates scheduled retry.</div>
                         </div>
                         <div class="mt-3 text-[10px] font-mono text-blue-600 font-medium">Run Case 3 &rarr;</div>
                     </button>
@@ -352,9 +352,37 @@
                                 <span class="text-purple-700 font-semibold">ESCALATE</span>
                             </div>
                             <div class="font-semibold text-slate-900 text-xs">LLM Uncertainty</div>
-                            <div class="text-[11px] text-slate-500 mt-1 line-clamp-2">₹25,000 ambiguous failure. Escalated to human reviewer.</div>
+                            <div class="text-[11px] text-slate-500 mt-1 line-clamp-2">₹25,000 ambiguous failure. Escalated to human.</div>
                         </div>
                         <div class="mt-3 text-[10px] font-mono text-blue-600 font-medium">Run Case 5 &rarr;</div>
+                    </button>
+
+                    <button @click="runScenario('scen_demo_subscription')" :disabled="scenarioRunning"
+                            :class="activeScenario === 'scen_demo_subscription' ? 'ring-2 ring-blue-600 border-blue-600 bg-blue-50/50' : 'bg-white hover:bg-slate-50 border-slate-200'"
+                            class="p-3.5 rounded-lg border text-left transition shadow-2xs flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between text-[11px] font-mono text-slate-500 mb-1">
+                                <span>CASE 6</span>
+                                <span class="text-cyan-700 font-semibold">MANDATE</span>
+                            </div>
+                            <div class="font-semibold text-slate-900 text-xs">SaaS Subscription</div>
+                            <div class="text-[11px] text-slate-500 mt-1 line-clamp-2">₹2,999 revoked mandate. Replaced with payment link.</div>
+                        </div>
+                        <div class="mt-3 text-[10px] font-mono text-blue-600 font-medium">Run Case 6 &rarr;</div>
+                    </button>
+
+                    <button @click="runScenario('scen_demo_abandonment')" :disabled="scenarioRunning"
+                            :class="activeScenario === 'scen_demo_abandonment' ? 'ring-2 ring-blue-600 border-blue-600 bg-blue-50/50' : 'bg-white hover:bg-slate-50 border-slate-200'"
+                            class="p-3.5 rounded-lg border text-left transition shadow-2xs flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between text-[11px] font-mono text-slate-500 mb-1">
+                                <span>CASE 7</span>
+                                <span class="text-indigo-700 font-semibold">CHECKOUT</span>
+                            </div>
+                            <div class="font-semibold text-slate-900 text-xs">Cart Abandonment</div>
+                            <div class="text-[11px] text-slate-500 mt-1 line-clamp-2">₹4,200 OTP drop-off. Timed re-engagement window.</div>
+                        </div>
+                        <div class="mt-3 text-[10px] font-mono text-blue-600 font-medium">Run Case 7 &rarr;</div>
                     </button>
                 </div>
             </div>
