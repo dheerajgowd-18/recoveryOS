@@ -79,12 +79,48 @@ async def get_exceptions_api() -> List[Dict[str, Any]]:
     return dashboard_service.get_exceptions()
 
 
+@router.get("/dashboard/api/llm/status", response_model=Dict[str, Any], summary="LLM Configuration & Connection Status")
+async def get_llm_status_api() -> Dict[str, Any]:
+    """Returns safe metadata regarding LLM provider, active model, and connection readiness."""
+    return dashboard_service.get_llm_status()
+
+
+@router.post("/dashboard/api/live-demo/run", response_model=Dict[str, Any], summary="Execute Live AI Demo Scenario")
+async def run_live_demo_api(request: Request) -> Dict[str, Any]:
+    """Executes a scenario in LIVE_LLM mode with strict fail-closed guarantees and zero silent fallback."""
+    try:
+        body = await request.json() if request.headers.get("content-type") == "application/json" else {}
+    except Exception:
+        body = {}
+    scenario_id = body.get("scenario_id") or body.get("scenario_key") or request.query_params.get("scenario_id") or request.query_params.get("scenario_key") or "scen_demo_timing"
+    mode = body.get("mode") or request.query_params.get("mode") or "LIVE_LLM"
+    try:
+        return await dashboard_service.run_scenario(scenario_id, mode=mode)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Live demo execution failed: {str(e)}") from e
+
+
 @router.post("/dashboard/api/scenarios/{scenario_id}/run", response_model=Dict[str, Any], summary="Execute Scenario Lab Simulation")
 @router.get("/dashboard/api/scenarios/{scenario_id}/run", response_model=Dict[str, Any], summary="Execute Scenario Lab Simulation")
-async def run_scenario_api(scenario_id: str) -> Dict[str, Any]:
-    """Executes a signature demo case through the live RecoveryOS runtime and returns audit trace."""
+async def run_scenario_api(scenario_id: str, request: Request) -> Dict[str, Any]:
+    """Executes a signature demo case through the RecoveryOS runtime and returns audit trace."""
+    mode = "DETERMINISTIC"
+    if request.method == "POST":
+        try:
+            if request.headers.get("content-type") == "application/json":
+                body = await request.json()
+                mode = body.get("mode", "DETERMINISTIC")
+        except Exception:
+            mode = "DETERMINISTIC"
+    # Also check query param if present
+    query_mode = request.query_params.get("mode")
+    if query_mode:
+        mode = query_mode
+
     try:
-        return await dashboard_service.run_scenario(scenario_id)
+        return await dashboard_service.run_scenario(scenario_id, mode=mode)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
