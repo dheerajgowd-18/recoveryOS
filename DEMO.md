@@ -7,7 +7,7 @@ This document provides the choreographed 5-minute demonstration guide and walkth
 ## 1. Quickstart Execution Commands
 
 ```bash
-# Step 1: Run the full automated test suite (297 passing tests)
+# Step 1: Run the full automated test suite (319 passing tests)
 make test
 # (or: python -m pytest -v)
 

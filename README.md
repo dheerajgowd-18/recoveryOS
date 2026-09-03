@@ -1,6 +1,6 @@
 # RecoveryOS: Autonomous AI Revenue Recovery Agent
 
-[![Build Status](https://img.shields.io/badge/tests-297%20passed-brightgreen.svg)]()
+[![Build Status](https://img.shields.io/badge/tests-319%20passed-brightgreen.svg)]()
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)]()
 [![Pydantic Version](https://img.shields.io/badge/pydantic-v2-orange.svg)]()
 [![Razorpay AI Buildathon 2026](https://img.shields.io/badge/Track%2003-AI%20Revenue%20Recovery-blueviolet.svg)]()
@@ -214,7 +214,7 @@ make demo       # Runs the 7 signature demo cases CLI showcase (python scripts/d
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Run automated test suite (297 passing tests)
+# 2. Run automated test suite (319 passing tests)
 python -m pytest -v
 
 # 3. Launch the Operations Console Dashboard
