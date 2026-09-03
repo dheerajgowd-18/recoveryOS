@@ -214,10 +214,13 @@ def main() -> None:
         print("  " + "-" * 106)
         for vname, vdata in ab_res.cohort_results.items():
             print(f"  {vname:<32} | {vdata['diagnosis_source']:<24} | {vdata['strategy_source']:<24} | {vdata['diagnosis_fallbacks']:<8} | {vdata['strategy_fallbacks']:<8}")
-        print("-" * 80)
-        print(f"  LLM Diagnosis Incremental Uplift (B - A)            : INR {ab_res.diagnosis_contribution_uplift_paise / 100:,.2f}")
-        print(f"  Incremental Value of Full Agentic Strategy Layer (C - B): INR {ab_res.strategy_layer_incremental_value_paise / 100:,.2f}")
-        print(f"  Total Combined AI Layer Value (C - A)               : INR {ab_res.total_ai_layer_uplift_paise / 100:,.2f}")
+        diag_up_str = f"INR {ab_res.diagnosis_contribution_uplift_paise / 100:,.2f}" if ab_res.diagnosis_contribution_uplift_paise is not None else "UNAVAILABLE (Cohort used fallback)"
+        strat_up_str = f"INR {ab_res.strategy_layer_incremental_value_paise / 100:,.2f}" if ab_res.strategy_layer_incremental_value_paise is not None else "UNAVAILABLE (Cohort used fallback)"
+        total_up_str = f"INR {ab_res.total_ai_layer_uplift_paise / 100:,.2f}" if ab_res.total_ai_layer_uplift_paise is not None else "UNAVAILABLE (Cohort used fallback)"
+
+        print(f"  LLM Diagnosis Incremental Uplift (B - A)                : {diag_up_str}")
+        print(f"  Incremental Value of Full Agentic Strategy Layer (C - B): {strat_up_str}")
+        print(f"  Total Combined AI Layer Value (C - A)                   : {total_up_str}")
 
     print("=" * 80)
 
