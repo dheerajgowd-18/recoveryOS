@@ -106,6 +106,11 @@
                     <span>Exceptions & Audit</span>
                     <span x-show="exceptions.length > 0" class="px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-xs font-mono" x-text="exceptions.length"></span>
                 </button>
+                <button @click="setTab('policies')"
+                    :class="activeTab === 'policies' ? 'bg-slate-100 text-blue-700 font-semibold border-b-2 border-blue-600' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'"
+                    class="px-3 py-1.5 rounded-t-md text-xs sm:text-sm font-medium transition-colors">
+                    Merchant Policy
+                </button>
             </nav>
 
             <!-- Right Controls -->
@@ -837,6 +842,83 @@
             </div>
         </section>
 
+        <!-- ========================================================================= -->
+        <!-- TAB 7: MERCHANT POLICY DEMO CONTROLS -->
+        <!-- ========================================================================= -->
+        <section x-show="activeTab === 'policies'" x-cloak class="space-y-6">
+            <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-xs space-y-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                    <div>
+                        <h2 class="text-sm font-semibold text-slate-900 uppercase tracking-wider">Merchant Policy & Governor Controls</h2>
+                        <p class="text-xs text-slate-500">Configure deterministic safety boundaries, escalation thresholds, and frequency caps.</p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xs font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold" x-text="'Policy ' + (policies.policy_version || 'v1.0.0')"></span>
+                    </div>
+                </div>
+
+                <!-- Form Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 text-xs">
+                    <!-- Max Retries -->
+                    <div class="space-y-1.5 bg-slate-50 p-3.5 rounded-lg border border-slate-200">
+                        <label class="font-semibold text-slate-800">Max Retry Attempts</label>
+                        <input type="number" x-model.number="policies.max_retries" min="1" max="10"
+                               class="w-full px-3 py-1.5 rounded border border-slate-300 font-mono text-xs bg-white text-slate-900 focus:ring-1 focus:ring-blue-600">
+                        <p class="text-[11px] text-slate-500">Maximum autonomous gateway retries permitted per invoice.</p>
+                    </div>
+
+                    <!-- Min Cooldown Hours -->
+                    <div class="space-y-1.5 bg-slate-50 p-3.5 rounded-lg border border-slate-200">
+                        <label class="font-semibold text-slate-800">Cooldown Between Retries (Hours)</label>
+                        <input type="number" x-model.number="policies.min_cooldown_hours_between_attempts" min="0" max="72" step="0.5"
+                               class="w-full px-3 py-1.5 rounded border border-slate-300 font-mono text-xs bg-white text-slate-900 focus:ring-1 focus:ring-blue-600">
+                        <p class="text-[11px] text-slate-500">Minimum spacing interval required before subsequent attempts.</p>
+                    </div>
+
+                    <!-- Max Contacts 24h -->
+                    <div class="space-y-1.5 bg-slate-50 p-3.5 rounded-lg border border-slate-200">
+                        <label class="font-semibold text-slate-800">24h Contact Budget</label>
+                        <input type="number" x-model.number="policies.max_contacts_24h" min="1" max="10"
+                               class="w-full px-3 py-1.5 rounded border border-slate-300 font-mono text-xs bg-white text-slate-900 focus:ring-1 focus:ring-blue-600">
+                        <p class="text-[11px] text-slate-500">Max proactive messages allowed per customer in 24 hours.</p>
+                    </div>
+
+                    <!-- Auto-Escalate Threshold (INR) -->
+                    <div class="space-y-1.5 bg-slate-50 p-3.5 rounded-lg border border-slate-200">
+                        <label class="font-semibold text-slate-800">Human Review Threshold (₹)</label>
+                        <input type="number" x-model.number="policies.auto_escalate_amount_inr" min="0" step="500"
+                               class="w-full px-3 py-1.5 rounded border border-slate-300 font-mono text-xs bg-white text-slate-900 focus:ring-1 focus:ring-blue-600">
+                        <p class="text-[11px] text-slate-500">Transactions above this value require operator approval.</p>
+                    </div>
+
+                    <!-- Min Diagnosis Confidence -->
+                    <div class="space-y-1.5 bg-slate-50 p-3.5 rounded-lg border border-slate-200">
+                        <label class="font-semibold text-slate-800">Min Diagnosis Confidence (0.0 - 1.0)</label>
+                        <input type="number" x-model.number="policies.min_diagnosis_confidence" min="0.1" max="1.0" step="0.05"
+                               class="w-full px-3 py-1.5 rounded border border-slate-300 font-mono text-xs bg-white text-slate-900 focus:ring-1 focus:ring-blue-600">
+                        <p class="text-[11px] text-slate-500">Diagnoses below this score trigger uncertainty escalation.</p>
+                    </div>
+
+                    <!-- Max Autonomous Amount (INR) -->
+                    <div class="space-y-1.5 bg-slate-50 p-3.5 rounded-lg border border-slate-200">
+                        <label class="font-semibold text-slate-800">Max Autonomous Amount (₹)</label>
+                        <input type="number" x-model.number="policies.max_autonomous_amount_inr" min="0" step="1000"
+                               class="w-full px-3 py-1.5 rounded border border-slate-300 font-mono text-xs bg-white text-slate-900 focus:ring-1 focus:ring-blue-600">
+                        <p class="text-[11px] text-slate-500">Absolute ceiling for non-human autonomous execution.</p>
+                    </div>
+                </div>
+
+                <div class="pt-4 border-t border-slate-100 flex items-center justify-between">
+                    <span class="text-xs font-mono text-slate-500" x-show="policySaveStatus" x-text="policySaveStatus"></span>
+                    <button @click="savePolicies()" :disabled="policySaving"
+                            class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs transition shadow-2xs">
+                        <span x-show="!policySaving">Save Policy Configuration</span>
+                        <span x-show="policySaving">Saving...</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
     </main>
 
     <!-- Footer -->
@@ -862,6 +944,8 @@
                 evaluation: {},
                 policies: {},
                 exceptions: [],
+                policySaving: false,
+                policySaveStatus: '',
 
                 async initApp() {
                     await this.refreshAll();
@@ -895,6 +979,34 @@
                         console.error("Dashboard telemetry refresh error:", err);
                     } finally {
                         this.loading = false;
+                    }
+                },
+
+                async savePolicies() {
+                    this.policySaving = true;
+                    this.policySaveStatus = 'Saving policy updates...';
+                    try {
+                        const res = await fetch('/dashboard/api/policies', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                max_retries: this.policies.max_retries,
+                                min_cooldown_hours: this.policies.min_cooldown_hours_between_attempts,
+                                max_contacts_24h: this.policies.max_contacts_24h,
+                                auto_escalate_amount_inr: this.policies.auto_escalate_amount_inr,
+                                max_autonomous_amount_inr: this.policies.max_autonomous_amount_inr,
+                                min_diagnosis_confidence: this.policies.min_diagnosis_confidence,
+                            })
+                        });
+                        if (!res.ok) throw new Error('Policy update failed');
+                        this.policies = await res.json();
+                        this.policySaveStatus = 'Policy saved and propagated to Recovery Governor.';
+                        await this.refreshAll();
+                    } catch (err) {
+                        this.policySaveStatus = 'Error saving policy: ' + err.message;
+                    } finally {
+                        this.policySaving = false;
+                        setTimeout(() => { this.policySaveStatus = ''; }, 4000);
                     }
                 },
 

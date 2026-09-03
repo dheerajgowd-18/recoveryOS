@@ -744,6 +744,32 @@ class DashboardService:
             },
         }
 
+    def update_merchant_policy(self, updates: Dict[str, Any]) -> Dict[str, Any]:
+        """Updates runtime merchant policy parameters and propagates to Governor and ReplayEngine."""
+        current_dict = self.merchant_policy.model_dump()
+        for k, v in updates.items():
+            if v is None:
+                continue
+            if k in current_dict:
+                current_dict[k] = v
+            elif k == "min_cooldown_seconds":
+                current_dict["cooldown_seconds"] = int(v)
+            elif k == "min_cooldown_hours":
+                current_dict["cooldown_seconds"] = int(float(v) * 3600)
+            elif k == "auto_escalate_amount_inr":
+                current_dict["human_review_amount_threshold_paise"] = int(float(v) * 100)
+            elif k == "max_autonomous_amount_inr":
+                current_dict["max_automatic_action_amount_paise"] = int(float(v) * 100)
+            elif k == "min_expected_net_value_inr":
+                current_dict["min_expected_incremental_value_paise"] = int(float(v) * 100)
+
+        self.merchant_policy = MerchantPolicy.model_validate(current_dict)
+        self.replay_engine = ReplayEngine(
+            decision_log=self.decision_log,
+            merchant_policy=self.merchant_policy,
+        )
+        return self.get_policies()
+
     def get_policies(self) -> Dict[str, Any]:
         """Returns active merchant policy rules, amount thresholds, and automation settings (read-only)."""
         p = self.merchant_policy
@@ -757,9 +783,11 @@ class DashboardService:
             "contact_limit_24h": p.max_contacts_24h,
             "max_contacts_7d": p.max_contacts_7d,
             "min_cooldown_seconds": p.cooldown_seconds,
+            "cooldown_seconds": p.cooldown_seconds,
             "min_cooldown_hours_between_attempts": round(p.cooldown_seconds / 3600.0, 1),
             "max_autonomous_amount_paise": p.max_automatic_action_amount_paise,
             "max_autonomous_amount_inr": round(p.max_automatic_action_amount_paise / 100.0, 2),
+            "human_review_amount_threshold_paise": p.human_review_amount_threshold_paise,
             "auto_escalate_amount_paise": p.human_review_amount_threshold_paise,
             "auto_escalate_amount_inr": round(p.human_review_amount_threshold_paise / 100.0, 2),
             "allowed_action_types": [a.value if hasattr(a, "value") else str(a) for a in p.allowed_action_types],

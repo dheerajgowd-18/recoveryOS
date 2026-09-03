@@ -59,8 +59,18 @@ async def get_evaluation_api() -> Dict[str, Any]:
 
 @router.get("/dashboard/api/policies", response_model=Dict[str, Any], summary="Merchant Policies API")
 async def get_policies_api() -> Dict[str, Any]:
-    """Returns active merchant policy configuration, frequency limits, and automation mode (read-only)."""
+    """Returns active merchant policy configuration, frequency limits, and automation mode."""
     return dashboard_service.get_policies()
+
+
+@router.put("/dashboard/api/policies", response_model=Dict[str, Any], summary="Update Merchant Policies API")
+@router.post("/dashboard/api/policies", response_model=Dict[str, Any], summary="Update Merchant Policies API")
+async def update_policies_api(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Updates active merchant policy parameters and propagates to Governor runtime immediately."""
+    try:
+        return dashboard_service.update_merchant_policy(payload)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid policy parameters: {str(e)}") from e
 
 
 @router.get("/dashboard/api/exceptions", response_model=List[Dict[str, Any]], summary="Operational Exceptions API")
