@@ -1,288 +1,437 @@
-# RecoveryOS: Autonomous AI Revenue Recovery Agent
+# RecoveryOS
 
-[![Build Status](https://img.shields.io/badge/tests-339%20passed-brightgreen.svg)]()
-[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)]()
-[![Pydantic Version](https://img.shields.io/badge/pydantic-v2-orange.svg)]()
+### Policy-Governed AI for Incremental Revenue Recovery
+
+[![CI Suite](https://img.shields.io/badge/CI%20Suite-339%20passed-brightgreen.svg)]()
+[![Python](https://img.shields.io/badge/python-%3E%3D3.11-blue.svg)]()
 [![Razorpay AI Buildathon 2026](https://img.shields.io/badge/Track%2003-AI%20Revenue%20Recovery-blueviolet.svg)]()
-[![LLM Provider](https://img.shields.io/badge/LLM-Groq%20llama--3.3--70b--versatile-indigo.svg)]()
+[![LLM Layer](https://img.shields.io/badge/LLM-Groq%20%7C%20Deterministic%20Fallback-indigo.svg)]()
+[![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
-> **Razorpay AI Buildathon 2026 — Track 03: AI Revenue Recovery**
->
-> **Positioning**: *Policy-governed AI for incremental revenue recovery under uncertainty.*
->
-> **Central Thesis**: Most dunning systems optimize for recovered payments. RecoveryOS optimizes for revenue that would **NOT** have been recovered without intervention ($\Delta Y_{\text{adj}} = Y(a) - Y(\text{no\_action}) - \text{Action Costs} - \text{Churn Penalty}$).
->
-> **Operational Rule**: *AI proposes. Deterministic economic policy decides. The Governor authorizes. The executor acts. State reconciliation verifies.*
->
-> **Canonical Production Path**: `RecoveryStateGraph` (`agent/graph.py`) executes an authoritative 10-node stateful DAG with an 8-stage decision anatomy (`OBSERVATION` &rarr; `DIAGNOSIS` &rarr; `CANDIDATES` &rarr; `ECONOMIC_SCORE` &rarr; `GOVERNOR` &rarr; `FIREWALL` &rarr; `EXECUTION` &rarr; `VERIFIED_OUTCOME`).
+> **Razorpay AI Buildathon 2026 · Track 03 — AI Revenue Recovery**  
+> **Positioning**: *Policy-governed AI for incremental revenue recovery under uncertainty.*  
+> **Central Thesis**: Most recovery systems optimize for recovered volume. RecoveryOS optimizes for the incremental revenue that an intervention actually adds beyond what would have resolved naturally.  
+> **Core Operating Invariant**:
+> $$\text{AI proposes} \longrightarrow \text{Economic Policy decides} \longrightarrow \text{Governor authorizes} \longrightarrow \text{Executor acts} \longrightarrow \text{State verifies}$$
 
 ---
 
-## ⚡ 60-Second Reviewer Guide
+## 1. Executive Overview
 
-### What RecoveryOS Is:
-- A closed-loop, causal recovery agent that balances gross recovery against direct action costs, organic natural recovery, and customer contact fatigue.
-- A fail-closed architecture with a non-bypassable **Recovery Governor** and **Tool Firewall** enforcing idempotency, contact caps, cooldowns, and customer consent opt-outs.
-- An auditable decision engine providing contrastive reasoning (*Why We Acted* vs *Why We Did Not Choose Alternatives* or *Why We Did Not Act*).
+RecoveryOS is a closed-loop revenue recovery system designed for subscription merchants, SaaS platforms, and digital commerce. When a payment fails, RecoveryOS diagnoses the underlying root cause, evaluates candidate action and timing windows against expected net recovery, enforces deterministic financial guardrails through a non-bypassable Governor, dispatches bounded recovery actions, and verifies final state via Razorpay webhooks.
 
-### What RecoveryOS Is NOT:
-- **NOT** a generic AI dunning bot or SMS spammer.
-- **NOT** a generic conversational failed-payment chatbot.
-- **NOT** a raw payment retry engine claiming to execute unassisted card retries on Razorpay (our Razorpay adapter strictly distinguishes genuine payment-link creation from gateway payment-status reconciliation `GET /v1/payments/{id}`).
-- **NOT** a fabricated ML uplift claim (we explicitly differentiate parameterized synthetic priors from future learned bandit models).
+```
+                  ┌──────────────────────────────────────────────────────────┐
+                  │                 THE CENTRAL OPERATIONAL RULE             │
+                  │                                                          │
+                  │   "Sometimes the best recovery action is no action."     │
+                  │                                                          │
+                  │   AI proposes candidate actions.                         │
+                  │   Deterministic economic policy decides expected yield.  │
+                  │   The Recovery Governor authorizes against merchant caps.│
+                  │   The Executor dispatches bounded API workflows.         │
+                  │   Payment state reconciliation verifies actual outcomes. │
+                  └──────────────────────────────────────────────────────────┘
+```
 
-### Three Key Proof Metrics (100 Scenarios, Seed=42, Churn Penalty ₹2,500):
-1. **+₹80,859 Incremental Adjusted Net Recovery** (+₹6,764 over static rules & probability greedy baselines, +₹63,073 over naive retries).
-2. **27% Churn Reduction** (8 churned customers vs 11 under static rules) through intelligent abstention and delayed retries.
-3. **52% Action Cost Savings** (₹35.80 vs ₹74.40 under static dunning).
+---
 
-### 30-Second Quickstart:
+## 2. The Financial Problem
+
+A failed payment does not automatically equal lost revenue. In fintech billing environments, naive retry bots treat every failure as an emergency—spamming customer payment links, burning gateway fees, triggering customer support escalations, and claiming credit for payments that would have resolved organically.
+
+```
+TRADITIONAL RECOVERY (Naive Volume Chaser):
+  FAILED PAYMENT ──────► BLIND RETRY ──────► SPAM CUSTOMER ──────► COUNT GROSS RECOVERY
+  (High gateway surcharge fees • Severe customer contact fatigue • Unnecessary churn)
+
+RECOVERYOS (Economic & Policy Governed):
+  FAILED PAYMENT ──────► DIAGNOSE ROOT CAUSE ──────► ESTIMATE INCREMENTAL VALUE
+                                                             │
+  OUTCOME VERIFIED ◄────── ACT OR ABSTAIN ◄────── GOVERNOR AUTHORIZATION
+```
+
+Depending on the failure archetype, customers may:
+- **Recover naturally** without any intervention (e.g., temporary bank maintenance during salary hours).
+- **Require delayed retry** to permit upstream banking switches to recover.
+- **Require a payment link** to collect an alternate payment instrument (e.g., expired mandate).
+- **Require human escalation** due to high ticket value or fraud uncertainty.
+- **Be better left untouched** when transaction value is less than action costs and friction.
+
+---
+
+## 3. Why RecoveryOS Is Different
+
+| Dimension | Conventional Recovery Tools | RecoveryOS |
+| :--- | :--- | :--- |
+| **Optimization Target** | Gross recovered volume ($\sum Y(a)$) | **Incremental adjusted net revenue** ($\Delta Y_{\text{adj}}$) |
+| **Intervention Policy** | Fixed cron schedules (e.g., Retry at Day 1, 3, 5) | **Action $\times$ Timing optimization** evaluated per case |
+| **Abstention** | Impossible; always triggers communication | **First-class decision**; deliberately abstains when net value $< 0$ |
+| **Financial Authority** | Unbounded scripts or unrestricted LLM calls | **Deterministic Governor & Tool Firewall** authorize every action |
+| **State Awareness** | Blindly dispatches scheduled jobs | **State-versioned scheduling**; invalidates stale retries if customer pays |
+| **Customer Protection** | Relies on manual suppression lists | **Hard consent opt-out enforcement** and contact caps ($24\text{h} / 7\text{d}$) |
+| **Auditability** | Opaque webhook logs | **7-layer Decision Anatomy Matrix** with contrastive explanations |
+| **Evaluation Honesty** | Cherry-picked success metrics | **Multi-seed benchmarks** vs baselines, Oracle ceiling, and regret analysis |
+
+---
+
+## 4. System Architecture
+
+RecoveryOS enforces separation of concerns across five sovereign planes. The LLM provides reasoning assistance; it never possesses financial authority or direct execution capabilities.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                                 INCOMING RAZORPAY WEBHOOKS                              │
+│                                (X-Razorpay-Signature HMAC SHA-256)                      │
+└────────────────────────────────────────────┬────────────────────────────────────────────┘
+                                             │
+                                             ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│ 1. OBSERVE & RECONCILE PLANE (backend/, ingestion/)                                     │
+│    • Ingestion Service & Idempotency Store                                              │
+│    • Event-Sourced Payment Aggregate Reconstruction                                     │
+│    • State Reconciliation (CREATED ➔ FAILED ➔ CAPTURED ➔ CLOSED)                        │
+└────────────────────────────────────────────┬────────────────────────────────────────────┘
+                                             │
+                                             ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│ 2. INTELLIGENCE PLANE (agent/, intelligence/, rag/)                                     │
+│    • Observable Context Builder (strictly isolates simulator ground truth)             │
+│    • Bounded Recovery Memory & Merchant Playbook Retrieval                              │
+│    • Diagnosis Provider: Groq (openai/gpt-oss-120b) with Deterministic Rule Fallback    │
+│    • Strategy Synthesis: Generates candidate mechanisms                                │
+└────────────────────────────────────────────┬────────────────────────────────────────────┘
+                                             │
+                                             ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│ 3. ECONOMIC DECISION PLANE (policy/, planner/)                                          │
+│    • Timing Candidate Generator (IMMEDIATE, PLUS_2H, PLUS_6H, PLUS_12H, PLUS_24H)       │
+│    • Deterministic Net Value Estimator: Computes expected incremental yield             │
+│    • Deliberate Abstention: Selects NO_ACTION if all candidates produce negative yield  │
+└────────────────────────────────────────────┬────────────────────────────────────────────┘
+                                             │
+                                             ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│ 4. SAFETY & CONTROL PLANE (governor/)                                                   │
+│    • Recovery Governor: Enforces 8 merchant policy invariants                           │
+│    • Customer Consent Gate: Verifies opt-out status (DENY on opt-out)                   │
+│    • Cooldown & Frequency Caps: Enforces max retries and 24h contact limits             │
+│    • Tool Firewall: Strict whitelist gateway and payload schema validator               │
+└────────────────────────────────────────────┬────────────────────────────────────────────┘
+                                             │
+                      ┌──────────────────────┴──────────────────────┐
+                      ▼                                             ▼
+          [ IMMEDIATE EXECUTION ]                       [ SCHEDULED LIFECYCLE ]
+                      │                                             │
+                      │                                             ▼
+                      │                                  Revalidates state at due window
+                      │                                  (Invalidates if CAPTURED out-of-band)
+                      │                                             │
+                      └──────────────────────┬──────────────────────┘
+                                             │
+                                             ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│ 5. EXECUTION & AUDIT PLANE (execution/, audit/, dashboard/)                             │
+│    • Bounded Executor: Razorpay Adapter (Links, Status Checks) / Simulator              │
+│    • Replay Flight Recorder: Emits 7-layer Decision Anatomy with contrastive rationales │
+│    • Operations Console: Real-time telemetry, scenario lab, and benchmark analytics     │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### The 8-Stage Decision Anatomy Lifecycle
+
+Every transaction processed by RecoveryOS moves sequentially through eight verifiable checkpoints:
+
+$$\text{OBSERVE} \longrightarrow \text{DIAGNOSE} \longrightarrow \text{CANDIDATES} \longrightarrow \text{ECONOMIC SCORE} \longrightarrow \text{GOVERNOR} \longrightarrow \text{FIREWALL} \longrightarrow \text{EXECUTE} \longrightarrow \text{VERIFY}$$
+
+---
+
+## 5. System Components
+
+| Plane | Component | Primary Responsibility | Key Modules |
+| :--- | :--- | :--- | :--- |
+| **Ingestion** | Ingestion Service | Validates HMAC signatures, deduplicates payloads, reconstructs state | `backend/api/webhooks.py`, `ingestion/` |
+| **Context** | Recovery Memory | Attaches bounded merchant playbooks and sanitized historical telemetry | `rag/` |
+| **Intelligence** | Diagnosis Provider | Infers root-cause archetype with calibrated uncertainty; deterministic fallback | `intelligence/`, `agent/agents.py` |
+| **Decision** | Economic Policy | Generates Action $\times$ Timing matrix; optimizes expected net recovery | `policy/scoring.py`, `planner/timing.py` |
+| **Safety** | Recovery Governor | Enforces merchant limits, cooldowns, human approval caps, and consent | `governor/recovery_governor.py` |
+| **Safety** | Tool Firewall | Schema validation and payload boundary isolation; blocks malformed execution | `governor/firewall.py` |
+| **Lifecycle** | Scheduler Service | Manages state-versioned delayed actions; invalidates stale executions | `scheduler/service.py` |
+| **Execution** | Razorpay Adapter | Dispatches genuine payment links and reconciles gateway payment status | `execution/razorpay_adapter.py` |
+| **Verification** | Reconciler | Re-evaluates payment state aggregate prior to execution | `ingestion/reconciler.py` |
+| **Audit** | Replay Engine | Records 7-layer Decision Anatomy and contrastive *"Why We Acted"* audit logs | `audit/replay.py`, `audit/decision_log.py` |
+| **Evaluation** | Benchmark Harness | Compares policies across multi-seed cohorts against counterfactual Oracle | `evaluation/harness.py`, `evaluation/` |
+
+---
+
+## 6. The Economic Decision Model
+
+RecoveryOS treats revenue recovery as a constrained expected-value optimization problem under uncertainty. A high recovery probability alone is insufficient; an intervention must produce **positive incremental net yield** over what would happen if the merchant did nothing.
+
+### Core Formulation
+
+$$\mathbb{E}[\Delta Y_{\text{adj}}] = \text{Amount} \times \left( P(\text{recovery} \mid a) - P(\text{natural recovery}) \right) - C_{\text{action}}(a) - C_{\text{friction}}(a) - \text{Penalty}_{\text{churn}}(a)$$
+
+Where:
+- $\text{Amount}$: Transaction value in paise.
+- $P(\text{recovery} \mid a)$: Estimated recovery probability under action $a$ at timing window $t$.
+- $P(\text{natural recovery})$: Base probability that the customer resolves payment organically without outreach.
+- $C_{\text{action}}(a)$: Direct marginal cost of intervention (e.g., ₹0.20 per gateway retry, ₹1.00 per SMS payment link).
+- $C_{\text{friction}}(a)$: Customer annoyance and fatigue penalty accrued from outreach.
+- $\text{Penalty}_{\text{churn}}(a)$: Expected lifetime value loss if intervention triggers customer opt-out or churn (modeled at ₹2,500 per churn event).
+
+### Micro-Ticket Example: Why Abstention Wins
+
+Consider a **₹1.00** failed payment on an expired card:
+- **Option A (Blind Payment Link)**:
+  $$\mathbb{E}[\text{Net}] = ₹1.00 \times 0.05 - ₹1.00 \text{ (Link Fee)} - ₹0.50 \text{ (Fatigue)} = -₹1.45 \quad \mathbf{(Value\ Destruction)}$$
+- **Option B (RecoveryOS Abstention)**:
+  $$\mathbb{E}[\text{Net}] = ₹0.00 \quad \mathbf{(Optimal\ Economic\ Choice)}$$
+
+RecoveryOS selects `NO_ACTION`. Result: **₹0.00 spent, zero customer friction.**
+
+---
+
+## 7. Financial Safety by Design
+
+The Large Language Model is isolated from financial authority.
+
+```
+       [ UNTRUSTED INPUT / TELEMETRY ]
+                     │
+                     ▼
+         [ LLM DIAGNOSIS / STRATEGY ]  ───► Proposes Action Candidate
+                     │
+                     ▼
+       [ DETERMINISTIC ECONOMIC SCORER ] ──► Calculates Expected Net Value
+                     │
+                     ▼
+         [ RECOVERY GOVERNOR GATE ]    ───► Enforces Invariants (ALLOW / DENY / ABSTAIN)
+                     │
+                     ▼
+           [ TOOL FIREWALL GATE ]      ───► Validates Schema & Consent Tokens
+                     │
+                     ▼
+       [ BOUNDED DISPATCH / ADAPTER ]  ───► Executes Payment Link or Sim Action
+```
+
+### Non-Bypassable Safety Invariants
+
+1. **Customer Consent Opt-Out**: If a customer has globally opted out of dunning communications, the Governor issues a hard `DENY` with reason code `CUSTOMER_OPTED_OUT`.
+2. **Contact Limits ($24\text{h} / 7\text{d}$)**: Restricts customer outreach to a maximum of 2 contacts per 24 hours and 4 contacts per 7 days.
+3. **Attempt Ceilings**: Enforces a strict maximum of 3 recovery attempts per transaction aggregate.
+4. **Minimum Cooldown**: Enforces a minimum 4-hour cooldown between successive interventions.
+5. **High-Value Escalation Threshold**: Any transaction exceeding ₹20,000 requiring non-standard outreach halts for human-in-the-loop review (`HUMAN_REVIEW_REQUIRED`).
+6. **State-Versioned Idempotency**: Cryptographic hashes over webhook payloads prevent replay attacks and duplicate processing.
+7. **Strict Fail-Closed Architecture**: If an external LLM provider encounters a network timeout or parsing failure, the engine fails closed with ₹0.00 dispatched.
+
+---
+
+## 8. State-Aware Recovery & Stale-Action Protection
+
+Payment states are dynamic. A customer who failed payment at 10:00 AM may complete checkout independently at 10:30 AM via their mobile banking app.
+
+```
+10:00 AM  Payment fails (GATEWAY_TIMEOUT)
+          └── RecoveryOS schedules delayed retry for +6h (State Version: V1)
+10:30 AM  Customer pays organically out-of-band on merchant portal
+          └── Razorpay emits webhook: payment.captured (State Version: V2)
+          └── Ingestion Service reconciles payment aggregate to CAPTURED
+04:00 PM  Scheduled execution window arrives (+6h)
+          └── Scheduler revalidates aggregate before dispatch
+          └── Expected State V1 != Current State V2 (CAPTURED)
+          └── SCHEDULED ACTION INVALIDATED (₹0.00 spent, 0 duplicate debits)
+```
+
+RecoveryOS eliminates race conditions by coupling scheduled actions to aggregate state versions. Stale recovery actions are invalidated before dispatch.
+
+---
+
+## 9. Signature Demonstration Cases
+
+All eight signature demonstration cases can be executed via CLI (`python scripts/demo.py`) or inspected inside the Operations Console (`/dashboard`):
+
+| Case | Scenario & Amount | Inferred Diagnosis | Policy & Governor Verdict | Core Engineering Invariant Demonstrated |
+| :---: | :--- | :--- | :---: | :--- |
+| **01** | ₹1.00 Micro-ticket on expired card | `EXPIRED_PAYMENT_METHOD` | `NO_ACTION`<br>**`ABSTAIN`** | **Economic Abstention**: Avoids value destruction when intervention cost exceeds transaction value. |
+| **02** | ₹5,000.00 Transient gateway error | `TRANSIENT_GATEWAY_FAILURE` | `RETRY_LATER (+6h)`<br>**`ALLOW`** | **Action $\times$ Timing**: Optimizes recovery yield across discrete timing windows. |
+| **03** | ₹2,500.00 Organic out-of-band capture | `TRANSIENT_GATEWAY_FAILURE` | `RETRY_LATER`<br>**`INVALIDATED`** | **Stale-Action Protection**: Aggregate revalidation halts scheduled retries when payment is captured. |
+| **04** | ₹1,000.00 Outreach to opted-out user | `INSUFFICIENT_FUNDS` | `REMINDER`<br>**`DENY`** | **Consent Governance**: Hard merchant policy halts outreach to globally opted-out customers. |
+| **05** | 100-Scenario multi-archetype cohort | Mixed Distribution | `RECOVERYOS_DETERMINISTIC_V0` | **Cohort Benchmark**: Evaluates incremental net uplift and churn friction vs baselines. |
+| **06** | ₹2,999.00 SaaS subscription drop | `MANDATE_ISSUE` | `PAYMENT_LINK`<br>**`ALLOW`** | **Subscription Recovery**: Direct payment link replaces failing auto-debit on revoked mandate. |
+| **07** | ₹4,200.00 Cart drop at 3DS OTP | `CUSTOMER_ABANDONMENT` | `PAYMENT_LINK (+2h)`<br>**`ALLOW`** | **Checkout Drop-Off Recovery**: Delayed 1-click link avoids aggressive immediate dunning. |
+| **08** | ₹3,500.00 Fatigued user during bank outage | `TRANSIENT_GATEWAY_FAILURE` | `RETRY_LATER`<br>**(Suboptimal Decision)** | **Regret Post-Mortem**: Transparently audits decision regret against counterfactual Oracle truth. |
+
+---
+
+## 10. Benchmark & Empirical Evaluation
+
+> **Environment Label**: *Deterministic Synthetic Benchmark (100 Scenarios, Seed=42, Churn Penalty=₹2,500)*. Generated by `scripts/benchmark.py`.
+
+### Policy Performance Comparison
+
+| Policy | Gross Recovery | Action Costs | Churn Penalty | Adjusted Net Recovery | Incremental Net Uplift (★) | Actions | Avoided | Churned |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| `baseline_0_no_action` | ₹21,040 | ₹0.00 | ₹0 | ₹21,040 | ₹0 | 0 | 100 | 0 |
+| `baseline_1_always_retry` | ₹48,846 | ₹20.00 | ₹10,000 | ₹38,826 | +₹17,786 | 100 | 0 | 4 |
+| `baseline_2_static_rules` | ₹122,709 | ₹74.40 | ₹27,500 | ₹95,135 | +₹74,095 | 100 | 0 | 11 |
+| `baseline_3_probability_only`| ₹122,709 | ₹74.40 | ₹27,500 | ₹95,135 | +₹74,095 | 100 | 0 | 11 |
+| **`RECOVERYOS_DETERMINISTIC_V0`** | ₹121,935 | **₹34.80** | **₹20,000** | **₹101,900** | **+₹80,860** | 94 | 6 | **8** |
+
+### Benchmark Takeaways:
+1. **+₹80,860 Incremental Adjusted Net Recovery**: Delivers a **+₹6,765 uplift** over static heuristics by factoring natural recovery and friction into decisioning.
+2. **27% Churn Reduction**: Reduces churned customers from 11 down to 8 by eliminating spammy outreach on low-probability recoveries.
+3. **53% Action Cost Reduction**: Cuts operational intervention costs from ₹74.40 to ₹34.80 through deliberate abstention.
+4. **Theoretical Oracle Efficiency**: Achieves **48.6%** of theoretical Oracle upper-bound efficiency across 100 synthetic counterfactual scenarios with a **41.0% zero-regret rate**.
+
+---
+
+## 11. Razorpay Integration Scope
+
+RecoveryOS integrates with Razorpay APIs while maintaining strict technical honesty regarding gateway boundaries:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                                RAZORPAY INTEGRATION MATRIX                              │
+├────────────────────────────────┬──────────────┬────────────────────────────────────────┤
+│ Capability                     │ Status       │ Implementation Detail                  │
+├────────────────────────────────┼──────────────┼────────────────────────────────────────┤
+│ Webhook Ingestion & Deduplication│ REAL         │ HMAC SHA-256 constant-time digest      │
+│ Payment State Reconciliation   │ REAL         │ GET /v1/payments/{id}                  │
+│ Payment Link Creation          │ REAL         │ POST /v1/payment_links                 │
+│ Event Sourcing Store           │ REAL         │ In-memory & SQLite event streams       │
+│ Autonomous Card Network Retries│ SIMULATED    │ Models card retry timing & bank delay  │
+│ Future Learned Bandit Uplift   │ SYNTHETIC    │ Synthetic priors calibrated per error  │
+└────────────────────────────────┴──────────────┴────────────────────────────────────────┘
+```
+
+> **Fintech Honesty Boundary**: Under Reserve Bank of India (RBI) tokenization and two-factor authentication (2FA) guidelines, third-party software cannot autonomously execute unassisted debit transactions against customer credit/debit cards without an active e-mandate. RecoveryOS creates genuine Razorpay Payment Links and simulates delayed retry timing logic.
+
+---
+
+## 12. Observability, Replay & Audit
+
+Every recovery decision produces an immutable, machine-readable audit record containing:
+1. **Sanitized Observable Context**: Transaction parameters, payment method, error code, and contact counters.
+2. **Diagnostic Assessment**: Failure archetype label and certainty score.
+3. **Candidate Rankings**: Action $\times$ Timing evaluation matrix.
+4. **Governor Invariants Trace**: Rule-by-rule evaluation results.
+5. **Contrastive Rationales**:
+   - **Why We Acted**: Expected marginal net yield exceeded action costs and friction.
+   - **Why We Did Not Act**: Negative expected incremental recovery.
+   - **Why Alternatives Were Rejected**: Evaluated alternative window produced lower net yield.
+
+```json
+{
+  "case_id": "dec_sig_002",
+  "payment_id": "pay_demo_02",
+  "selected_action": "retry_later",
+  "timing_window": "PLUS_6H",
+  "expected_net_inr": 2749.80,
+  "governor_decision": "ALLOW",
+  "why_acted": "Delayed retry at +6h maximizes recovery probability (55%) after transient gateway failure.",
+  "why_alternatives_rejected": {
+    "retry_now": "Immediate retry probability (20%) too low during ongoing gateway degradation.",
+    "payment_link": "Action cost (₹1.00) and friction higher than delayed background retry."
+  }
+}
+```
+
+---
+
+## 13. Quickstart & Verification
+
+### Prerequisites
+- Python `>=3.11`
+- Modern web browser (Chrome / Firefox / Brave)
+
+### Installation & Setup
+
 ```bash
-# 1. Run complete test suite (339 tests, 100% passing)
-python -m pytest -q
+# 1. Clone repository
+git clone https://github.com/dheerajgowd-18/recoveryOS.git
+cd recoveryOS
 
-# 2. Run interactive 8-case signature CLI showcase (including Case 8 real failure post-mortem)
+# 2. Create and activate virtual environment
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+
+# 3. Install package with development dependencies
+pip install -e ".[dev]"
+```
+
+### Verification & Demonstration Commands
+
+```bash
+# Run full automated test suite (339 tests, 100% passing)
+python -m pytest -q
+# (or verbose mode: python -m pytest -v)
+
+# Run signature 8-case CLI demonstration (< 5 seconds)
 python scripts/demo.py
 
-# 3. Launch operations console dashboard
-uvicorn backend.app:app --host 127.0.0.1 --port 8000
-# Open http://127.0.0.1:8000/dashboard
-```
-
----
-
-## 1. Executive Summary & Operations Console
-
-Traditional subscription dunning systems rely on static retry schedules and aggressive payment link broadcasting. In fintech billing environments, these naive heuristics destroy customer goodwill, trigger gateway surcharge fees on impossible recoveries (e.g. expired cards), and take credit for transactions that would have naturally resolved on their own.
-
-**RecoveryOS** introduces a closed-loop, state-reconciling autonomous recovery agent built on four strict separation-of-concern planes:
-1. **Memory & Context Plane**: Bounded context assembler and Recovery Memory RAG (`rag/`) attaching immutable provenance metadata without exposing simulator ground truth.
-2. **Intelligence Plane**: Specialized Multi-Agent reasoning graph (`agent/agents.py`, `agent/graph.py`) powered by open-weights LLM (`Groq openai/gpt-oss-120b`) and deterministic offline diagnostic providers.
-3. **Bounded Context & Recovery Memory (RAG)**: Provenance-tracked retrieval (`rag/`) querying sanitized customer communication preferences, merchant playbooks, and operational fatigue metrics.
-4. **Decision & Economic Optimization**: Action × Timing planner (`planner/timing.py`, `policy/scoring.py`) evaluating discrete recovery mechanisms against deterministic net incremental value formulas.
-5. **Recovery Governor & Tool Firewall**: Non-bypassable authorization gate (`governor/`, `governor/firewall.py`) checking idempotency, consent, contact limits, amount thresholds, cooldowns, and fail-closed safety.
-6. **Execution & Event Sourcing**: Append-only event store (`ingestion/store.py`), state reconciler (`ingestion/reconciler.py`), and webhook adapter for Razorpay APIs (`execution/razorpay_adapter.py`).
-
----
-
-## 🏛️ System Architecture
-
-```
-                                      [ INCOMING RAZORPAY WEBHOOK / INGESTION ]
-                                                          │
-                                                          ▼
-                                            [ 1. CONTEXT RETRIEVAL (RAG) ]
-                                            - Observable Context Sanitization
-                                            - Bounded Memory & Playbook Matching
-                                                          │
-                                                          ▼
-                                            [ 2. LLM DIAGNOSIS AGENT ]
-                                            - Groq (openai/gpt-oss-120b) + Replay Cache
-                                            - Root Cause & Uncertainty Separation
-                                            - Deterministic Offline Fallback
-                                                          │
-                                                          ▼
-                                            [ 3. RECOVERY STRATEGY AGENT ]
-                                            - Candidate Strategy Synthesis
-                                            - First-Class Strategic Abstention
-                                                          │
-                                                          ▼
-                                     [ 4. TIMING & ECONOMIC OPTIMIZATION AGENT ]
-                                     - Action × Timing Discrete Matrix (+0, +2h, +6h, +12h, +24h)
-                                     - Deterministic Net Incremental Value Optimization
-                                                          │
-                                                          ▼
-                                            [ 5. RECOVERY GOVERNOR ]
-                                            - Idempotency & Replay Protection
-                                            - Customer Consent & Contact Limits
-                                            - Cooldowns, Amount Caps & Negative Uplift Guards
-                                                          │
-                                                          ▼
-                                            [ 6. TOOL FIREWALL GATE ]
-                                            - Parameter Schema & Allowed Action Whitelist
-                                                          │
-                                          ┌───────────────┴───────────────┐
-                                          ▼                               ▼
-                             [ 7A. IMMEDIATE EXECUTION ]     [ 7B. SCHEDULED LIFECYCLE ]
-                             - Razorpay API / Simulator      - State Version Binding
-                             - Idempotency Lock Release      - Due Revalidation on State Drift
-                                          │                               │
-                                          └───────────────┬───────────────┘
-                                                          ▼
-                                            [ 8. OUTCOME VERIFICATION ]
-                                            - Append-Only Event Store Reconciliation
-                                            - State Snapshot Verification (CAPTURED/FAILED)
-```
-
-| Component | Responsibility | Technical Implementation |
-|---|---|---|
-| **Ingestion Service** | Webhook intake & idempotency | `backend/services/ingestion_service.py`, `ingestion/store.py` |
-| **Context Agent (RAG)** | Bounded context & memory retrieval | `rag/retrieval.py`, `rag/customer_memory.py`, `rag/merchant_memory.py` |
-| **Diagnosis Agent** | Root-cause diagnosis & uncertainty triad | `agent/agents.py`, `intelligence/providers/groq_provider.py` (`openai/gpt-oss-120b`) |
-| **Strategy Agent** | Admissible candidate generation | `agent/agents.py` (`propose_strategy`, `generate_strategy_candidates`) |
-| **Economic Optimizer** | Action × Timing value ranking | `planner/timing.py`, `policy/scoring.py` (Deterministic Expected Net Value) |
-| **Recovery Governor** | Non-bypassable financial authority | `governor/recovery_governor.py`, `governor/policy.py` |
-| **Tool Firewall** | Execution boundary & parameter gate | `governor/firewall.py` |
-| **Scheduler** | Delayed action lifecycle & stale checks | `scheduler/service.py`, `scheduler/store.py` |
-| **Verifier** | Domain state reconciliation | `agent/agents.py`, `ingestion/reconciler.py` |
-
-### Benchmark Comparison (100 Deterministic Synthetic Scenarios, Seed=42)
-
-*Evaluated with a conservative customer churn friction penalty of ₹2,500 per churned customer.*
-
-| Policy Benchmark | Gross Recovery | Action Costs | Churn Penalty | Adjusted Net Recovery | Incremental Adjusted Net | Interventions | Actions Avoided | Churned Customers |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Baseline 0: No Action** (Natural Baseline) | ₹21,040 | ₹0.00 | ₹0 | ₹21,040 | ₹0 | 0 | 100 | 0 |
-| **Baseline 1: Always Retry** (Naive Gateway) | ₹48,846 | ₹20.00 | ₹10,000 | ₹38,826 | ₹17,786 | 100 | 0 | 4 |
-| **Baseline 2: Static Rules** (Heuristic Dunning) | ₹122,709 | ₹74.40 | ₹27,500 | ₹95,135 | ₹74,095 | 100 | 0 | 11 |
-| **Baseline 3: Probability Only** (Greedy Model) | ₹122,709 | ₹74.40 | ₹27,500 | ₹95,135 | ₹74,095 | 100 | 0 | 11 |
-| **RECOVERYOS_DETERMINISTIC_V0** | **₹121,935** | **₹35.80** | **₹20,000** | **₹101,899** | **₹80,859** | **95** | **5** | **8** |
-
-### Why RecoveryOS Outperforms Baselines
-1. **Beats All Baselines on North Star Metric**: Delivers **₹80,859** in Incremental Adjusted Net Recovery (+₹6,764 over Static Rules and Greedy Probability baselines, and +₹63,073 over Always Retry).
-2. **27% Reduction in Customer Churn**: Preserves customer lifetime value (LTV) by replacing aggressive link spam with optimal timed retries (8 churned customers vs 11 under Static Rules).
-3. **52% Reduction in Action Execution Costs**: Avoids expensive redundant communications (₹35.80 total action costs vs ₹74.40 under Static Rules).
-4. **Intelligent Abstention (5 Actions Avoided)**: Evaluates expected net value and safely abstains on micro-transactions where dunning costs exceed expected recovery.
-
----
-
-## 2. System Architecture
-
-```
-                       +-------------------------------+
-                       |   Razorpay Webhook Dispatch   |
-                       +---------------+---------------+
-                                       |
-                                       | POST /webhooks/razorpay
-                                       v
-                     +-----------------------------------+
-                     | backend/dependencies/security.py  |
-                     |  - Raw HMAC SHA-256 Verification  |
-                     |  - Constant-time compare_digest   |
-                     +-----------------+-----------------+
-                                       |
-                                       v
-                     +-----------------------------------+
-                     | backend/services/ingestion_service|
-                     |  - Idempotent Event Deduplication |
-                     |  - Append-Only Event Store        |
-                     |  - StateReconciler State Machine  |
-                     +-----------------+-----------------+
-                                       |
-                                       v
-                     +-----------------------------------+
-|                        CLOSED-LOOP AGENT RUNTIME (agent/)                         |
-|                                                                                   |
-|  [RiskDetector] -> Payment Risk Detected                                          |
-|        |                                                                          |
-|        v                                                                          |
-|  [ObservableRecoveryContext] (Strict Hidden/Public Boundary: No Hidden Truth)     |
-|        |                                                                          |
-|        v                                                                          |
-|  [Structured Intelligence Layer] (intelligence/)                                  |
-|    - GroqLLMDiagnosisProvider (llama-3.3-70b-versatile via Groq SDK with JSON mode)|
-|    - DeterministicDiagnosisProvider (Fail-Closed Offline Rule Fallback)           |
-|    - StructuredDiagnosis: taxonomy label, confidence, evidence, timing hint       |
-|        |                                                                          |
-|        v                                                                          |
-|  [DeterministicRecoveryPolicy & Action x Timing Planner] (planner/timing.py)      |
-|    - Low Confidence Gate: Abstains if diagnosis confidence < threshold            |
-|    - TimingCandidateGenerator: Admissible (Mechanism x Timing Window) pairs      |
-|    - DeterministicTimingValueEstimator: Expected Net Value across discrete windows|
-|        |                                                                          |
-|        v [Proposed Action x Timing Candidate]                                     |
-|  [Recovery Governor v1] (governor/recovery_governor.py)                           |
-|    - Validates: Recovery Window Bound, Cooldowns, Contact Limits, Consent, Caps   |
-|    - Outcomes: ALLOW, DENY, DEFER, ESCALATE, ABSTAIN                              |
-|        |                                                                          |
-|        +---- [DENY / DEFER / ESCALATE / ABSTAIN] ----> [Halt / Human Review Trace] |
-|        |                                                                          |
-|        v [ALLOW]                                                                  |
-|        +-----------------------------------+----------------------------------+   |
-|        | (Immediate Timing Window)         | (Delayed Timing Window)          |   |
-|        v                                   v                                  |   |
-|  [ToolFirewall Pre-Check]            [ScheduledLifecycleService (scheduler/)] |   |
-|        |                               - Persists ScheduledAction (State vN)  |   |
-|        |                               - Exits Loop: ACTION_SCHEDULED         |   |
-|        |                                   |                                  |   |
-|        |                                   v (When Due / On Trigger)          |   |
-|        |                             [Pre-Execution State Revalidation]       |   |
-|        |                               - Validates current aggregate version  |   |
-|        |                               - If Terminal/Captured: INVALIDATE     |   |
-|        |                               - If Window Exceeded: EXPIRE           |   |
-|        |                               - Else: Passes through ToolFirewall    |   |
-|        |                                   |                                  |   |
-|        +-----------------------------------+                                  |   |
-|        v                                                                          |   |
-|  [ToolFirewall] (governor/firewall.py - Independent Safety & Idempotency Gate)    |   |
-|    - Schema Validation                                                            |   |
-|    - Channel Consent Double-Check                                                 |   |
-|    - Action Idempotency Lock                                                      |   |
-|        |                                                                          |   |
-|        v (Gated Action)                                                           |   |
-|  [RecoveryExecutor / SimulatorExecutor]                                           |   |
-|        |                                                                          |   |
-|        v (Emits payment.captured / payment.failed event)                          |   |
-|  [IngestionService.process_webhook()] -> Mutates Reconciled Aggregate State       |   |
-+-----------------------------------------------------------------------------------+
-                                       |
-                                       v
-                     +-----------------------------------+
-                     |         audit/replay.py           |
-                     |  - DecisionRecord Provenance      |
-                     |  - ReplayEngine Reconstruction    |
-                     +-----------------------------------+
-```
-
----
-
-## 3. Quickstart & Verification
-
-### Standard Make Workflow
-```bash
-make install    # Installs dependencies via pip install -r requirements.txt
-make test       # Runs the complete automated test suite (python -m pytest -v)
-make demo       # Runs the 7 signature demo cases CLI showcase (python scripts/demo.py)
-```
-
-### Direct Python Fallback (If `make` is unavailable)
-```bash
-# 1. Install dependencies
-pip install -r requirements.txt
-
-# 2. Run automated test suite (339 passing tests)
-python -m pytest -v
-
-# 3. Launch the Operations Console Dashboard
+# Launch Operations Console Dashboard
 uvicorn backend.app:app --host 127.0.0.1 --port 8000
 # Open http://127.0.0.1:8000/dashboard in your browser
 
-# 4. Run signature CLI demonstration (Fast 7-case showcase + 100-scenario benchmark)
-python scripts/demo.py
-
-# 5. Run Expanded Evaluation Lab (Multi-seed 5,000 scenario benchmark with holdout & oracle regret)
-python scripts/benchmark.py --scenarios 1000 --seeds 42,43,44 --holdout-seeds 45,46
+# Run 100-scenario multi-seed benchmark & sensitivity evaluation
+python scripts/benchmark.py --scenarios 100 --seed 42 --no-holdout
 ```
-
-### Operations Console Interface (`GET /dashboard`)
-The RecoveryOS Operations Console provides a production-inspired, high-density merchant operations cockpit built with FastAPI, Jinja2, Tailwind CSS, and Alpine.js (zero Node.js build dependencies):
-1. **Merchant Control Room**: Executive KPI strip displaying Revenue at Risk, Gross Recovered, Incremental Net Recovery, Interventions Avoided, and real-time event telemetry.
-2. **Scenario Lab**: Interactive simulation lab for 7 signature Track 03 scenarios with live decision anatomy and timeline visualization.
-3. **Recovery Queue**: Operational queue of active failure cohorts ranked by priority and expected incremental value.
-4. **Case Decision Replay**: Deep chronological audit trace reconstructing exact step-by-step reasoning ("Why We Acted" vs "Why We Did Not Act" and 7-layer Decision Anatomy).
-5. **Evaluation Lab**: Interactive multi-seed statistical proof, baseline comparisons, Oracle hindsight ceiling, regret bounds, and sensitivity grid.
-6. **Exceptions & Audit**: Surveillance of stale action invalidations, consent opt-outs, and human review escalations.
-7. **Merchant Policy Controls**: Interactive policy configuration controls for live Governor risk tuning.
 
 ---
 
-## 4. Documentation Directory
+## 14. Repository Structure
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — Deep-dive architecture, Action × Timing model, and Scheduled Lifecycle mechanics.
-- [EVALUATION.md](EVALUATION.md) — Evaluation methodology, benchmark baselines, and counterfactual metrics.
-- [ASSUMPTIONS.md](ASSUMPTIONS.md) — Complete modeling assumptions, action costs, and simulation constraints.
-- [LIMITATIONS.md](LIMITATIONS.md) — Transparent assessment of technical boundaries and production requirements.
-- [THREAT_MODEL.md](THREAT_MODEL.md) — Complete security architecture, threat matrix, and fail-closed mitigations.
-- [DEMO.md](DEMO.md) — Interactive CLI demonstration guide and judges' walkthrough.
-- [PITCH.md](PITCH.md) — 5-minute panel pitch script and defense Q&A.
-- [CHANGELOG.md](CHANGELOG.md) — Chronological release history (v0.1.0 to v1.6.0).
+```
+recoveryOS/
+├── agent/            # State machine graph, runtime orchestrator, and reasoning agents
+├── audit/            # Decision audit logging, flight-recorder, and case replay engine
+├── backend/          # FastAPI application, webhook endpoints, and security middleware
+├── dashboard/        # Operations Console UI (Jinja2, Tailwind CSS, Alpine.js)
+├── domain/           # Core domain entities, payment states, events, and metrics
+├── evaluation/       # Multi-seed benchmark runner, sensitivity grid, and baseline policies
+├── execution/        # Bounded executors: Razorpay adapter and simulator executor
+├── governor/         # Recovery Governor, Tool Firewall, and merchant policy invariants
+├── ingestion/        # Webhook ingestion, event store, and payment state reconciler
+├── intelligence/     # Diagnostic providers: Groq LLM integration and deterministic rules
+├── planner/          # Action × Timing candidate generation and value estimation
+├── policy/           # Deterministic recovery policies, scoring, and candidate ranking
+├── rag/              # Bounded recovery memory and merchant playbook retrieval
+├── scheduler/        # State-versioned lifecycle store and stale-action scheduler
+├── simulator/        # Synthetic payment failure generator and potential outcomes
+├── scripts/          # CLI utilities: demo runner and multi-seed benchmark harness
+└── tests/            # Automated test suite (339 tests: unit, integration, adversarial)
+```
+
+---
+
+## 15. Scope Boundaries & Current Limitations
+
+1. **Synthetic Benchmark Environment**: The current evaluation harness measures performance against synthetic counterfactual potential outcomes ($Y(a)$) and parameterized priors. It does not claim live production randomized controlled trial (RCT) results.
+2. **Discrete Timing Grid**: Timing optimization evaluates five discrete windows (`IMMEDIATE`, `PLUS_2H`, `PLUS_6H`, `PLUS_12H`, `PLUS_24H`) rather than continuous real-time customer payday estimation.
+3. **Single-Node Operations Console**: The Operations Console is optimized for local demonstration and evaluation. Enterprise SAML/SSO authentication and multi-tenant RBAC are out of scope for this prototype.
+4. **Gateway Execution**: Card network auto-debits are modeled through simulation; live Razorpay integration dispatches genuine payment links via `POST /v1/payment_links` and reconciles status via `GET /v1/payments/{id}`.
+
+---
+
+## 16. Engineering Roadmap
+
+- [x] Authoritative 10-node stateful runtime DAG (`agent/graph.py`)
+- [x] Action $\times$ Timing discrete economic optimization (`planner/timing.py`)
+- [x] Non-bypassable Recovery Governor and Tool Firewall (`governor/`)
+- [x] State-versioned scheduling and stale-action invalidation (`scheduler/`)
+- [x] Razorpay HMAC SHA-256 webhook verification & payment-link creation (`execution/`)
+- [x] 8-case signature demonstration suite (`scripts/demo.py`)
+- [x] Full automated test suite (339 tests passing, 0 failures)
+- [ ] Multi-armed contextual bandit models for learned real-world uplift
+- [ ] Integration with Razorpay Subscriptions Autopay e-mandate execution APIs
+- [ ] Distributed event sourcing backends (CockroachDB / PostgreSQL)
+
+---
+
+## 17. Razorpay AI Buildathon 2026 Submission
+
+- **Repository**: [https://github.com/dheerajgowd-18/recoveryOS](https://github.com/dheerajgowd-18/recoveryOS)
+- **Track**: Track 03 — AI Revenue Recovery
+- **Verified Commit**: `1ce98a71e72f00182533d6e16dcb89125b19ee72`
+- **Verification Result**: 339 / 339 tests passing (`pytest -q`), clean checkout reproducible.
