@@ -6,6 +6,9 @@ This document provides a comprehensive technical overview of the architecture, c
 
 ## 1. Architectural Philosophy & Design Principles
 
+> **Canonical Production Execution Path (1-Sentence Reviewer Answer)**:  
+> The canonical production execution path is **`RecoveryStateGraph` (`agent/graph.py`)**, a stateful 10-node agent pipeline connecting Ingestion & State Reconciliation, Risk Detection, Bounded RAG, Root Cause Diagnosis, Strategy Reasoning, Timing & Economic Valuation, the Authoritative Recovery Governor, State-Versioned Scheduling, Tool Firewall Gating, and Outcome Verification (`AgentRuntime` in `agent/runtime.py` serves as a thin lifecycle wrapper driving multi-attempt iteration).
+
 1. **State-First Financial Integrity**: No decision is made based on transient memory or unverified payloads. All actions derive from verified, append-only aggregate state timelines.
 2. **Strict Public Policy Boundary**: Autonomous policies operate strictly on observable, sanitized public domain features (`PublicScenarioView`). Hidden ground-truth counterfactuals and latent customer archetypes are completely segregated.
 3. **Incremental Value Optimization**: RecoveryOS measures success by incremental uplift ($\Delta Y = Y(a) - Y(\text{no\_action})$) minus direct action costs, preventing value destruction on low-value transactions or natural recoverers.

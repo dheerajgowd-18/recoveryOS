@@ -89,6 +89,7 @@ class RecoveryWorkflowState(BaseModel):
     # Workflow lifecycle tracking
     is_terminal: bool = Field(default=False, description="Whether state has reached a terminal branch")
     stop_reason: Optional[str] = Field(default=None, description="Final stopping reason code")
+    error_message: Optional[str] = Field(default=None, description="Any caught operational or governance error message")
     step_traces: List[WorkflowStepTrace] = Field(default_factory=list, description="Chronological node execution trace")
 
 
@@ -108,6 +109,7 @@ class RecoveryStateGraph:
         scheduler: Optional[ScheduledLifecycleService] = None,
         firewall: Optional[ToolFirewall] = None,
         executor: Optional[RecoveryExecutor] = None,
+        policy: Optional[Any] = None,
     ) -> None:
         self.ingestion = ingestion_service or IngestionService()
         self.context_agent = context_agent or ContextRetrievalAgent()
@@ -120,6 +122,7 @@ class RecoveryStateGraph:
         self.scheduler = scheduler or ScheduledLifecycleService()
         self.firewall = firewall or ToolFirewall()
         self.executor = executor or SimulatorExecutor()
+        self.policy = policy
 
     async def execute_workflow(
         self,
@@ -221,6 +224,22 @@ class RecoveryStateGraph:
         if not state.policy_healthy:
             state.is_terminal = True
             state.stop_reason = "POLICY_OUTAGE"
+            state.error_message = "Policy decision engine is flagged unhealthy. Failing closed."
+            state.governor_decision = self.governor.evaluate(
+                context=state.observable_context,
+                diagnosis=None,
+                proposal=None,
+                aggregate=state.aggregate,
+                consent=state.consent,
+                policy_healthy=False,
+            )
+            state.proposal = PolicyDecision(
+                action_type=SimulatedActionType.NO_ACTION,
+                confidence=1.0,
+                rationale="Policy decision engine is flagged unhealthy. Failing closed.",
+                policy_name="GOVERNOR_FAIL_CLOSED",
+                reason_codes=["POLICY_OUTAGE_FAIL_CLOSED"],
+            )
             state.step_traces.append(
                 WorkflowStepTrace(
                     step_name="NODE_4_DIAGNOSIS",
@@ -282,7 +301,39 @@ class RecoveryStateGraph:
         state.selected_candidate = best_timing
 
         # Build Policy Proposal
-        if best_timing and best_timing.action_type != SimulatedActionType.NO_ACTION and best_timing.expected_uplift >= 0.0 and best_timing.expected_net_value_paise >= 0:
+        if self.policy is not None:
+            try:
+                state.proposal = self.policy.decide(state.observable_context, diagnosis=state.diagnosis)
+            except PolicyOutageError as e:
+                state.is_terminal = True
+                state.stop_reason = "POLICY_OUTAGE"
+                state.error_message = str(e)
+                state.governor_decision = self.governor.evaluate(
+                    context=state.observable_context,
+                    diagnosis=None,
+                    proposal=None,
+                    aggregate=state.aggregate,
+                    consent=state.consent,
+                    policy_healthy=False,
+                )
+                state.proposal = PolicyDecision(
+                    action_type=SimulatedActionType.NO_ACTION,
+                    confidence=1.0,
+                    rationale="Policy engine unavailable. Failing closed.",
+                    policy_name="GOVERNOR_FAIL_CLOSED",
+                    reason_codes=["POLICY_OUTAGE_FAIL_CLOSED"],
+                )
+                state.step_traces.append(
+                    WorkflowStepTrace(
+                        step_name="NODE_6_TIMING_AND_ECONOMICS",
+                        status="HALTED",
+                        elapsed_ms=round((time.perf_counter() - t0) * 1000.0, 2),
+                        summary="Policy engine raised PolicyOutageError; failing closed",
+                        payload={"error": str(e)},
+                    )
+                )
+                return state
+        elif best_timing and best_timing.action_type != SimulatedActionType.NO_ACTION and best_timing.expected_uplift >= 0.0 and best_timing.expected_net_value_paise >= 0:
             state.proposal = PolicyDecision(
                 action_type=best_timing.action_type,
                 confidence=best_timing.estimated_probability,
@@ -347,6 +398,11 @@ class RecoveryStateGraph:
         if state.governor_decision.decision_result != GovernorDecisionResult.ALLOW:
             state.is_terminal = True
             state.stop_reason = state.governor_decision.stop_reason or "GOVERNOR_BLOCKED"
+            state.error_message = (
+                state.governor_decision.human_review_reason
+                if state.governor_decision.decision_result == GovernorDecisionResult.ESCALATE
+                else (state.governor_decision.rationale if state.governor_decision.decision_result == GovernorDecisionResult.DENY else None)
+            )
             return state
 
         # -------------------------------------------------------------
@@ -402,6 +458,7 @@ class RecoveryStateGraph:
         except (ActionBlockedError, ConsentViolationError, SchemaValidationError, DuplicateExecutionError, PolicyOutageError) as e:
             state.is_terminal = True
             state.stop_reason = "ACTION_BLOCKED" if not isinstance(e, PolicyOutageError) else "POLICY_OUTAGE"
+            state.error_message = str(e)
             state.step_traces.append(
                 WorkflowStepTrace(
                     step_name="NODE_9_TOOL_FIREWALL",
@@ -425,6 +482,7 @@ class RecoveryStateGraph:
         except (TimeoutError, ConnectionError, PolicyOutageError, RuntimeError, httpx.RequestError, httpx.HTTPError) as e:
             state.is_terminal = True
             state.stop_reason = "POLICY_OUTAGE" if isinstance(e, PolicyOutageError) else "EXECUTION_FAILURE"
+            state.error_message = f"{type(e).__name__}: {str(e)}"
             state.step_traces.append(
                 WorkflowStepTrace(
                     step_name="NODE_9_EXECUTION",

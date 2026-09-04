@@ -81,6 +81,11 @@ def parse_args() -> argparse.Namespace:
         help="Enforce strict execution where LLM provider failure raises an error rather than falling back to offline rules",
     )
     parser.add_argument(
+        "--distribution-shift",
+        action="store_true",
+        help="Execute the 6-macroeconomic distribution shift robustness stress test",
+    )
+    parser.add_argument(
         "--output-dir",
         type=str,
         default="reports",
@@ -221,6 +226,21 @@ def main() -> None:
         print(f"  LLM Diagnosis Incremental Uplift (B - A)                : {diag_up_str}")
         print(f"  Incremental Value of Full Agentic Strategy Layer (C - B): {strat_up_str}")
         print(f"  Total Combined AI Layer Value (C - A)                   : {total_up_str}")
+
+    if args.distribution_shift:
+        from evaluation.distribution_shift import DistributionShiftRunner
+        print("\n" + "=" * 80)
+        print("  EXECUTING DISTRIBUTION SHIFT ROBUSTNESS EVALUATION (6 Macro Scenarios)")
+        print("=" * 80)
+        shift_runner = DistributionShiftRunner(churn_penalty_paise=args.churn_penalty)
+        shift_result = shift_runner.run_all_shifts(seed=dev_seeds[0] if dev_seeds else 42, num_scenarios=min(args.scenarios, 200))
+        print("\n" + shift_result.markdown_table + "\n")
+        print(f"  Robustness Win Rate: {shift_result.recoveryos_wins_count}/{shift_result.total_shifts_evaluated} Shifts Won ({shift_result.recoveryos_win_rate_pct}%)")
+        os.makedirs(args.output_dir, exist_ok=True)
+        out_shift_path = os.path.join(args.output_dir, "distribution_shift_report.json")
+        with open(out_shift_path, "w", encoding="utf-8") as f:
+            f.write(shift_result.model_dump_json(indent=2))
+        print(f"  [SAVED] distribution_shift_report -> {out_shift_path}")
 
     print("=" * 80)
 

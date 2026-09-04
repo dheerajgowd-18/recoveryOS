@@ -51,6 +51,10 @@ class DecisionRecord(BaseModel):
     delay_seconds: int = Field(default=0, ge=0, description="Scheduled delay in seconds")
     scheduled_action_id: Optional[str] = Field(default=None, description="Associated scheduled action identifier if delayed")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Decision confidence score")
+    diagnostic_confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Confidence in inferred root cause diagnosis")
+    economic_confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Confidence in expected net recovery uplift and prior estimates")
+    execution_state_validity: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Validity score of execution state, idempotency tokens, and gateway readiness")
+    record_origin: str = Field(default="ACTUAL_RUNTIME_EXECUTION", description="Origin: DEMO_FIXTURE or ACTUAL_RUNTIME_EXECUTION")
     rationale: str = Field(..., description="Audit rationale for decision")
     reason_codes: List[str] = Field(default_factory=list, description="Machine-readable audit reason codes")
     execution_result_success: Optional[bool] = Field(default=None, description="Whether execution succeeded")
@@ -59,6 +63,7 @@ class DecisionRecord(BaseModel):
     recovered_amount_paise: Optional[int] = Field(default=None, description="Actual revenue recovered")
     stop_reason: Optional[str] = Field(default=None, description="Runtime stopping reason")
     observable_context: Optional[Dict[str, Any]] = Field(default=None, description="Snapshot of observable context")
+
 
 
 class DecisionLogStore:

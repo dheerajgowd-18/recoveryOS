@@ -2,10 +2,11 @@
 from typing import Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
+from domain.metrics import CanonicalFinancialKPIs, DEFAULT_CHURN_PENALTY_PAISE, compute_canonical_financial_kpis
 from simulator.config import SimulatedActionType
 from simulator.outcomes import ActionOutcome
 
-DEFAULT_CHURN_PENALTY_PAISE_PER_CUSTOMER = 250_000  # ₹2,500 per churned customer
+DEFAULT_CHURN_PENALTY_PAISE_PER_CUSTOMER = DEFAULT_CHURN_PENALTY_PAISE  # ₹2,500 per churned customer
 
 
 class ScenarioEvaluationRecord(BaseModel):
@@ -106,6 +107,10 @@ class EvaluationMetrics(BaseModel):
     scheduled_actions_expired_count: int = Field(default=0, ge=0, description="Count of scheduled actions expired past recovery window")
     timing_governor_block_count: int = Field(default=0, ge=0, description="Count of actions blocked due to timing constraints")
     timing_governor_defer_count: int = Field(default=0, ge=0, description="Count of actions deferred due to timing cooldown")
+
+    @property
+    def abstention_rate(self) -> float:
+        return self.abstention_count / max(1, self.total_scenarios)
 
 
 class MetricCalculator:
@@ -258,25 +263,21 @@ class MetricCalculator:
 
         interventions = sum(1 for r in records if r.is_intervention)
         abstentions = sum(1 for r in records if r.is_abstention)
-        gross_recovered = sum(r.recovered_amount_paise for r in records)
-        natural_recovered = sum(r.natural_recovered_amount_paise for r in records)
-        total_cost = sum(r.action_cost_paise for r in records)
-        churned = sum(1 for r in records if r.customer_churned)
         total_recovered_count = sum(1 for r in records if r.recovered)
         total_delay = sum(r.recovery_delay_seconds for r in records if r.recovered)
         total_fatigue = sum(r.fatigue_score for r in records)
 
-        net_recovered = gross_recovered - total_cost
-        incremental_recovered = gross_recovered - natural_recovered
-        natural_net = natural_recovered  # Natural recovery incurs 0 action cost
-        incremental_net = net_recovered - natural_net
-
-        churn_penalty = churned * churn_penalty_paise_per_customer
-        adjusted_net_recovery = net_recovered - churn_penalty
-
-        natural_churn_count = sum(1 for r in records if r.natural_customer_churned)
-        natural_adjusted_net = natural_recovered - (natural_churn_count * churn_penalty_paise_per_customer)
-        incremental_adjusted_net = adjusted_net_recovery - natural_adjusted_net
+        kpis = compute_canonical_financial_kpis(records, churn_penalty_per_customer_paise=churn_penalty_paise_per_customer)
+        gross_recovered = kpis.gross_recovery_paise
+        natural_recovered = kpis.natural_recovery_paise
+        total_cost = kpis.total_action_cost_paise
+        churned = kpis.churned_customers_count
+        net_recovered = kpis.net_recovery_paise
+        incremental_recovered = kpis.incremental_recovery_paise
+        incremental_net = kpis.incremental_net_recovery_paise
+        churn_penalty = kpis.churn_penalty_paise
+        adjusted_net_recovery = kpis.adjusted_net_recovery_paise
+        incremental_adjusted_net = kpis.incremental_adjusted_net_recovery_paise
 
         # Diagnosis accuracy
         diag_evaluated = [r for r in records if r.diagnosis_correct is not None]

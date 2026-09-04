@@ -1122,6 +1122,7 @@
                                 <tr>
                                     <th class="py-2.5 px-3">Payment ID</th>
                                     <th class="py-2.5 px-3 font-mono">Amount</th>
+                                    <th class="py-2.5 px-3">Origin</th>
                                     <th class="py-2.5 px-3">State</th>
                                     <th class="py-2.5 px-3">Diagnosis</th>
                                     <th class="py-2.5 px-3 font-mono">Conf</th>
@@ -1135,6 +1136,11 @@
                                     <tr class="hover:bg-warm-subtle">
                                         <td class="py-2.5 px-3 font-mono font-semibold text-warm-text" x-text="item.payment_id"></td>
                                         <td class="py-2.5 px-3 font-mono text-warm-text" x-text="'₹' + formatINR(item.amount_inr)"></td>
+                                        <td class="py-2.5 px-3">
+                                            <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold"
+                                                  :class="item.record_origin === 'DEMO_FIXTURE' ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'"
+                                                  x-text="item.record_origin === 'DEMO_FIXTURE' ? 'DEMO FIXTURE' : 'RUNTIME'"></span>
+                                        </td>
                                         <td class="py-2.5 px-3">
                                             <span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-semibold"
                                                   :class="getStateBadge(item.aggregate_state)"
@@ -1184,7 +1190,12 @@
                         <div class="space-y-4">
                             <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                                 <div class="bg-warm-subtle p-2.5 rounded border border-warm-border text-xs">
-                                    <div class="text-warm-secondary">Payment ID</div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-warm-secondary">Payment ID</span>
+                                        <span class="text-[9px] px-1 py-0.2 rounded font-mono font-bold"
+                                              :class="replayData.record_origin === 'DEMO_FIXTURE' ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-emerald-100 text-emerald-900 border border-emerald-300'"
+                                              x-text="replayData.record_origin === 'DEMO_FIXTURE' ? 'DEMO FIXTURE' : 'RUNTIME'"></span>
+                                    </div>
                                     <div class="font-mono font-bold text-warm-text mt-0.5" x-text="replayData.case_id"></div>
                                 </div>
                                 <div class="bg-warm-subtle p-2.5 rounded border border-warm-border text-xs">
@@ -1203,6 +1214,25 @@
                                 </div>
                             </div>
 
+                            <!-- Explicit Uncertainty Triad -->
+                            <div class="grid grid-cols-3 gap-3 text-xs">
+                                <div class="bg-warm-subtle p-2 rounded border border-warm-border">
+                                    <div class="text-warm-secondary text-[10px] uppercase tracking-wider font-semibold">1. Diagnostic Confidence</div>
+                                    <div class="font-mono font-bold text-brand-700 mt-0.5" x-text="((replayData.diagnostic_confidence || replayData.diagnosis_confidence || 1.0) * 100).toFixed(0) + '%'"></div>
+                                    <div class="text-[10px] text-warm-secondary">Root-cause inference certainty</div>
+                                </div>
+                                <div class="bg-warm-subtle p-2 rounded border border-warm-border">
+                                    <div class="text-warm-secondary text-[10px] uppercase tracking-wider font-semibold">2. Economic Confidence</div>
+                                    <div class="font-mono font-bold text-emerald-800 mt-0.5" x-text="((replayData.economic_confidence || 1.0) * 100).toFixed(0) + '%'"></div>
+                                    <div class="text-[10px] text-warm-secondary">Expected net recovery uplift prior</div>
+                                </div>
+                                <div class="bg-warm-subtle p-2 rounded border border-warm-border">
+                                    <div class="text-warm-secondary text-[10px] uppercase tracking-wider font-semibold">3. Execution Validity</div>
+                                    <div class="font-mono font-bold text-warm-text mt-0.5" x-text="((replayData.execution_state_validity || 1.0) * 100).toFixed(0) + '%'"></div>
+                                    <div class="text-[10px] text-warm-secondary">Idempotency & state health</div>
+                                </div>
+                            </div>
+
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                                 <div class="bg-warm-subtle border border-warm-border p-3 rounded space-y-1">
                                     <div class="font-bold text-warm-text">Why Autonomous Runtime Acted</div>
@@ -1213,6 +1243,21 @@
                                     <p class="text-warm-secondary font-mono text-[11px]" x-text="replayData.why_did_not_act"></p>
                                 </div>
                             </div>
+
+                            <!-- Contrastive Alternatives Rejected -->
+                            <template x-if="replayData.why_alternatives_rejected && Object.keys(replayData.why_alternatives_rejected).length > 0">
+                                <div class="bg-warm-subtle border border-warm-border p-3 rounded space-y-2 text-xs">
+                                    <div class="font-bold text-warm-text uppercase tracking-wider text-[11px]">Contrastive Analysis: Why Alternatives Were Rejected</div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <template x-for="[altAction, altReason] in Object.entries(replayData.why_alternatives_rejected)" :key="altAction">
+                                            <div class="p-2 bg-warm-surface border border-warm-border rounded space-y-0.5">
+                                                <div class="font-mono font-semibold text-brand-700 uppercase text-[10px]" x-text="altAction"></div>
+                                                <div class="text-warm-secondary font-mono text-[11px]" x-text="altReason"></div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
 
                             <div class="space-y-2">
                                 <h3 class="text-xs font-bold text-warm-text uppercase tracking-wider">Chronological Execution Steps</h3>

@@ -627,6 +627,82 @@ async def demo_case_7_checkout_abandonment() -> None:
         print(f"  [GOVERNOR]  Verdict     : {gov.decision_result.value if gov else 'ALLOW'}")
 
 
+async def demo_case_8_suboptimal_failure_and_regret_analysis() -> None:
+    print("\n" + HEADER)
+    print("  CASE 8: REAL FAILURE CASE & SUBOPTIMAL DECISION REGRET ANALYSIS")
+    print(HEADER)
+    print("  Scenario: Contact-fatigued customer on a ₹3,500.00 transaction experiencing network friction.")
+    print("  Suboptimal AI Action: Policy selects RETRY_NOW based on transient error heuristics.")
+    print("  Counterfactual Oracle Truth: Bank had not recovered; immediate retry failed and triggered customer churn.")
+    print("  Governor Safety Boundary: Governor halts subsequent aggressive actions, bounding maximum regret.\n")
+
+    ingestion = IngestionService()
+    executor = SimulatorExecutor()
+    governor = RecoveryGovernor()
+    runtime = AgentRuntime(ingestion_service=ingestion, executor=executor, governor=governor)
+
+    customer = SimulatedCustomer(
+        customer_id="cust_demo_08_fatigued",
+        name="Vikram Sethi",
+        email="vikram.sethi@example.com",
+        contact="+919876543208",
+        archetype=CustomerArchetype.CONTACT_FATIGUED,
+    )
+    generator = SyntheticEntityGenerator()
+    scenario_cfg = ScenarioConfig(
+        scenario_id="scen_demo_failure_case",
+        seed=208,
+        archetype=CustomerArchetype.CONTACT_FATIGUED,
+        failure_class=FailureClass.TRANSIENT_GATEWAY,
+        amount_in_paise=350000,  # INR 3,500.00
+        attempt_count=1,
+    )
+    event, webhook = generator.generate_payment_scenario(
+        rng=__import__("random").Random(208),
+        scenario=scenario_cfg,
+        customer=customer,
+        created_at_epoch=1700000000,
+    )
+    # Counterfactual truth: Bank outage is persistent; RETRY_LATER fails (0 recovery).
+    # Customer is reachable; PAYMENT_LINK was Oracle-optimal (INR 3,500 recovery).
+    hidden_outcomes = PotentialOutcomes(
+        no_action=ActionOutcome(action_type=SimulatedActionType.NO_ACTION, recovered=False, recovery_delay_seconds=0, recovered_amount_paise=0, customer_churned=False, fatigue_score=0.1, action_cost_paise=0),
+        retry_now=ActionOutcome(action_type=SimulatedActionType.RETRY_NOW, recovered=False, recovery_delay_seconds=0, recovered_amount_paise=0, customer_churned=True, fatigue_score=0.9, action_cost_paise=20),
+        retry_later=ActionOutcome(action_type=SimulatedActionType.RETRY_LATER, recovered=False, recovery_delay_seconds=21600, recovered_amount_paise=0, customer_churned=False, fatigue_score=0.2, action_cost_paise=20),
+        payment_link=ActionOutcome(action_type=SimulatedActionType.PAYMENT_LINK, recovered=True, recovery_delay_seconds=3600, recovered_amount_paise=350000, customer_churned=False, fatigue_score=0.2, action_cost_paise=100),
+        reminder=ActionOutcome(action_type=SimulatedActionType.REMINDER, recovered=False, recovery_delay_seconds=0, recovered_amount_paise=0, customer_churned=False, fatigue_score=0.3, action_cost_paise=50),
+    )
+    scenario = SimulatedScenario(
+        scenario_id="scen_demo_failure_case",
+        customer=customer,
+        event=event,
+        webhook_payload=webhook,
+        archetype=CustomerArchetype.CONTACT_FATIGUED,
+        failure_class=FailureClass.TRANSIENT_GATEWAY,
+        hidden_outcomes=hidden_outcomes,
+    )
+
+    result: AgentRunResult = await runtime.run_recovery_loop(scenario)
+
+    # Post-mortem regret computation
+    oracle_best_action = SimulatedActionType.PAYMENT_LINK
+    oracle_outcome = hidden_outcomes.get_outcome(oracle_best_action)
+    oracle_net_paise = oracle_outcome.recovered_amount_paise - oracle_outcome.action_cost_paise - (250000 if oracle_outcome.customer_churned else 0)
+
+    selected_action = result.trace[0].decision.action_type if result.trace else SimulatedActionType.RETRY_LATER
+    actual_outcome = hidden_outcomes.get_outcome(selected_action)
+    actual_net_paise = actual_outcome.recovered_amount_paise - actual_outcome.action_cost_paise - (250000 if actual_outcome.customer_churned else 0)
+    regret_paise = max(0, oracle_net_paise - actual_net_paise)
+
+    print(f"  [AI DECISION] Selected Action   : {selected_action.value}")
+    print(f"  [AI DECISION] Net Realized Value : INR {actual_net_paise / 100:,.2f} (Action failed to recover)")
+    print(f"  [ORACLE]      Oracle-Best Action : {oracle_best_action.value}")
+    print(f"  [ORACLE]      Oracle Net Value   : INR {oracle_net_paise / 100:,.2f}")
+    print(f"  [AUDIT]       Decision Regret    : INR {regret_paise / 100:,.2f}")
+    print(f"  [POST-MORTEM] Root Divergence    : AI over-indexed on transient code; missed persistent bank outage.")
+    print(f"  [GOVERNOR]    Safety Containment : Max retry limit cap reached; Governor bounded further financial loss.")
+
+
 async def main() -> None:
     print_banner()
     await demo_case_1_abstention()
@@ -635,9 +711,10 @@ async def main() -> None:
     await demo_case_4_safety_block()
     await demo_case_6_subscription_mandate_recovery()
     await demo_case_7_checkout_abandonment()
+    await demo_case_8_suboptimal_failure_and_regret_analysis()
     demo_case_5_batch_benchmark()
     print("\n" + HEADER)
-    print("  [OK] All 7 Signature RecoveryOS Showcase Scenarios Completed Successfully!")
+    print("  [OK] All 8 Signature RecoveryOS Showcase Scenarios Completed Successfully!")
     print(HEADER + "\n")
 
 

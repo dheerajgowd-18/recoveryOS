@@ -16,28 +16,29 @@
 
 ## 2. Test Suite Verification
 - **Command**: `python -m pytest -q` and `python -m pytest -v`
-- **Collected**: 319 test items
-- **Passed**: 319 (100% pass rate)
+- **Collected**: 336 test items
+- **Passed**: 336 (100% pass rate)
 - **Failed**: 0
 - **Skipped**: 0
-- **Runtime**: 36.77s
+- **Runtime**: ~19.74s
 - **Coverage Areas**:
   - `tests/adversarial/`: ToolFirewall invariants, opt-out gating, policy outage fail-closed, out-of-order reconciliation, high-value human escalations, economic abstention.
-  - `tests/integration/`: Closed-loop agent runtime, Razorpay test mode adapter, webhook HMAC security, 7 signature showcase scenarios, Scenario Lab API, dynamic Merchant Policy controls API, recovery queue contract, case replay 7-layer Decision Anatomy.
-  - `tests/unit/`: Strict LLM no-fallback mode, evaluation execution modes, ablation validity rules, RAG memory bounds, deterministic pricing, idempotency tracker, exception handling granularity.
+  - `tests/integration/`: Closed-loop agent runtime, Razorpay test mode adapter, webhook HMAC security, 8 signature showcase scenarios, Scenario Lab API, dynamic Merchant Policy controls API, recovery queue contract, case replay 8-layer Decision Anatomy.
+  - `tests/unit/`: Strict LLM no-fallback mode, distribution-shift stress testing (6 scenarios), uncertainty triad verification, evaluation execution modes, ablation validity rules, RAG memory bounds, deterministic pricing, idempotency tracker, exception handling granularity.
 
 ---
 
-## 3. Demo Verification (7 Signature Showcase Cases)
+## 3. Demo Verification (8 Signature Showcase Cases)
 - **Command**: `python scripts/demo.py` (Executes in < 5 seconds)
-- **7 / 7 Cases Verified**:
+- **8 / 8 Cases Verified**:
   1. **Case 1 (Economic Abstention)**: ₹1.00 micro-transaction on expired card &rarr; AI & Governor abstain &rarr; `POLICY_ABSTAINED`, `no_action`, ₹0.00 cost.
-  2. **Case 2 (Action × Timing Economic Selection)**: ₹5,000.00 transient gateway error &rarr; Evaluates candidate windows (+2h, +6h, +12h, +24h) &rarr; Optimal delayed retry `PLUS_6H` chosen (+₹2,749.80 expected net value, 55.0% uplift over baseline).
+  2. **Case 2 (Action × Timing Economic Selection)**: ₹5,000.00 transient gateway error &rarr; Evaluates candidate windows (+2h, +6h, +12h, +24h) &rarr; Optimal delayed retry `PLUS_6H` chosen (+₹2,762.30 expected net value, 55.0% uplift over baseline).
   3. **Case 3 (Late State Change & Stale Action Protection)**: Retry scheduled for +6h; customer pays out-of-band at +30m &rarr; Revalidation detects `CAPTURED` state &rarr; `INVALIDATED` (₹0.00 cost, 0 duplicate charges).
   4. **Case 4 (Consent Enforcement & Opt-Out Safety)**: Customer with global opt-out &rarr; Governor and Tool Firewall reject direct contact with `DENY` & `CUSTOMER_OPTED_OUT`.
   5. **Case 5 (Deterministic 100-Scenario Batch Benchmark)**: Multi-archetype cohort &rarr; `RECOVERYOS_DETERMINISTIC_V0` achieves +₹80,859.00 incremental adjusted net recovery over `baseline_0_no_action`.
   6. **Case 6 (Subscription Mandate Revocation Recovery)**: ₹2,999.00/mo SaaS subscription with revoked mandate &rarr; Diagnoses `MANDATE_ISSUE`, issues 1-click payment link &rarr; `REVENUE_RECOVERED` (₹2,998.00 net value).
   7. **Case 7 (Checkout Drop-Off & Cart Abandonment Recovery)**: ₹4,200.00 cart drop-off at 3DS OTP step &rarr; Diagnoses `CUSTOMER_ABANDONMENT`, issues +2h delayed 1-click payment link &rarr; `REVENUE_RECOVERED` (₹4,199.50 net value).
+  8. **Case 8 (Real Failure Case & Suboptimal Regret Analysis)**: Contact-fatigued customer with network friction &rarr; AI selects suboptimal `retry_later` &rarr; Incurs ₹3,499.20 decision regret vs counterfactual Oracle truth &rarr; Demonstrates evaluation honesty and Governor boundary containment.
 
 ---
 

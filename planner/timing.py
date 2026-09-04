@@ -82,7 +82,9 @@ class ActionTimingCandidate(BaseModel):
     expected_uplift: float = Field(..., ge=-1.0, le=1.0, description="Incremental uplift over natural recovery (can be negative)")
     expected_incremental_value_paise: int = Field(..., description="Expected incremental revenue in paise")
     action_cost_paise: int = Field(..., ge=0, description="Direct execution cost in paise")
-    expected_net_value_paise: int = Field(..., description="Expected net recovery value (Incremental - Cost)")
+    customer_friction_penalty_paise: int = Field(default=0, ge=0, description="Estimated customer contact fatigue cost in paise")
+    risk_penalty_paise: int = Field(default=0, ge=0, description="Estimated risk penalty for repeated failure attempts in paise")
+    expected_net_value_paise: int = Field(..., description="Expected net recovery value (Incremental - Cost - Friction - Risk)")
     reason_codes: List[str] = Field(default_factory=list, description="Timing and scoring audit tags")
 
 
@@ -338,7 +340,21 @@ class DeterministicTimingValueEstimator:
         weighted_p_action = round((p_action * diagnosis.confidence) + (p_natural * (1.0 - diagnosis.confidence)), 4)
         uplift = round(weighted_p_action - p_natural, 4)
         incremental_value = int(context.amount_in_paise * uplift)
-        net_value = incremental_value - cost
+
+        # Compute friction penalty based on customer contact frequency
+        friction_penalty = 0
+        if mechanism in (ActionMechanism.PAYMENT_LINK, ActionMechanism.REMINDER):
+            if context.contacts_in_last_24h > 0:
+                friction_penalty = 500  # ₹5 fatigue penalty for consecutive contact
+            if context.contacts_in_last_7d >= 2:
+                friction_penalty += 1000  # ₹10 fatigue penalty for high weekly frequency
+
+        # Compute risk penalty for repeated attempt retries
+        risk_penalty = 0
+        if context.recent_failed_attempts >= 2 and mechanism == ActionMechanism.RETRY:
+            risk_penalty = 200  # ₹2 penalty
+
+        net_value = incremental_value - cost - friction_penalty - risk_penalty
 
         reason_codes = [
             f"MECH_{mechanism.value}",
@@ -347,6 +363,10 @@ class DeterministicTimingValueEstimator:
             f"UPLIFT_{int(uplift * 100)}PCT",
             f"COST_{cost}PAISE",
         ]
+        if friction_penalty > 0:
+            reason_codes.append(f"FRICTION_PENALTY_{friction_penalty}PAISE")
+        if risk_penalty > 0:
+            reason_codes.append(f"RISK_PENALTY_{risk_penalty}PAISE")
 
         if strategy_candidates is not None:
             def _match_mech(c_mech: Any, target_mech: ActionMechanism) -> bool:

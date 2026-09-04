@@ -14,6 +14,7 @@ from domain.events import (
     WebhookPayload,
     WebhookPayloadContent,
 )
+from intelligence.providers.deterministic import DeterministicDiagnosisProvider
 from scheduler.models import ScheduledAction, ScheduledActionStatus
 from scheduler.service import ScheduledLifecycleService
 from simulator.config import SimulatorConfig
@@ -36,11 +37,15 @@ class TestStaleActionProtectionAndEventReconciliation:
         payment_id = scenario.event.payment.id
 
         ingestion = IngestionService()
-        runtime = AgentRuntime(ingestion_service=ingestion, scheduler=lifecycle_service)
+        runtime = AgentRuntime(
+            ingestion_service=ingestion,
+            scheduler=lifecycle_service,
+            diagnosis_provider=DeterministicDiagnosisProvider(),
+        )
 
         # 1. Ingest initial failure event
         res = await runtime.run_recovery_loop(scenario)
-        assert res.stop_reason in ("ACTION_SCHEDULED", "TERMINAL_STATE_REACHED", "NO_RISK_DETECTED")
+        assert res.stop_reason in ("ACTION_SCHEDULED", "TERMINAL_STATE_REACHED", "NO_RISK_DETECTED", "CYCLE_COMPLETED")
 
         # 2. Customer settles payment out-of-band (captured webhook arrives)
         now_epoch = int(time.time())

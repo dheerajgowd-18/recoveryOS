@@ -14,6 +14,8 @@ class PolicyDecision(BaseModel):
 
     action_type: SimulatedActionType = Field(..., description="Action chosen by the policy")
     confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Confidence score [0.0, 1.0]")
+    economic_confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Confidence in expected net recovery uplift")
+    execution_state_validity: float = Field(default=1.0, ge=0.0, le=1.0, description="Validity score of execution state")
     rationale: str = Field(..., min_length=1, description="Audit reasoning behind the policy decision")
     policy_name: str = Field(..., description="Identifier of the executing policy")
     reason_codes: List[str] = Field(default_factory=list, description="Machine-readable audit reason tags")

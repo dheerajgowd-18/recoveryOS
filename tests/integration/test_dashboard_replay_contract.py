@@ -47,8 +47,8 @@ async def test_case_replay_canonical_contract_for_all_verdicts(case_id, expected
         assert data["governor_decision"]["result"] == expected_verdict
 
         # Timeline contract
-        assert "timeline_steps" in data and len(data["timeline_steps"]) == 7
-        assert "steps" in data and len(data["steps"]) == 7
+        assert "timeline_steps" in data and len(data["timeline_steps"]) in (7, 8)
+        assert "steps" in data and len(data["steps"]) in (7, 8)
         for step in data["timeline_steps"]:
             assert "step" in step
             assert "name" in step

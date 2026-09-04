@@ -283,7 +283,11 @@ class RazorpayAdapter(RecoveryExecutor):
                 )
 
         elif action_type in (SimulatedActionType.RETRY_NOW, SimulatedActionType.RETRY_LATER):
-            # Check status of payment on gateway
+            # Razorpay API Truthfulness Note:
+            # Razorpay's public REST API does not provide a headless card re-auth endpoint without customer
+            # presence/saved mandate tokens. Therefore, executing a gateway retry via Razorpay test API
+            # performs authoritative payment-status verification / reconciliation (GET /payments/{id}) to check
+            # if the transaction settled or recovered through banking network rails or secondary attempts.
             payment_entity = await self.fetch_payment_status(payment_id)
             cost_paise = 20
             if payment_entity:
@@ -295,7 +299,11 @@ class RazorpayAdapter(RecoveryExecutor):
                     recovered_amount_paise=amount_paise if is_captured else 0,
                     action_cost_paise=cost_paise,
                     execution_timestamp_epoch=context.current_epoch,
-                    message=f"Executed payment status inspection for {payment_id}. State: {payment_entity.status}",
+                    message=(
+                        f"Reconciled gateway status via Razorpay API (GET /payments/{payment_id}). "
+                        f"Lifecycle: INTERVENTION_DISPATCHED -> State: {payment_entity.status}. "
+                        f"{'PAYMENT_RECOVERED' if is_captured else 'PAYMENT_PENDING_OR_FAILED'}."
+                    ),
                 )
             else:
                 return ExecutionResult(
@@ -305,7 +313,7 @@ class RazorpayAdapter(RecoveryExecutor):
                     recovered_amount_paise=0,
                     action_cost_paise=cost_paise,
                     execution_timestamp_epoch=context.current_epoch,
-                    message=f"Razorpay retry/inquiry failed for payment {payment_id}.",
+                    message=f"Razorpay reconciliation inquiry failed (GET /payments/{payment_id} returned not found or error).",
                 )
 
         return ExecutionResult(

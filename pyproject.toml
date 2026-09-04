@@ -23,7 +23,38 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "anyio>=4.0.0",
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "agent*",
+    "audit*",
+    "backend*",
+    "dashboard*",
+    "domain*",
+    "evaluation*",
+    "execution*",
+    "governor*",
+    "ingestion*",
+    "intelligence*",
+    "planner*",
+    "policy*",
+    "rag*",
+    "scheduler*",
+    "simulator*",
+]
+exclude = [
+    "tests*",
+    "scripts*",
+    "reports*",
+    "config*",
+]
+
+[tool.setuptools.package-data]
+"*" = ["*.html", "*.css", "*.js", "*.json"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"

@@ -20,6 +20,12 @@ from evaluation.policies import (
 )
 from evaluation.regret import RegretCalculator, RegretSummary
 from evaluation.reports import BenchmarkReportGenerator
+from evaluation.distribution_shift import (
+    DistributionShiftReport,
+    DistributionShiftRunner,
+    DistributionShiftSuiteResult,
+    DistributionShiftType,
+)
 from evaluation.sensitivity import (
     SensitivityAnalysisResult,
     SensitivityAnalyzer,
@@ -46,6 +52,10 @@ __all__ = [
     "SensitivityCellResult",
     "SensitivityAnalysisResult",
     "SensitivityAnalyzer",
+    "DistributionShiftReport",
+    "DistributionShiftRunner",
+    "DistributionShiftSuiteResult",
+    "DistributionShiftType",
     "BenchmarkConfig",
     "MetricDistribution",
     "AggregatedPolicyMetrics",

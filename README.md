@@ -1,6 +1,6 @@
 # RecoveryOS: Autonomous AI Revenue Recovery Agent
 
-[![Build Status](https://img.shields.io/badge/tests-319%20passed-brightgreen.svg)]()
+[![Build Status](https://img.shields.io/badge/tests-336%20passed-brightgreen.svg)]()
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)]()
 [![Pydantic Version](https://img.shields.io/badge/pydantic-v2-orange.svg)]()
 [![Razorpay AI Buildathon 2026](https://img.shields.io/badge/Track%2003-AI%20Revenue%20Recovery-blueviolet.svg)]()
@@ -8,9 +8,46 @@
 
 > **Razorpay AI Buildathon 2026 — Track 03: AI Revenue Recovery**
 >
-> **Core Architectural Rule**: *The model proposes. The Governor authorizes. The executor acts.*
+> **Positioning**: *Policy-governed AI for incremental revenue recovery under uncertainty.*
 >
-> **The North Star Metric**: Maximize **Incremental Adjusted Net Recovery** ($\Delta Y_{\text{adj}} = Y(a) - Y(\text{no\_action}) - \text{Action Costs} - \text{Churn Penalty}$) while eliminating value-destructive interventions, contact fatigue, and customer churn.
+> **Central Thesis**: Most dunning systems optimize for recovered payments. RecoveryOS optimizes for revenue that would **NOT** have been recovered without intervention ($\Delta Y_{\text{adj}} = Y(a) - Y(\text{no\_action}) - \text{Action Costs} - \text{Churn Penalty}$).
+>
+> **Operational Rule**: *AI proposes. Deterministic economic policy decides. The Governor authorizes. The executor acts. State reconciliation verifies.*
+>
+> **Canonical Production Path**: `RecoveryStateGraph` (`agent/graph.py`) executes an authoritative 10-node stateful DAG with an 8-stage decision anatomy (`OBSERVATION` &rarr; `DIAGNOSIS` &rarr; `CANDIDATES` &rarr; `ECONOMIC_SCORE` &rarr; `GOVERNOR` &rarr; `FIREWALL` &rarr; `EXECUTION` &rarr; `VERIFIED_OUTCOME`).
+
+---
+
+## ⚡ 60-Second Reviewer Guide
+
+### What RecoveryOS Is:
+- A closed-loop, causal recovery agent that balances gross recovery against direct action costs, organic natural recovery, and customer contact fatigue.
+- A fail-closed architecture with a non-bypassable **Recovery Governor** and **Tool Firewall** enforcing idempotency, contact caps, cooldowns, and customer consent opt-outs.
+- An auditable decision engine providing contrastive reasoning (*Why We Acted* vs *Why We Did Not Choose Alternatives* or *Why We Did Not Act*).
+
+### What RecoveryOS Is NOT:
+- **NOT** a generic AI dunning bot or SMS spammer.
+- **NOT** a generic conversational failed-payment chatbot.
+- **NOT** a raw payment retry engine claiming to execute unassisted card retries on Razorpay (our Razorpay adapter strictly distinguishes genuine payment-link creation from gateway payment-status reconciliation `GET /v1/payments/{id}`).
+- **NOT** a fabricated ML uplift claim (we explicitly differentiate parameterized synthetic priors from future learned bandit models).
+
+### Three Key Proof Metrics (100 Scenarios, Seed=42, Churn Penalty ₹2,500):
+1. **+₹80,859 Incremental Adjusted Net Recovery** (+₹6,764 over static rules & probability greedy baselines, +₹63,073 over naive retries).
+2. **27% Churn Reduction** (8 churned customers vs 11 under static rules) through intelligent abstention and delayed retries.
+3. **52% Action Cost Savings** (₹35.80 vs ₹74.40 under static dunning).
+
+### 30-Second Quickstart:
+```bash
+# 1. Run complete test suite (336 tests, 100% passing)
+python -m pytest -q
+
+# 2. Run interactive 8-case signature CLI showcase (including Case 8 real failure post-mortem)
+python scripts/demo.py
+
+# 3. Launch operations console dashboard
+uvicorn backend.app:app --host 127.0.0.1 --port 8000
+# Open http://127.0.0.1:8000/dashboard
+```
 
 ---
 
@@ -19,12 +56,12 @@
 Traditional subscription dunning systems rely on static retry schedules and aggressive payment link broadcasting. In fintech billing environments, these naive heuristics destroy customer goodwill, trigger gateway surcharge fees on impossible recoveries (e.g. expired cards), and take credit for transactions that would have naturally resolved on their own.
 
 **RecoveryOS** introduces a closed-loop, state-reconciling autonomous recovery agent built on four strict separation-of-concern planes:
-1. **Memory & Context Plane**: Bounded context assembler and Recovery Memory RAG (`rag/`) attaching immutable provenance metadata without exposing simulator ground truth
+1. **Memory & Context Plane**: Bounded context assembler and Recovery Memory RAG (`rag/`) attaching immutable provenance metadata without exposing simulator ground truth.
 2. **Intelligence Plane**: Specialized Multi-Agent reasoning graph (`agent/agents.py`, `agent/graph.py`) powered by open-weights LLM (`Groq openai/gpt-oss-120b`) and deterministic offline diagnostic providers.
 3. **Bounded Context & Recovery Memory (RAG)**: Provenance-tracked retrieval (`rag/`) querying sanitized customer communication preferences, merchant playbooks, and operational fatigue metrics.
-4. **Decision & Economic Optimization**: Action × Timing planner (`planner/timing.py`) evaluating discrete recovery mechanisms against deterministic net incremental value formulas.
+4. **Decision & Economic Optimization**: Action × Timing planner (`planner/timing.py`, `policy/scoring.py`) evaluating discrete recovery mechanisms against deterministic net incremental value formulas.
 5. **Recovery Governor & Tool Firewall**: Non-bypassable authorization gate (`governor/`, `governor/firewall.py`) checking idempotency, consent, contact limits, amount thresholds, cooldowns, and fail-closed safety.
-6. **Execution & Event Sourcing**: Append-only event store (`ingestion/store.py`), state reconciler (`ingestion/reconciler.py`), and webhook adapter for Razorpay APIs (`backend/adapters/razorpay_adapter.py`).
+6. **Execution & Event Sourcing**: Append-only event store (`ingestion/store.py`), state reconciler (`ingestion/reconciler.py`), and webhook adapter for Razorpay APIs (`execution/razorpay_adapter.py`).
 
 ---
 
@@ -41,7 +78,7 @@ Traditional subscription dunning systems rely on static retry schedules and aggr
                                                           ▼
                                             [ 2. LLM DIAGNOSIS AGENT ]
                                             - Groq (openai/gpt-oss-120b) + Replay Cache
-                                            - Root Cause & Uncertainty Estimation
+                                            - Root Cause & Uncertainty Separation
                                             - Deterministic Offline Fallback
                                                           │
                                                           ▼
@@ -81,7 +118,7 @@ Traditional subscription dunning systems rely on static retry schedules and aggr
 |---|---|---|
 | **Ingestion Service** | Webhook intake & idempotency | `backend/services/ingestion_service.py`, `ingestion/store.py` |
 | **Context Agent (RAG)** | Bounded context & memory retrieval | `rag/retrieval.py`, `rag/customer_memory.py`, `rag/merchant_memory.py` |
-| **Diagnosis Agent** | Root-cause diagnosis & uncertainty | `agent/agents.py`, `intelligence/providers/groq_provider.py` (`openai/gpt-oss-120b`) |
+| **Diagnosis Agent** | Root-cause diagnosis & uncertainty triad | `agent/agents.py`, `intelligence/providers/groq_provider.py` (`openai/gpt-oss-120b`) |
 | **Strategy Agent** | Admissible candidate generation | `agent/agents.py` (`propose_strategy`, `generate_strategy_candidates`) |
 | **Economic Optimizer** | Action × Timing value ranking | `planner/timing.py`, `policy/scoring.py` (Deterministic Expected Net Value) |
 | **Recovery Governor** | Non-bypassable financial authority | `governor/recovery_governor.py`, `governor/policy.py` |
@@ -94,19 +131,18 @@ Traditional subscription dunning systems rely on static retry schedules and aggr
 *Evaluated with a conservative customer churn friction penalty of ₹2,500 per churned customer.*
 
 | Policy Benchmark | Gross Recovery | Action Costs | Churn Penalty | Adjusted Net Recovery | Incremental Adjusted Net | Interventions | Actions Avoided | Churned Customers |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Baseline 0: No Action** (Natural Baseline) | ₹21,040 | ₹0.00 | ₹0 | ₹21,040 | ₹0 | 0 | 100 | 0 |
 | **Baseline 1: Always Retry** (Naive Gateway) | ₹48,846 | ₹20.00 | ₹10,000 | ₹38,826 | ₹17,786 | 100 | 0 | 4 |
 | **Baseline 2: Static Rules** (Heuristic Dunning) | ₹122,709 | ₹74.40 | ₹27,500 | ₹95,135 | ₹74,095 | 100 | 0 | 11 |
 | **Baseline 3: Probability Only** (Greedy Model) | ₹122,709 | ₹74.40 | ₹27,500 | ₹95,135 | ₹74,095 | 100 | 0 | 11 |
-| **RecoveryOS (Deterministic v0)** | **₹121,935** | **₹36.00** | **₹20,000** | **₹101,899** | **₹80,859** | **96** | **4** | **8** |
-| **RecoveryOS (Groq LLM-Driven)** | **₹121,935** | **₹36.00** | **₹20,000** | **₹101,899** | **₹80,859** | **96** | **4** | **8** |
+| **RECOVERYOS_DETERMINISTIC_V0** | **₹121,935** | **₹35.80** | **₹20,000** | **₹101,899** | **₹80,859** | **95** | **5** | **8** |
 
 ### Why RecoveryOS Outperforms Baselines
 1. **Beats All Baselines on North Star Metric**: Delivers **₹80,859** in Incremental Adjusted Net Recovery (+₹6,764 over Static Rules and Greedy Probability baselines, and +₹63,073 over Always Retry).
 2. **27% Reduction in Customer Churn**: Preserves customer lifetime value (LTV) by replacing aggressive link spam with optimal timed retries (8 churned customers vs 11 under Static Rules).
-3. **52% Reduction in Action Execution Costs**: Avoids expensive redundant communications (₹36.00 total action costs vs ₹74.40 under Static Rules).
-4. **Intelligent Abstention (4 Actions Avoided)**: Evaluates expected net value and safely abstains on micro-transactions where dunning costs exceed expected recovery.
+3. **52% Reduction in Action Execution Costs**: Avoids expensive redundant communications (₹35.80 total action costs vs ₹74.40 under Static Rules).
+4. **Intelligent Abstention (5 Actions Avoided)**: Evaluates expected net value and safely abstains on micro-transactions where dunning costs exceed expected recovery.
 
 ---
 

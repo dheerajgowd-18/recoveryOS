@@ -49,3 +49,27 @@ class TestPackagingSanity:
         assert ".env" in content
         assert "CONTEXT_SUMMARY_*.md" in content or "CONTEXT_SUMMARY_PHASE_*.md" in content
         assert "REVIEW_ARTIFACT_*.md" in content or "REVIEW_ARTIFACT_PHASE_*.md" in content
+
+    def test_pyproject_defines_explicit_package_discovery(self):
+        """pyproject.toml must configure explicit setuptools package discovery to avoid flat-layout ambiguity."""
+        pyproject_path = os.path.join(ROOT_DIR, "pyproject.toml")
+        assert os.path.exists(pyproject_path), "pyproject.toml does not exist"
+
+        with open(pyproject_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        assert "[tool.setuptools.packages.find]" in content, "Missing setuptools package discovery config"
+        assert 'include = [' in content
+        for pkg in ["agent*", "audit*", "backend*", "dashboard*", "domain*", "evaluation*", "execution*", "governor*", "ingestion*", "intelligence*", "planner*", "policy*", "rag*", "scheduler*", "simulator*"]:
+            assert f'"{pkg}"' in content, f"Package pattern '{pkg}' missing from pyproject.toml package discovery"
+
+    def test_requirements_points_to_pyproject_dependencies(self):
+        """requirements.txt must delegate to editable package dependencies to prevent version drift."""
+        req_path = os.path.join(ROOT_DIR, "requirements.txt")
+        assert os.path.exists(req_path), "requirements.txt does not exist"
+
+        with open(req_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        assert "-e .[dev]" in content, "requirements.txt must reference -e .[dev] to avoid dependency drift"
+

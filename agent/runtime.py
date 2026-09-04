@@ -1,31 +1,22 @@
-"""AgentRuntime orchestrating the closed-loop observe-diagnose-propose-govern-schedule-execute recovery cycle."""
+"""AgentRuntime compatibility wrapper delegating canonical orchestration to RecoveryStateGraph."""
 from typing import List, Optional, Tuple
-import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
+from agent.agents import DiagnosisAgent, TimingAndEconomicOptimizationAgent
+from agent.graph import RecoveryStateGraph, RecoveryWorkflowState
 from agent.risk import RiskAssessment, RiskDetector
 from backend.services.ingestion_service import IngestionService
 from domain.enums import PaymentState
 from execution.executor import ExecutionContext, ExecutionResult, RecoveryExecutor
 from execution.simulator_executor import SimulatorExecutor
 from governor.decision import GovernorDecision, GovernorDecisionResult
-from governor.exceptions import (
-    ActionBlockedError,
-    ConsentViolationError,
-    DuplicateExecutionError,
-    PolicyOutageError,
-    SchemaValidationError,
-)
 from governor.firewall import CustomerConsentContext, ToolFirewall
-from governor.policy import MerchantPolicy
 from governor.recovery_governor import RecoveryGovernor
-from intelligence.context import ObservableContextBuilder, ObservableRecoveryContext
 from intelligence.providers import BaseDiagnosisProvider, DeterministicDiagnosisProvider
 from intelligence.schemas import StructuredDiagnosis
-from planner.timing import TimingWindow
 from policy.base import BasePolicy, PolicyDecision
 from policy.deterministic import DeterministicRecoveryPolicy
-from scheduler.models import ScheduledAction, ScheduledActionStatus
+from scheduler.models import ScheduledAction
 from scheduler.service import ScheduledLifecycleService
 from simulator.config import SimulatedActionType
 from simulator.generator import SimulatedScenario
@@ -65,7 +56,11 @@ class AgentRunResult(BaseModel):
 
 
 class AgentRuntime:
-    """Closed-loop recovery controller connecting Ingestion, Intelligence, Policy, Governor, Scheduler, Firewall, and Execution."""
+    """Canonical recovery controller wrapper delegating closed-loop execution to RecoveryStateGraph.
+
+    The canonical production execution path is RecoveryStateGraph (a stateful 10-node agent pipeline).
+    AgentRuntime serves as a thin lifecycle wrapper driving multi-attempt iteration and legacy result packaging.
+    """
 
     def __init__(
         self,
@@ -79,19 +74,35 @@ class AgentRuntime:
         executor: Optional[RecoveryExecutor] = None,
         max_iterations: int = 5,
     ) -> None:
-        from intelligence.providers.llm_provider import LLMDiagnosisProvider
-        from rag.retrieval import RecoveryMemoryRetriever
-
         self.ingestion_service = ingestion_service or IngestionService()
         self.risk_detector = risk_detector or RiskDetector()
-        self.diagnosis_provider = diagnosis_provider or LLMDiagnosisProvider(fallback_provider=DeterministicDiagnosisProvider())
-        self.policy = policy or DeterministicRecoveryPolicy(diagnosis_provider=self.diagnosis_provider)
+        self.diagnosis_provider = diagnosis_provider
+        self.policy = policy
         self.governor = governor or RecoveryGovernor()
         self.scheduler = scheduler or ScheduledLifecycleService()
         self.firewall = firewall or ToolFirewall()
         self.executor = executor or SimulatorExecutor()
-        self.retriever = RecoveryMemoryRetriever()
         self.max_iterations = max_iterations
+
+        diag_agent = DiagnosisAgent(provider=self.diagnosis_provider) if self.diagnosis_provider else None
+        timing_agent = (
+            TimingAndEconomicOptimizationAgent(config=getattr(self.policy, "config", None))
+            if self.policy and hasattr(self.policy, "config")
+            else None
+        )
+
+        self.graph = RecoveryStateGraph(
+            ingestion_service=self.ingestion_service,
+            risk_detector=self.risk_detector,
+            diagnosis_agent=diag_agent,
+            timing_agent=timing_agent,
+            governor=self.governor,
+            scheduler=self.scheduler,
+            firewall=self.firewall,
+            executor=self.executor,
+            policy=self.policy,
+        )
+        self.state_graph = self.graph
 
     async def run_recovery_loop(
         self,
@@ -99,297 +110,79 @@ class AgentRuntime:
         consent: Optional[CustomerConsentContext] = None,
         policy_healthy: bool = True,
     ) -> AgentRunResult:
-        """Execute the closed-loop recovery sequence for an incoming payment failure event."""
-        # 1. Ingest initial failure event into the system
-        await self.ingestion_service.process_webhook(initial_scenario.webhook_payload)
-
+        """Executes the closed-loop recovery sequence by delegating step execution to RecoveryStateGraph."""
         payment_id = initial_scenario.event.payment.id if initial_scenario.event.payment else "pay_unknown"
         trace: List[AgentIterationRecord] = []
         recovered_amount = 0
         total_costs = 0
         stop_reason = "MAX_ITERATIONS_REACHED"
-
-        current_event = initial_scenario.event
-        current_payload = initial_scenario.webhook_payload
+        current_state_val = PaymentState.FAILED.value
 
         for iteration in range(1, self.max_iterations + 1):
-            current_epoch = int(current_payload.created_at) + ((iteration - 1) * 3600)
-
-            # A. State Reconstruction (Observe)
-            aggregate = await self.ingestion_service.event_store.get_payment_aggregate(payment_id)
-            current_state = aggregate.current_state if aggregate else PaymentState.FAILED
-
-            # B. Terminal State Early Exit Check
-            if aggregate and aggregate.is_terminal:
-                if aggregate.current_state == PaymentState.CAPTURED:
-                    recovered_amount = aggregate.amount
-                    stop_reason = "TERMINAL_STATE_REACHED"
-                else:
-                    stop_reason = "TERMINAL_STATE_REACHED"
-                break
-
-            # C. Risk Assessment
-            risk = self.risk_detector.detect_payment_risk(current_event.payment, aggregate)
-            if not risk.is_at_risk:
-                stop_reason = "NO_RISK_DETECTED"
-                break
-
-            # D. Observable Context Construction & Bounded RAG Memory Retrieval
-            obs_context = ObservableContextBuilder.build_from_payment_event(
-                event=current_event,
-                aggregate=aggregate,
-                customer_consent=consent,
-                attempt_count=iteration,
-                scenario_id=initial_scenario.scenario_id,
-            )
-            memory_bundle = self.retriever.retrieve_bounded_context(obs_context)
-
-            # E. Intelligence Diagnosis & Policy Proposal
-            try:
-                if not policy_healthy:
-                    raise PolicyOutageError("Policy decision engine is flagged unhealthy. Failing closed.")
-
-                diagnosis = await self.diagnosis_provider.diagnose(obs_context, memory_bundle)
-                proposal = self.policy.decide(obs_context, diagnosis=diagnosis)
-            except PolicyOutageError as e:
-                # Policy Outage Fail-Closed: Pass through Governor to record governance decision
-                gov_decision = self.governor.evaluate(
-                    context=obs_context,
-                    diagnosis=None,
-                    proposal=None,
-                    aggregate=aggregate,
-                    consent=consent,
-                    policy_healthy=False,
-                )
-                fallback_decision = PolicyDecision(
-                    action_type=SimulatedActionType.NO_ACTION,
-                    confidence=1.0,
-                    rationale="Policy engine unavailable. Failing closed.",
-                    policy_name="GOVERNOR_FAIL_CLOSED",
-                    reason_codes=["POLICY_OUTAGE_FAIL_CLOSED"],
-                )
-                record = AgentIterationRecord(
-                    iteration=iteration,
-                    risk_assessment=risk,
-                    decision=fallback_decision,
-                    diagnosis=None,
-                    governor_decision=gov_decision,
-                    execution_result=None,
-                    aggregate_state_before=current_state.value,
-                    aggregate_state_after=current_state.value,
-                    aggregate_state=current_state.value,
-                    timestamp_epoch=current_epoch,
-                    error_message=str(e),
-                )
-                trace.append(record)
-                stop_reason = gov_decision.stop_reason or "POLICY_OUTAGE"
-                break
-
-            # F. Recovery Governor Evaluation (Authority Check with Timing Validation)
-            gov_decision = self.governor.evaluate(
-                context=obs_context,
-                diagnosis=diagnosis,
-                proposal=proposal,
-                aggregate=aggregate,
+            state: RecoveryWorkflowState = await self.graph.execute_workflow(
+                initial_scenario=initial_scenario,
                 consent=consent,
                 policy_healthy=policy_healthy,
-            )
-
-            if gov_decision.decision_result != GovernorDecisionResult.ALLOW:
-                record = AgentIterationRecord(
-                    iteration=iteration,
-                    risk_assessment=risk,
-                    decision=proposal,
-                    diagnosis=diagnosis,
-                    governor_decision=gov_decision,
-                    execution_result=None,
-                    aggregate_state_before=current_state.value,
-                    aggregate_state_after=current_state.value,
-                    aggregate_state=current_state.value,
-                    timestamp_epoch=current_epoch,
-                    error_message=gov_decision.human_review_reason if gov_decision.decision_result == GovernorDecisionResult.ESCALATE else (gov_decision.rationale if gov_decision.decision_result == GovernorDecisionResult.DENY else None),
-                )
-                trace.append(record)
-                stop_reason = gov_decision.stop_reason or "GOVERNOR_BLOCKED"
-                break
-
-            # G. Timing Selection: Delayed Action Scheduling vs Immediate Execution
-            is_delayed = (
-                gov_decision.delay_seconds > 0
-                or gov_decision.timing_window in ("PLUS_2H", "PLUS_6H", "PLUS_12H", "PLUS_24H")
-                or proposal.action_type == SimulatedActionType.RETRY_LATER
-            )
-
-            if is_delayed:
-                # Schedule future action bound to current state version and exit cycle
-                try:
-                    timing_win = TimingWindow(gov_decision.timing_window) if gov_decision.timing_window else TimingWindow.PLUS_6H
-                except (ValueError, KeyError, TypeError):
-                    timing_win = TimingWindow.PLUS_6H
-
-                scheduled_action = self.scheduler.schedule_action(
-                    decision=proposal,
-                    context=obs_context,
-                    aggregate=aggregate,
-                    policy=self.governor.merchant_policy,
-                    current_epoch=current_epoch,
-                    timing_window=timing_win,
-                    delay_seconds=gov_decision.delay_seconds if gov_decision.delay_seconds > 0 else timing_win.delay_seconds,
-                )
-
-                record = AgentIterationRecord(
-                    iteration=iteration,
-                    risk_assessment=risk,
-                    decision=proposal,
-                    diagnosis=diagnosis,
-                    governor_decision=gov_decision,
-                    execution_result=None,
-                    aggregate_state_before=current_state.value,
-                    aggregate_state_after=current_state.value,
-                    aggregate_state=current_state.value,
-                    timestamp_epoch=current_epoch,
-                )
-                trace.append(record)
-                stop_reason = "ACTION_SCHEDULED"
-                break
-
-            # H. Immediate Action: Stale Action Protection (Revalidate aggregate before execution)
-            aggregate = await self.ingestion_service.event_store.get_payment_aggregate(payment_id)
-            if aggregate and aggregate.is_terminal:
-                record = AgentIterationRecord(
-                    iteration=iteration,
-                    risk_assessment=risk,
-                    decision=proposal,
-                    diagnosis=diagnosis,
-                    governor_decision=gov_decision,
-                    execution_result=None,
-                    aggregate_state_before=current_state.value,
-                    aggregate_state_after=aggregate.current_state.value,
-                    aggregate_state=aggregate.current_state.value,
-                    timestamp_epoch=current_epoch,
-                )
-                trace.append(record)
-                stop_reason = "STALE_ACTION_PREVENTED"
-                if aggregate.current_state == PaymentState.CAPTURED:
-                    recovered_amount = aggregate.amount
-                break
-
-            # I. Tool Firewall Validation Gate (Independent Pre-Execution Verification)
-            chosen_action = gov_decision.selected_action or proposal.action_type
-            execution_key = f"exec_{payment_id}_{iteration}_{chosen_action.value}_{current_epoch}"
-            try:
-                validated_action = self.firewall.validate_and_gate(
-                    action=chosen_action,
-                    execution_key=execution_key,
-                    consent=consent,
-                    policy_healthy=policy_healthy,
-                )
-            except (ActionBlockedError, ConsentViolationError, SchemaValidationError, DuplicateExecutionError, PolicyOutageError) as e:
-                record = AgentIterationRecord(
-                    iteration=iteration,
-                    risk_assessment=risk,
-                    decision=proposal,
-                    diagnosis=diagnosis,
-                    governor_decision=gov_decision,
-                    execution_result=None,
-                    aggregate_state_before=current_state.value,
-                    aggregate_state_after=current_state.value,
-                    aggregate_state=current_state.value,
-                    timestamp_epoch=current_epoch,
-                    error_message=str(e),
-                )
-                trace.append(record)
-                if isinstance(e, ConsentViolationError):
-                    stop_reason = "ACTION_BLOCKED"
-                elif isinstance(e, PolicyOutageError):
-                    stop_reason = "POLICY_OUTAGE"
-                else:
-                    stop_reason = "ACTION_BLOCKED"
-                break
-
-            # J. Dispatch Execution with Fault Tolerance Handling
-            current_scenario = SimulatedScenario(
-                scenario_id=initial_scenario.scenario_id,
-                customer=initial_scenario.customer,
-                event=current_event,
-                webhook_payload=current_payload,
-                archetype=initial_scenario.archetype,
-                failure_class=initial_scenario.failure_class,
-                hidden_outcomes=initial_scenario.hidden_outcomes,
-            )
-            exec_ctx = ExecutionContext(
-                scenario=current_scenario,
                 attempt_count=iteration,
-                current_epoch=current_epoch,
             )
-            try:
-                exec_result = await self.executor.execute(validated_action, exec_ctx)
-            except (TimeoutError, ConnectionError, PolicyOutageError, RuntimeError, httpx.RequestError, httpx.HTTPError) as e:
-                record = AgentIterationRecord(
-                    iteration=iteration,
-                    risk_assessment=risk,
-                    decision=proposal,
-                    diagnosis=diagnosis,
-                    governor_decision=gov_decision,
-                    execution_result=None,
-                    aggregate_state_before=current_state.value,
-                    aggregate_state_after=current_state.value,
-                    aggregate_state=current_state.value,
-                    timestamp_epoch=current_epoch,
-                    error_message=f"{type(e).__name__}: {str(e)}",
-                )
-                trace.append(record)
-                if isinstance(e, PolicyOutageError):
-                    stop_reason = "POLICY_OUTAGE"
-                else:
-                    stop_reason = "EXECUTION_FAILURE"
-                break
 
-            total_costs += exec_result.action_cost_paise
+            current_state = state.aggregate.current_state if state.aggregate else PaymentState.FAILED
+            current_state_val = current_state.value
+            exec_cost = state.execution_result.action_cost_paise if state.execution_result else 0
+            total_costs += exec_cost
 
-            # K. Ingest resulting event into event store & update aggregate
-            if exec_result.resulting_payload:
-                await self.ingestion_service.process_webhook(exec_result.resulting_payload)
-                current_payload = exec_result.resulting_payload
-                if exec_result.resulting_event:
-                    current_event = exec_result.resulting_event
+            if state.aggregate and state.aggregate.current_state == PaymentState.CAPTURED:
+                recovered_amount = state.aggregate.amount
+            elif state.execution_result and state.execution_result.recovered:
+                recovered_amount = state.execution_result.recovered_amount_paise
 
-            updated_agg = await self.ingestion_service.event_store.get_payment_aggregate(payment_id)
-            new_state = updated_agg.current_state.value if updated_agg else current_state.value
+            # Extract aggregate state before this node cycle
+            state_before = PaymentState.FAILED.value
+            if state.step_traces:
+                for step in state.step_traces:
+                    if step.step_name == "NODE_1_INGESTION_RECONCILIATION":
+                        state_before = step.payload.get("state", state_before)
+                        break
 
             record = AgentIterationRecord(
                 iteration=iteration,
-                risk_assessment=risk,
-                decision=proposal,
-                diagnosis=diagnosis,
-                governor_decision=gov_decision,
-                execution_result=exec_result,
-                aggregate_state_before=current_state.value,
-                aggregate_state_after=new_state,
-                aggregate_state=new_state,
-                timestamp_epoch=current_epoch,
+                risk_assessment=state.risk_assessment or RiskAssessment(is_at_risk=True, risk_level="LOW", reason="Autonomous cycle"),
+                decision=state.proposal or PolicyDecision(
+                    action_type=SimulatedActionType.NO_ACTION,
+                    confidence=1.0,
+                    rationale="Deliberate non-intervention or fallback",
+                    policy_name="GOVERNOR_BASELINE",
+                ),
+                diagnosis=state.diagnosis,
+                governor_decision=state.governor_decision,
+                execution_result=state.execution_result,
+                aggregate_state_before=state_before,
+                aggregate_state_after=current_state_val,
+                aggregate_state=current_state_val,
+                timestamp_epoch=state.current_epoch,
+                error_message=state.error_message,
             )
             trace.append(record)
 
-            if exec_result.recovered:
-                recovered_amount = exec_result.recovered_amount_paise
-                stop_reason = "REVENUE_RECOVERED"
+            if state.is_terminal and state.stop_reason != "CYCLE_COMPLETED":
+                stop_reason = state.stop_reason or "TERMINAL_STATE_REACHED"
+                break
+            elif iteration == self.max_iterations:
+                stop_reason = state.stop_reason or "MAX_ITERATIONS_REACHED"
                 break
 
-        # Final aggregate inspection
-        final_agg = await self.ingestion_service.event_store.get_payment_aggregate(payment_id)
-        final_state_str = final_agg.current_state.value if final_agg else PaymentState.FAILED.value
-        is_recovered = final_state_str == PaymentState.CAPTURED.value
+        is_rec = (current_state_val == PaymentState.CAPTURED.value) or (recovered_amount > 0)
+        net_val = recovered_amount - total_costs
 
         return AgentRunResult(
             scenario_id=initial_scenario.scenario_id,
             payment_id=payment_id,
             total_iterations=len(trace),
-            final_state=final_state_str,
-            is_recovered=is_recovered,
+            final_state=current_state_val,
+            is_recovered=is_rec,
             recovered_amount_paise=recovered_amount,
             total_cost_paise=total_costs,
-            net_value_paise=recovered_amount - total_costs,
+            net_value_paise=net_val,
             stop_reason=stop_reason,
             trace=trace,
         )
