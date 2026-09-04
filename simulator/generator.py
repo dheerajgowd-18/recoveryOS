@@ -22,6 +22,8 @@ class SimulatedScenario(BaseModel):
     hidden_outcomes: PotentialOutcomes = Field(
         ..., description="Secret counterfactual potential outcome vector Y(a) hidden from the agent"
     )
+    contacts_in_last_24h: int = Field(default=0, ge=0, description="Customer contacts in last 24 hours")
+    contacts_in_last_7d: int = Field(default=0, ge=0, description="Customer contacts in last 7 days")
 
 
 class Simulator:

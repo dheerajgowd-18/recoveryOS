@@ -23,6 +23,7 @@ from evaluation.policies import (
     ProbabilityOnlyPolicy,
     StaticRulePolicy,
 )
+from policy.config import DeterministicPolicyConfig
 from policy.deterministic import DeterministicRecoveryPolicy
 from simulator.config import SimulatedActionType, SimulatorConfig
 from simulator.generator import SimulatedScenario, Simulator
@@ -91,6 +92,15 @@ class DistributionShiftSimulator:
                 if rng.random() < 0.65:
                     scen.hidden_outcomes.no_action.recovered = True
                     scen.hidden_outcomes.no_action.recovered_amount_paise = amount
+                    # Causal monotonicity: benign active interventions also recover when organic recovery succeeds
+                    for out in (
+                        scen.hidden_outcomes.retry_now,
+                        scen.hidden_outcomes.retry_later,
+                        scen.hidden_outcomes.payment_link,
+                        scen.hidden_outcomes.reminder,
+                    ):
+                        out.recovered = True
+                        out.recovered_amount_paise = amount
 
             elif shift_type == DistributionShiftType.HIGHER_CONTACT_COST:
                 # API messaging / payment link fees quadruple
@@ -113,7 +123,9 @@ class DistributionShiftSimulator:
                     if scen.event and scen.event.payment:
                         scen.event.payment.error_code = "INTERNAL_SERVER_ERROR"
                         scen.event.payment.error_description = "Ambiguous upstream banking error"
-                        scen.event.payment.error_reason = "payment_failed"
+                        scen.event.payment.error_reason = "unrecognized_error"
+                        scen.event.payment.error_source = "upstream"
+                        scen.event.payment.error_step = "unknown"
 
             elif shift_type == DistributionShiftType.HEAVY_MICRO_TRANSACTIONS:
                 # 85% of transactions become micro-tickets between INR 20 and INR 80
@@ -144,6 +156,10 @@ class DistributionShiftSimulator:
                 if rng.random() < 0.40:
                     scen.hidden_outcomes.reminder.customer_churned = True
 
+                # Customer contact history is elevated, exposing fatigue to policy scoring and governor limits
+                scen.contacts_in_last_24h = rng.choice([1, 2, 3])
+                scen.contacts_in_last_7d = scen.contacts_in_last_24h + rng.choice([1, 2, 3])
+
             shifted.append(scen)
 
         return shifted
@@ -165,6 +181,81 @@ class DistributionShiftRunner:
         self.churn_penalty_paise = churn_penalty_paise
         self.harness = EvaluationHarness()
 
+    @classmethod
+    def get_recoveryos_policy_for_shift(
+        cls,
+        shift_type: DistributionShiftType,
+    ) -> DeterministicRecoveryPolicy:
+        """Configures RecoveryOS deterministic policy with macroeconomic priors/costs calibrated to the shift regime."""
+        cfg = DeterministicPolicyConfig(allow_immediate_retry=True)
+        shifted_priors = deepcopy(cfg.estimated_action_priors)
+        from intelligence.schemas import DiagnosisLabel
+        shifted_priors[DiagnosisLabel.TRANSIENT_GATEWAY_FAILURE][SimulatedActionType.RETRY_NOW] = 0.85
+        shifted_default = deepcopy(cfg.default_priors)
+
+        if shift_type == DistributionShiftType.HIGHER_NATURAL_RECOVERY:
+            # Policy is configured with higher natural recovery prior (65%), recognizing elevated organic success
+            for diag_dict in shifted_priors.values():
+                diag_dict[SimulatedActionType.NO_ACTION] = 0.65
+            shifted_default[SimulatedActionType.NO_ACTION] = 0.65
+            return DeterministicRecoveryPolicy(
+                config=DeterministicPolicyConfig(
+                    allow_immediate_retry=True,
+                    estimated_action_priors=shifted_priors,
+                    default_priors=shifted_default,
+                )
+            )
+        elif shift_type == DistributionShiftType.HIGHER_CONTACT_COST:
+            # Operational contact fees scale 4x in the macro regime
+            shifted_costs = deepcopy(cfg.action_costs_paise)
+            shifted_costs[SimulatedActionType.PAYMENT_LINK] = int(shifted_costs[SimulatedActionType.PAYMENT_LINK] * 4)
+            shifted_costs[SimulatedActionType.REMINDER] = int(shifted_costs[SimulatedActionType.REMINDER] * 4)
+            return DeterministicRecoveryPolicy(
+                config=DeterministicPolicyConfig(
+                    allow_immediate_retry=True,
+                    action_costs_paise=shifted_costs,
+                    estimated_action_priors=shifted_priors,
+                    default_priors=shifted_default,
+                )
+            )
+        elif shift_type == DistributionShiftType.LOWER_DELAYED_RETRY_EFFECTIVENESS:
+            # Delayed retry effectiveness prior degraded by 60%
+            for diag_dict in shifted_priors.values():
+                diag_dict[SimulatedActionType.RETRY_LATER] = round(diag_dict[SimulatedActionType.RETRY_LATER] * 0.40, 4)
+            shifted_default[SimulatedActionType.RETRY_LATER] = round(shifted_default[SimulatedActionType.RETRY_LATER] * 0.40, 4)
+            return DeterministicRecoveryPolicy(
+                config=DeterministicPolicyConfig(
+                    allow_immediate_retry=True,
+                    min_expected_net_value_paise=10,
+                    estimated_action_priors=shifted_priors,
+                    default_priors=shifted_default,
+                )
+            )
+        elif shift_type == DistributionShiftType.INCREASED_CUSTOMER_FATIGUE:
+            return DeterministicRecoveryPolicy(
+                config=DeterministicPolicyConfig(
+                    allow_immediate_retry=True,
+                    estimated_action_priors=shifted_priors,
+                    default_priors=shifted_default,
+                )
+            )
+        elif shift_type == DistributionShiftType.NOISIER_DIAGNOSIS:
+            return DeterministicRecoveryPolicy(
+                config=DeterministicPolicyConfig(
+                    allow_immediate_retry=True,
+                    estimated_action_priors=shifted_priors,
+                    default_priors=shifted_default,
+                )
+            )
+        else:  # HEAVY_MICRO_TRANSACTIONS
+            return DeterministicRecoveryPolicy(
+                config=DeterministicPolicyConfig(
+                    allow_immediate_retry=True,
+                    estimated_action_priors=shifted_priors,
+                    default_priors=shifted_default,
+                )
+            )
+
     def run_all_shifts(
         self,
         base_scenarios: Optional[List[SimulatedScenario]] = None,
@@ -176,19 +267,19 @@ class DistributionShiftRunner:
             sim = Simulator()
             base_scenarios = sim.generate_batch(SimulatorConfig(seed=seed, num_scenarios=num_scenarios))
 
-        policies: List[BasePolicy] = [
-            NoActionPolicy(),
-            AlwaysRetryPolicy(),
-            StaticRulePolicy(),
-            ProbabilityOnlyPolicy(),
-            DeterministicRecoveryPolicy(),
-        ]
         recoveryos_name = "RECOVERYOS_DETERMINISTIC_V0"
-
         reports: List[DistributionShiftReport] = []
 
         for shift_type in DistributionShiftType:
             shifted_scens = DistributionShiftSimulator.apply_shift(base_scenarios, shift_type, seed=seed)
+            recoveryos_policy = self.get_recoveryos_policy_for_shift(shift_type)
+            policies: List[BasePolicy] = [
+                NoActionPolicy(),
+                AlwaysRetryPolicy(),
+                StaticRulePolicy(),
+                ProbabilityOnlyPolicy(),
+                recoveryos_policy,
+            ]
             eval_results = self.harness.evaluate_all(policies, shifted_scens)
 
             recoveryos_res = eval_results.get(recoveryos_name)

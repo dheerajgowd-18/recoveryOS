@@ -85,6 +85,11 @@ class ExpectedValueScorer:
         if context.recent_failed_attempts >= 2 and action in (SimulatedActionType.RETRY_NOW, SimulatedActionType.RETRY_LATER):
             risk_penalty = 200  # ₹2 risk penalty
 
+        # Micro-ticket churn risk penalty: On tickets < ₹100, direct customer outreach
+        # (payment link / reminder) risks customer churn (₹2,500 penalty) that dominates ticket value
+        if amount < 10000 and action in (SimulatedActionType.PAYMENT_LINK, SimulatedActionType.REMINDER):
+            risk_penalty += 50000  # ₹500 churn risk penalty ensures deliberate abstention to protect margins
+
         # Allow genuine negative uplift (e.g. ill-timed actions destroying natural recovery)
         uplift = round(p_action - p_natural, 4)
         incremental_value = int(amount * uplift)

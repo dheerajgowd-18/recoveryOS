@@ -47,7 +47,7 @@ class CandidateGenerator:
         elif label == DiagnosisLabel.TRANSIENT_GATEWAY_FAILURE:
             if context.attempt_count < config.max_retry_attempts:
                 candidates.add(SimulatedActionType.RETRY_LATER)
-                if context.attempt_count <= 1 and config.allow_immediate_retry:
+                if config.allow_immediate_retry:
                     candidates.add(SimulatedActionType.RETRY_NOW)
             else:
                 # Retries exhausted; fall back to customer communication

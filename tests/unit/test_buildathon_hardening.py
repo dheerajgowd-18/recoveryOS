@@ -193,3 +193,112 @@ async def test_razorpay_adapter_fail_closed_and_reconciliation_semantics(monkeyp
     strict_adapter = RazorpayAdapter(key_id=None, key_secret=None, strict=True)
     with pytest.raises(RazorpayConfigurationError):
         await strict_adapter.fetch_payment_status("pay_test_123")
+
+
+def test_mathematical_kpi_consistency_across_surfaces():
+    """Verify exact bit-level mathematical KPI consistency across domain, evaluation, and dashboard."""
+    from evaluation.harness import EvaluationHarness
+    from policy.deterministic import DeterministicRecoveryPolicy
+    from simulator.generator import Simulator
+
+    sim = Simulator()
+    scenarios = sim.generate_batch(SimulatorConfig(seed=123, num_scenarios=25))
+    harness = EvaluationHarness()
+    policy = DeterministicRecoveryPolicy()
+    eval_result = harness.evaluate_policy(policy, scenarios)
+
+    # 1. Domain Canonical KPIs computed from ScenarioEvaluationRecords
+    canonical_kpis = compute_canonical_financial_kpis(eval_result.records)
+
+    # 2. Compare against EvaluationMetrics
+    metrics = eval_result.metrics
+    assert metrics.gross_recovered_amount_paise == canonical_kpis.gross_recovery_paise
+    assert metrics.natural_recovered_amount_paise == canonical_kpis.natural_recovery_paise
+    assert metrics.total_action_cost_paise == canonical_kpis.total_action_cost_paise
+    assert metrics.net_recovered_amount_paise == canonical_kpis.net_recovery_paise
+    assert metrics.incremental_recovered_amount_paise == canonical_kpis.incremental_recovery_paise
+    assert metrics.incremental_net_recovery_paise == canonical_kpis.incremental_net_recovery_paise
+    assert metrics.churn_penalty_paise == canonical_kpis.churn_penalty_paise
+    assert metrics.adjusted_net_recovery_paise == canonical_kpis.adjusted_net_recovery_paise
+    assert metrics.incremental_adjusted_net_recovery_paise == canonical_kpis.incremental_adjusted_net_recovery_paise
+
+    # 3. Compare against DashboardService Control Room data using DecisionRecords
+    log_store = DecisionLogStore()
+    for idx, r in enumerate(eval_result.records):
+        log_store.save_record(
+            DecisionRecord(
+                decision_id=f"dec_sync_{idx}",
+                scenario_id=r.scenario_id,
+                payment_id=f"pay_sync_{idx}",
+                iteration=1,
+                timestamp_epoch=1700000000 + idx,
+                policy_name=r.policy_name,
+                policy_version="v1",
+                diagnosis_label=r.predicted_diagnosis or "unknown",
+                diagnosis_confidence=r.diagnosis_confidence or 0.5,
+                amount_in_paise=r.recovered_amount_paise if r.recovered else 50000,
+                aggregate_state_before="FAILED",
+                aggregate_state_after="CAPTURED" if r.recovered else "FAILED",
+                aggregate_state="CAPTURED" if r.recovered else "FAILED",
+                risk_level="LOW",
+                selected_action=r.chosen_action,
+                timing_window=r.timing_window,
+                delay_seconds=r.delay_seconds,
+                confidence=r.diagnosis_confidence or 0.8,
+                rationale="Sync test trace",
+                recovered=r.recovered,
+                recovered_amount_paise=r.recovered_amount_paise,
+                action_cost_paise=r.action_cost_paise,
+                governor_decision=r.governor_decision,
+            )
+        )
+
+    dashboard_service = DashboardService(decision_log=log_store)
+    control_room = dashboard_service.get_control_room_data()
+
+    # Verify Dashboard Control Room calculations exactly reflect canonical KPIs
+    dash_kpis = compute_canonical_financial_kpis(log_store.get_all_records())
+    assert control_room["gross_recovered_inr"] == round(dash_kpis.gross_recovery_paise / 100.0, 2)
+    assert control_room["net_adjusted_recovery_inr"] == round(dash_kpis.incremental_adjusted_net_recovery_paise / 100.0, 2)
+    assert control_room["actions_executed"] == dash_kpis.actions_dispatched_count
+    assert control_room["actions_avoided"] == dash_kpis.actions_avoided_count
+
+
+def test_distribution_shift_policy_relevance_and_adaptation():
+    """Verify all 6 distribution shifts produce distinct macroeconomic adaptations and high win rate."""
+    from evaluation.distribution_shift import DistributionShiftSimulator
+    from intelligence.context import ObservableContextBuilder
+
+    runner = DistributionShiftRunner()
+    scens = Simulator().generate_batch(SimulatorConfig(seed=42, num_scenarios=50))
+
+    # Test policy configs per shift
+    p_nat = runner.get_recoveryos_policy_for_shift(DistributionShiftType.HIGHER_NATURAL_RECOVERY)
+    assert p_nat.config.default_priors[SimulatedActionType.NO_ACTION] == 0.65
+
+    p_cost = runner.get_recoveryos_policy_for_shift(DistributionShiftType.HIGHER_CONTACT_COST)
+    assert p_cost.config.action_costs_paise[SimulatedActionType.PAYMENT_LINK] == 400
+    assert p_cost.config.action_costs_paise[SimulatedActionType.REMINDER] == 200
+
+    p_retry = runner.get_recoveryos_policy_for_shift(DistributionShiftType.LOWER_DELAYED_RETRY_EFFECTIVENESS)
+    assert p_retry.config.default_priors[SimulatedActionType.RETRY_LATER] < 0.30
+    assert p_retry.config.allow_immediate_retry is True
+
+    # Test observable perturbations
+    s_noisy = DistributionShiftSimulator.apply_shift(scens, DistributionShiftType.NOISIER_DIAGNOSIS, seed=42)
+    corrupted = [s for s in s_noisy if s.event.payment and s.event.payment.error_code == "INTERNAL_SERVER_ERROR"]
+    assert len(corrupted) > 0
+
+    s_micro = DistributionShiftSimulator.apply_shift(scens, DistributionShiftType.HEAVY_MICRO_TRANSACTIONS, seed=42)
+    micro_cases = [s for s in s_micro if s.event.payment and s.event.payment.amount < 10000]
+    assert len(micro_cases) > 0
+
+    s_fatigue = DistributionShiftSimulator.apply_shift(scens, DistributionShiftType.INCREASED_CUSTOMER_FATIGUE, seed=42)
+    fatigue_cases = [s for s in s_fatigue if s.contacts_in_last_24h > 0]
+    assert len(fatigue_cases) > 0
+
+    # Test execution and win rate
+    res = runner.run_all_shifts(base_scenarios=scens, seed=42)
+    assert res.total_shifts_evaluated == 6
+    assert res.recoveryos_win_rate_pct >= 80.0
+    assert res.recoveryos_wins_count >= 5

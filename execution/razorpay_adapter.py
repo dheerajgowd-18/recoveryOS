@@ -3,6 +3,7 @@
 Bridges RecoveryOS autonomous decisions with the live Razorpay Test API.
 Implements fail-closed security guards, credential sanitization, and domain model mapping.
 """
+import json
 import logging
 import os
 from typing import Any, Dict, Optional, Union

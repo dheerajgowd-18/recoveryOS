@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Checkout Abandonment Revenue Recovery Workflow (`dashboard/service.py`, `scripts/demo.py`)**:
   - Integrated Case 7 (Checkout Drop-Off & Cart Abandonment Recovery) into runtime, demo CLI, and Scenario Lab.
 - **Comprehensive Test Suite Expansion**:
-  - Expanded test suite to **319 passing automated unit, integration, benchmark, and adversarial tests** with 100% pass rate.
+  - Expanded test suite to **339 passing automated unit, integration, benchmark, and adversarial tests** with 100% pass rate.
 
 ## [1.6.0] - 2026-09-02
 

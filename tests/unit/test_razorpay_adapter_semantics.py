@@ -97,3 +97,19 @@ class TestRazorpayAdapterSemantics:
             assert res.success is True
             assert "plink_test_001" in res.message
             assert res.action_cost_paise == 20
+
+    @pytest.mark.anyio
+    async def test_non_json_razorpay_error_response_handling(self, sample_execution_context):
+        """When Razorpay returns non-JSON error HTML (e.g. 502/503 bad gateway), handle safely without NameError."""
+        adapter = RazorpayAdapter(key_id="rzp_test_validkey", key_secret="valid_secret_123")
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 502
+        mock_resp.text = "<html><body>502 Bad Gateway</body></html>"
+        mock_resp.json.side_effect = ValueError("No JSON")
+
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp):
+            res = await adapter.create_payment_link("pay_test_502", 50000)
+            assert res["success"] is False
+            assert res["status_code"] == 502
+            assert "502 Bad Gateway" in res["error"]
