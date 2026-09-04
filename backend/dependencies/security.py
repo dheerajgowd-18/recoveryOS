@@ -24,13 +24,6 @@ async def verify_razorpay_signature(request: Request) -> bytes:
         HTTPException(401): If signature header is missing or signature verification fails.
         HTTPException(500): If the server webhook secret is unconfigured.
     """
-    secret = os.getenv("RAZORPAY_WEBHOOK_SECRET")
-    if not secret:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Server misconfiguration: RAZORPAY_WEBHOOK_SECRET is not configured",
-        )
-
     signature = request.headers.get("X-Razorpay-Signature")
     if not signature:
         raise HTTPException(
@@ -43,6 +36,13 @@ async def verify_razorpay_signature(request: Request) -> bytes:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Empty request payload cannot be verified",
+        )
+
+    secret = os.getenv("RAZORPAY_WEBHOOK_SECRET")
+    if not secret:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Server misconfiguration: RAZORPAY_WEBHOOK_SECRET is not configured",
         )
 
     expected_signature = hmac.new(

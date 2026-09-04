@@ -52,29 +52,76 @@ async def test_zero_secret_or_ground_truth_leakage_in_apis():
 
 
 @pytest.mark.anyio
-async def test_webhook_hmac_tampering_defense():
-    """Verifies that tampered payloads, tampered signatures, or missing headers fail with HTTP 401."""
+async def test_webhook_hmac_tampering_defense(monkeypatch):
+    """Verifies that missing headers, tampered signatures, or missing secret adhere to strict security precedence."""
     secret = "rzp_wh_sec_hardening_test_12345"
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        payload = {"event": "payment.failed", "payload": {"payment": {"entity": {"id": "pay_sec_001", "amount": 1000}}}}
+        payload = {
+            "entity": "event",
+            "account_id": "acc_sec_test_001",
+            "event": "payment.failed",
+            "contains": ["payment"],
+            "payload": {
+                "payment": {
+                    "entity": {
+                        "id": "pay_sec_001",
+                        "entity": "payment",
+                        "amount": 100000,
+                        "currency": "INR",
+                        "status": "failed",
+                        "order_id": "order_sec_001",
+                        "invoice_id": "inv_sec_001",
+                        "international": False,
+                        "method": "card",
+                        "amount_refunded": 0,
+                        "refund_status": None,
+                        "captured": False,
+                        "description": "Security Test Payment",
+                        "card_id": "card_sec_001",
+                        "email": "test@security.org",
+                        "contact": "+919999999999",
+                        "customer_id": "cust_sec_001",
+                        "error_code": "BAD_REQUEST_ERROR",
+                        "error_description": "Declined",
+                        "error_source": "bank",
+                        "error_step": "payment_authorization",
+                        "error_reason": "card_declined",
+                        "created_at": 1700000000,
+                    }
+                }
+            },
+            "created_at": 1700000000,
+        }
         raw_body = json.dumps(payload).encode("utf-8")
         
         valid_signature = hmac.new(key=secret.encode("utf-8"), msg=raw_body, digestmod=hashlib.sha256).hexdigest()
         tampered_signature = "bad" + valid_signature[3:]
 
-        # Missing header
+        # 1. Missing header -> 401 even without secret configured in environment
+        monkeypatch.delenv("RAZORPAY_WEBHOOK_SECRET", raising=False)
         res_no_sig = await client.post("/webhooks/razorpay", content=raw_body)
         assert res_no_sig.status_code == 401
 
-        # Tampered signature
+        # 2. Signed request but missing secret -> 500 (server misconfiguration)
+        res_missing_secret = await client.post("/webhooks/razorpay", content=raw_body, headers={"X-Razorpay-Signature": valid_signature})
+        assert res_missing_secret.status_code == 500
+
+        # Now configure secret in environment for authenticated checks
+        monkeypatch.setenv("RAZORPAY_WEBHOOK_SECRET", secret)
+
+        # 3. Tampered signature -> 401
         res_bad_sig = await client.post("/webhooks/razorpay", content=raw_body, headers={"X-Razorpay-Signature": tampered_signature})
         assert res_bad_sig.status_code == 401
 
-        # Tampered payload with original signature
+        # 4. Tampered payload with original signature -> 401
         tampered_body = json.dumps({"event": "payment.failed", "payload": {"payment": {"entity": {"id": "pay_sec_001", "amount": 99999}}}}).encode("utf-8")
         res_bad_body = await client.post("/webhooks/razorpay", content=tampered_body, headers={"X-Razorpay-Signature": valid_signature})
         assert res_bad_body.status_code == 401
+
+        # 5. Valid signature -> 200 / success
+        res_valid = await client.post("/webhooks/razorpay", content=raw_body, headers={"X-Razorpay-Signature": valid_signature})
+        assert res_valid.status_code == 200
 
 
 def test_adversarial_prompt_injection_in_memory_cannot_bypass_governor():

@@ -113,17 +113,55 @@ async def test_case_replay_missing_and_malformed_case_id():
 
 
 @pytest.mark.anyio
-async def test_evaluation_api_response():
-    """Verifies GET /dashboard/api/evaluation returns valid benchmark evaluation metrics even if file is missing."""
+async def test_evaluation_api_response(monkeypatch):
+    """Verifies GET /dashboard/api/evaluation contracts for both clean-checkout (absent) and available benchmark states."""
+    from dashboard.routes import dashboard_service
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        res = await client.get("/dashboard/api/evaluation")
-        assert res.status_code == 200
-        data = res.json()
-        assert "baseline_table" in data
-        assert "oracle_comparison" in data
-        assert "regret_distribution" in data
-        assert "config" in data
+        # 1. Clean checkout / benchmark-absent contract
+        monkeypatch.setattr(dashboard_service, "_load_benchmark_data", lambda: None)
+        res_absent = await client.get("/dashboard/api/evaluation")
+        assert res_absent.status_code == 200
+        data_absent = res_absent.json()
+        assert data_absent["status"] == "NO_BENCHMARK_RUN"
+        assert "message" in data_absent
+
+        # 2. Benchmark-present contract
+        sample_bench = {
+            "timestamp_iso": "2026-09-04T00:00:00Z",
+            "config": {"dev_seeds": [42], "holdout_seeds": [43], "churn_penalty_paise": 250000},
+            "combined_split": {
+                "total_scenarios": 100,
+                "policy_results": {
+                    "baseline_0_no_action": {
+                        "metric_distributions": {},
+                        "regret_summary": {},
+                    },
+                    "RECOVERYOS_DETERMINISTIC_V0": {
+                        "metric_distributions": {},
+                        "regret_summary": {},
+                    },
+                },
+                "oracle_comparison": {
+                    "oracle_gross_recovery_paise": 1000000,
+                    "recoveryos_gross_recovery_paise": 800000,
+                    "policy_comparisons": {},
+                },
+            },
+            "sensitivity_analysis": {
+                "churn_penalty_grid": [],
+            },
+        }
+        monkeypatch.setattr(dashboard_service, "_load_benchmark_data", lambda: sample_bench)
+        res_present = await client.get("/dashboard/api/evaluation")
+        assert res_present.status_code == 200
+        data_present = res_present.json()
+        assert data_present["status"] == "AVAILABLE"
+        assert "baseline_table" in data_present
+        assert "oracle_comparison" in data_present
+        assert "regret_distribution" in data_present
+        assert "config" in data_present
 
 
 @pytest.mark.anyio
